@@ -29,6 +29,7 @@ const validEnvironment = {
   LOG_LEVEL: 'debug',
   MAX_EVIDENCE_BYTES: '10485760',
   MAX_SIGNATURE_BYTES: '1048576',
+  MIN_PASSWORD_LENGTH: '12',
   NODE_ENV: 'development',
   OUTBOX_POLL_INTERVAL_MS: '5000',
   PORT: '3000',

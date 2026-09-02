@@ -12,7 +12,9 @@
     "typecheck": "vue-tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@puk/contracts": "workspace:*",
     "@tanstack/vue-query": "^5.90.5",
+    "axios": "^1.20.0",
     "naive-ui": "^2.43.1",
     "pinia": "^3.0.3",
     "vue": "^3.5.22",

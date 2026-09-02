@@ -78,22 +78,22 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 4. Autenticación, usuarios y técnicos
 
-- [ ] Implementar hash de contraseñas con Argon2id y política configurable de longitud mínima.
-- [ ] Implementar login con respuesta genérica ante credenciales inválidas.
-- [ ] Emitir access tokens de corta duración con `sub`, `role`, `iss` y `aud`.
-- [ ] Emitir refresh tokens en cookie segura y almacenar únicamente su hash.
-- [ ] Implementar rotación de refresh token, revocación individual y cierre de todas las sesiones.
-- [ ] Implementar `authenticate`, capacidades por rol y políticas de pertenencia.
-- [ ] Crear endpoints administrativos de usuarios y técnicos.
-- [ ] Crear las pantallas de login, sesión y directorio de técnicos.
-- [ ] Configurar la instancia Axios con token en memoria, refresh único compartido y un solo reintento.
-- [ ] Añadir auditoría para creación, edición, activación y desactivación de usuarios y técnicos.
+- [x] Implementar hash de contraseñas con Argon2id y política configurable de longitud mínima.
+- [x] Implementar login con respuesta genérica ante credenciales inválidas.
+- [x] Emitir access tokens de corta duración con `sub`, `role`, `iss` y `aud`.
+- [x] Emitir refresh tokens en cookie segura y almacenar únicamente su hash.
+- [x] Implementar rotación de refresh token, revocación individual y cierre de todas las sesiones.
+- [x] Implementar `authenticate`, capacidades por rol y políticas de pertenencia.
+- [x] Crear endpoints administrativos de usuarios y técnicos.
+- [x] Crear las pantallas de login, sesión y directorio de técnicos.
+- [x] Configurar la instancia Axios con token en memoria, refresh único compartido y un solo reintento.
+- [x] Añadir auditoría para creación, edición, activación y desactivación de usuarios y técnicos.
 
 ### Criterio de salida
 
-- [ ] Un administrador y un técnico pueden iniciar y cerrar sesión según su rol.
-- [ ] La rotación, expiración y revocación de tokens están cubiertas con pruebas.
-- [ ] El navegador no almacena JWT en `localStorage` ni `sessionStorage`.
+- [x] Un administrador y un técnico pueden iniciar y cerrar sesión según su rol.
+- [x] La rotación, expiración y revocación de tokens están cubiertas con pruebas.
+- [x] El navegador no almacena JWT en `localStorage` ni `sessionStorage`.
 
 ## 5. Catálogos de Google Sheets
 

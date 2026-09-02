@@ -8,11 +8,14 @@ import { openApiDocument } from './docs/openapi.js';
 import { errorHandler, notFound } from './middleware/error-handler.js';
 import { generalRateLimit } from './middleware/rate-limits.js';
 import { requestId } from './middleware/request-id.js';
+import { createAuthRouter, type AuthRouterOptions } from './modules/auth/index.js';
 import { createHealthRouter } from './modules/health/index.js';
+import { createAdministrationRouter } from './modules/administration/index.js';
 import { httpLogger } from './observability/logger.js';
 
 export interface AppOptions {
   allowedOrigins?: readonly string[];
+  auth?: AuthRouterOptions & { minimumPasswordLength: number };
   dependencyCheck?: () => Promise<boolean>;
   trustProxy?: boolean;
 }
@@ -39,6 +42,10 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(generalRateLimit);
 
   app.use('/health', createHealthRouter(options.dependencyCheck ?? (async () => true)));
+  if (options.auth !== undefined) {
+    app.use('/api/v1/auth', createAuthRouter(options.auth));
+    app.use('/api/v1', createAdministrationRouter(options.auth));
+  }
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
   app.use(notFound);
   app.use(errorHandler);

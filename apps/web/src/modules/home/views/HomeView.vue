@@ -2,6 +2,9 @@
 import { NCard, NTag } from 'naive-ui';
 
 import AppLayout from '@/shared/layouts/AppLayout.vue';
+import { useSessionStore } from '@/stores/session';
+
+const session = useSessionStore();
 </script>
 
 <template>
@@ -9,16 +12,17 @@ import AppLayout from '@/shared/layouts/AppLayout.vue';
     <main class="mx-auto flex w-full max-w-5xl flex-1 items-center px-4 py-10 sm:px-6">
       <n-card class="shadow-sm" content-class="space-y-5" size="large">
         <div class="flex flex-wrap items-center gap-3">
-          <n-tag type="success" round>Base del sistema lista</n-tag>
-          <span class="text-sm font-medium text-slate-500">Fase 1</span>
+          <n-tag type="success" round>Sesión activa</n-tag>
+          <span class="text-sm font-medium text-slate-500">{{ session.user?.role === 'ADMIN' ? 'Administrador' : 'Técnico' }}</span>
         </div>
         <div class="space-y-3">
           <h1 class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Órdenes de servicio
+            Hola, {{ session.user?.name }}
           </h1>
           <p class="max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-            La plataforma está preparada para incorporar los flujos de administración y trabajo
-            técnico de Bull Dog Solution.
+            {{ session.user?.role === 'ADMIN'
+              ? 'Administra técnicos y prepara las órdenes de servicio.'
+              : 'Consulta y completa las órdenes de servicio que tienes asignadas.' }}
           </p>
         </div>
       </n-card>

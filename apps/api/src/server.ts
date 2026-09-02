@@ -1,9 +1,52 @@
 import { createApp } from './app.js';
+import { TokenService } from './auth/tokens.js';
 import { loadEnvironment } from './config/environment.js';
+import { createPrismaClient } from './database/client.js';
 
 const environment = loadEnvironment();
+const prisma = createPrismaClient(environment.DATABASE_URL);
+const normalizePem = (value: string) => value.replaceAll('\\n', '\n');
+const tokenMetadata = {
+  accessTtl: environment.JWT_ACCESS_TTL,
+  audience: environment.JWT_AUDIENCE,
+  issuer: environment.JWT_ISSUER,
+  refreshTtl: environment.JWT_REFRESH_TTL,
+};
+const usesPlaceholderKeys =
+  environment.NODE_ENV !== 'production' &&
+  environment.JWT_ACCESS_PRIVATE_KEY.startsWith('development-only');
+const tokens = usesPlaceholderKeys
+  ? await TokenService.forDevelopment(tokenMetadata)
+  : await TokenService.fromPem({
+      ...tokenMetadata,
+      accessPrivateKey: normalizePem(environment.JWT_ACCESS_PRIVATE_KEY),
+      accessPublicKey: normalizePem(environment.JWT_ACCESS_PUBLIC_KEY),
+      refreshPrivateKey: normalizePem(environment.JWT_REFRESH_PRIVATE_KEY),
+      refreshPublicKey: normalizePem(environment.JWT_REFRESH_PUBLIC_KEY),
+    });
 const server = createApp({
   allowedOrigins: [environment.APP_ORIGIN],
+  auth: {
+    cookie: {
+      httpOnly: true,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/api/v1/auth',
+      sameSite: environment.COOKIE_SAME_SITE,
+      secure: environment.COOKIE_SECURE,
+      ...(environment.COOKIE_DOMAIN === undefined ? {} : { domain: environment.COOKIE_DOMAIN }),
+    },
+    minimumPasswordLength: environment.MIN_PASSWORD_LENGTH,
+    prisma,
+    tokens,
+  },
+  dependencyCheck: async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return true;
+    } catch {
+      return false;
+    }
+  },
   trustProxy: environment.TRUST_PROXY,
 }).listen(environment.PORT);
 
@@ -16,8 +59,9 @@ function stopServer(): void {
   const forceExitTimeout = setTimeout(() => process.exit(1), 10_000);
   forceExitTimeout.unref();
 
-  server.close((error) => {
+  server.close(async (error) => {
     clearTimeout(forceExitTimeout);
+    await prisma.$disconnect();
 
     if (error !== undefined) {
       process.stderr.write(`API shutdown error: ${error.message}\n`);
