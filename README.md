@@ -157,18 +157,19 @@ Las columnas `A`, `I` y `K` nunca son modificadas. Antes de cada escritura, la A
 
 ## Requisitos
 
-- Node.js LTS compatible con las versiones fijadas en el lockfile.
-- pnpm.
+- Node.js 24.20.0 LTS, fijado en `.nvmrc` y `.node-version`.
+- pnpm 11.9.0 mediante Corepack.
 - Docker y Docker Compose.
 - Documento de Google Sheets de desarrollo compartido con una cuenta de servicio.
 - Credenciales de Google Sheets y almacenamiento S3 para entornos no locales.
 
 ## Puesta en marcha local
 
-1. Instalar las dependencias:
+1. Activar la versión fijada de pnpm e instalar las dependencias:
 
    ```bash
-   pnpm install
+   corepack enable
+   pnpm install --frozen-lockfile
    ```
 
 2. Crear la configuración local a partir del archivo de ejemplo:
@@ -177,10 +178,10 @@ Las columnas `A`, `I` y `K` nunca son modificadas. Antes de cada escritura, la A
    cp .env.example .env
    ```
 
-3. Levantar PostgreSQL y MinIO:
+3. Para trabajar con recarga en caliente, levantar PostgreSQL y MinIO:
 
    ```bash
-   docker compose up -d postgres minio
+   docker compose up -d postgres minio minio-init
    ```
 
 4. Aplicar las migraciones y cargar datos iniciales:
@@ -196,7 +197,15 @@ Las columnas `A`, `I` y `K` nunca son modificadas. Antes de cada escritura, la A
    pnpm dev
    ```
 
-La aplicación web queda disponible en la URL configurada para Vite y la API bajo `/api/v1`.
+La aplicación web queda disponible por defecto en `http://localhost:5173` y la API en `http://localhost:3000`. `VITE_DEV_PORT`, `VITE_API_PROXY_TARGET` y `PORT` permiten usar puertos diferentes sin modificar código.
+
+Como alternativa, el stack completo compilado se levanta con:
+
+```bash
+docker compose up --build -d
+```
+
+En esta modalidad, la web se publica por defecto en `http://localhost:4173`, la API en `http://localhost:3000` y la consola de MinIO en `http://localhost:9001`. Los puertos pueden sobrescribirse en `.env` con las variables documentadas en `.env.example`.
 
 ## Configuración
 
@@ -218,18 +227,21 @@ Los secretos no deben guardarse en el repositorio. En producción se utilizan id
 
 ## Comandos disponibles
 
-| Comando               | Descripción                                 |
-| --------------------- | ------------------------------------------- |
-| `pnpm dev`            | Inicia API y web en desarrollo              |
-| `pnpm build`          | Construye todas las aplicaciones y paquetes |
-| `pnpm lint`           | Ejecuta el análisis estático                |
-| `pnpm typecheck`      | Comprueba TypeScript estricto               |
-| `pnpm test`           | Ejecuta pruebas unitarias y de integración  |
-| `pnpm test:e2e`       | Ejecuta escenarios Playwright               |
-| `pnpm docs:build`     | Genera OpenAPI 3.1                          |
-| `pnpm docs:validate`  | Valida el contrato de la API                |
-| `pnpm prisma:migrate` | Aplica migraciones de base de datos         |
-| `pnpm prisma:seed`    | Carga datos iniciales de desarrollo         |
+| Comando                | Descripción                                 |
+| ---------------------- | ------------------------------------------- |
+| `pnpm dev`             | Inicia API y web en desarrollo              |
+| `pnpm build`           | Construye todas las aplicaciones y paquetes |
+| `pnpm format`          | Formatea los archivos del repositorio       |
+| `pnpm format:check`    | Verifica el formato sin escribir cambios    |
+| `pnpm lint`            | Ejecuta el análisis estático                |
+| `pnpm typecheck`       | Comprueba TypeScript estricto               |
+| `pnpm test`            | Ejecuta pruebas unitarias y de integración  |
+| `pnpm test:e2e`        | Ejecuta escenarios Playwright               |
+| `pnpm docs:build`      | Genera OpenAPI 3.1                          |
+| `pnpm docs:validate`   | Valida el contrato de la API                |
+| `pnpm prisma:migrate`  | Aplica migraciones de base de datos         |
+| `pnpm prisma:seed`     | Carga datos iniciales de desarrollo         |
+| `pnpm prisma:validate` | Valida la configuración y el esquema Prisma |
 
 ## API y documentación
 

@@ -23,21 +23,21 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 1. Base del monorepo
 
-- [ ] Crear el workspace de `pnpm` con `apps/web`, `apps/api`, `packages/contracts`, configuraciones compartidas, `prisma` e `infra/docker`.
-- [ ] Configurar TypeScript estricto para API, web y paquetes compartidos.
-- [ ] Configurar ESLint, formato, aliases y límites de importación entre módulos.
-- [ ] Crear la aplicación Express 5 con `app.ts` y `server.ts` separados.
-- [ ] Crear la aplicación Vue 3 con Vite, Vue Router, Pinia y TanStack Query.
-- [ ] Integrar Naive UI y Tailwind CSS mediante el plugin de Vite.
-- [ ] Configurar Docker Compose con PostgreSQL, MinIO, API y web.
-- [ ] Implementar validación de variables de entorno con Valibot y fallo temprano al iniciar.
-- [ ] Añadir scripts raíz para desarrollo, build, lint, typecheck, pruebas, documentación y Prisma.
-- [ ] Crear archivos de ejemplo de configuración sin incluir secretos reales.
+- [x] Crear el workspace de `pnpm` con `apps/web`, `apps/api`, `packages/contracts`, configuraciones compartidas, `prisma` e `infra/docker`.
+- [x] Configurar TypeScript estricto para API, web y paquetes compartidos.
+- [x] Configurar ESLint, formato, aliases y límites de importación entre módulos.
+- [x] Crear la aplicación Express 5 con `app.ts` y `server.ts` separados.
+- [x] Crear la aplicación Vue 3 con Vite, Vue Router, Pinia y TanStack Query.
+- [x] Integrar Naive UI y Tailwind CSS mediante el plugin de Vite.
+- [x] Configurar Docker Compose con PostgreSQL, MinIO, API y web.
+- [x] Implementar validación de variables de entorno con Valibot y fallo temprano al iniciar.
+- [x] Añadir scripts raíz para desarrollo, build, lint, typecheck, pruebas, documentación y Prisma.
+- [x] Crear archivos de ejemplo de configuración sin incluir secretos reales.
 
 ### Criterio de salida
 
-- [ ] `pnpm dev`, `pnpm build`, `pnpm lint` y `pnpm typecheck` funcionan desde la raíz.
-- [ ] API, web, PostgreSQL y MinIO pueden levantarse en desarrollo local.
+- [x] `pnpm dev`, `pnpm build`, `pnpm lint` y `pnpm typecheck` funcionan desde la raíz.
+- [x] API, web, PostgreSQL y MinIO pueden levantarse en desarrollo local.
 
 ## 2. Fundamentos transversales de la API
 
