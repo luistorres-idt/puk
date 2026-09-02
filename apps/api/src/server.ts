@@ -10,11 +10,18 @@ server.on('error', (error) => {
 });
 
 function stopServer(): void {
+  const forceExitTimeout = setTimeout(() => process.exit(1), 10_000);
+  forceExitTimeout.unref();
+
   server.close((error) => {
+    clearTimeout(forceExitTimeout);
+
     if (error !== undefined) {
       process.stderr.write(`API shutdown error: ${error.message}\n`);
-      process.exitCode = 1;
+      process.exit(1);
     }
+
+    process.exit(0);
   });
 }
 

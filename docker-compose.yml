@@ -1,0 +1,137 @@
+name: puk
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-puk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-development-only}
+      POSTGRES_USER: ${POSTGRES_USER:-puk}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-development-only-change-me}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-puk-development}
+    ports:
+      - '${MINIO_API_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-development-only-change-me}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-puk-development}
+      S3_BUCKET: ${S3_BUCKET:-service-orders}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >-
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}";
+        do sleep 1; done;
+        mc mb --ignore-existing "local/$${S3_BUCKET}";
+        mc anonymous set none "local/$${S3_BUCKET}"
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      API_ORIGIN: http://localhost:${API_PORT:-3000}
+      APP_ORIGIN: http://localhost:${WEB_PORT:-4173}
+      CATALOG_CACHE_TTL_SECONDS: ${CATALOG_CACHE_TTL_SECONDS:-60}
+      CIRCUIT_BREAKER_ERROR_THRESHOLD: ${CIRCUIT_BREAKER_ERROR_THRESHOLD:-50}
+      CIRCUIT_BREAKER_RESET_TIMEOUT_MS: ${CIRCUIT_BREAKER_RESET_TIMEOUT_MS:-30000}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-puk}:${POSTGRES_PASSWORD:-development-only}@postgres:5432/${POSTGRES_DB:-puk}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER:-puk}:${POSTGRES_PASSWORD:-development-only}@postgres:5432/${POSTGRES_DB:-puk}?schema=public
+      GOOGLE_CLIENT_EMAIL: ${GOOGLE_CLIENT_EMAIL:-service-account@example.invalid}
+      GOOGLE_CLIENTS_SHEET: ${GOOGLE_CLIENTS_SHEET:-Clientes}
+      GOOGLE_EQUIPMENT_SHEET: ${GOOGLE_EQUIPMENT_SHEET:-SALIDAS}
+      GOOGLE_PRIVATE_KEY: ${GOOGLE_PRIVATE_KEY:-development-only-replace-with-google-private-key}
+      GOOGLE_SPREADSHEET_ID: ${GOOGLE_SPREADSHEET_ID:-development-only-replace-with-spreadsheet-id}
+      JWT_ACCESS_PRIVATE_KEY: ${JWT_ACCESS_PRIVATE_KEY:-development-only-replace-with-access-private-key}
+      JWT_ACCESS_PUBLIC_KEY: ${JWT_ACCESS_PUBLIC_KEY:-development-only-replace-with-access-public-key}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-puk-web}
+      JWT_ISSUER: ${JWT_ISSUER:-puk-api}
+      JWT_REFRESH_PRIVATE_KEY: ${JWT_REFRESH_PRIVATE_KEY:-development-only-replace-with-refresh-private-key}
+      JWT_REFRESH_PUBLIC_KEY: ${JWT_REFRESH_PUBLIC_KEY:-development-only-replace-with-refresh-public-key}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      MAX_EVIDENCE_BYTES: ${MAX_EVIDENCE_BYTES:-10485760}
+      MAX_SIGNATURE_BYTES: ${MAX_SIGNATURE_BYTES:-1048576}
+      NODE_ENV: development
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-5000}
+      PORT: 3000
+      PRESIGNED_URL_TTL_SECONDS: ${PRESIGNED_URL_TTL_SECONDS:-300}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-puk-development}
+      S3_BUCKET: ${S3_BUCKET:-service-orders}
+      S3_ENDPOINT: http://minio:9000
+      S3_FORCE_PATH_STYLE: 'true'
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-development-only-change-me}
+      SHEETS_RETRY_LIMIT: ${SHEETS_RETRY_LIMIT:-3}
+      SHEETS_TIMEOUT_MS: ${SHEETS_TIMEOUT_MS:-5000}
+      TRUST_PROXY: 'false'
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    ports:
+      - '${API_PORT:-3000}:3000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health/live').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    init: true
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${WEB_PORT:-4173}:80'
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--spider', 'http://127.0.0.1/']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  minio-data:
+  postgres-data:
