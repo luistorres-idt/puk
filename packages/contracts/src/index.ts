@@ -13,3 +13,14 @@ export {
   UpdateTechnicianSchema,
   UpdateUserSchema,
 } from './users.js';
+export {
+  CatalogMetadataSchema,
+  CatalogSearchQuerySchema,
+  ExternalClientSchema,
+  ExternalEquipmentSchema,
+  type CatalogMetadata,
+  type CatalogSearchQuery,
+  type ExternalClient,
+  type ExternalEquipment,
+} from './catalogs.js';
+

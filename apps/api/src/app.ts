@@ -11,11 +11,14 @@ import { requestId } from './middleware/request-id.js';
 import { createAuthRouter, type AuthRouterOptions } from './modules/auth/index.js';
 import { createHealthRouter } from './modules/health/index.js';
 import { createAdministrationRouter } from './modules/administration/index.js';
+import { createCatalogsRouter } from './modules/catalogs/index.js';
+import type { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
 import { httpLogger } from './observability/logger.js';
 
 export interface AppOptions {
   allowedOrigins?: readonly string[];
   auth?: AuthRouterOptions & { minimumPasswordLength: number };
+  catalogsService?: GoogleSheetsCatalogService;
   dependencyCheck?: () => Promise<boolean>;
   trustProxy?: boolean;
 }
@@ -45,6 +48,15 @@ export function createApp(options: AppOptions = {}): Express {
   if (options.auth !== undefined) {
     app.use('/api/v1/auth', createAuthRouter(options.auth));
     app.use('/api/v1', createAdministrationRouter(options.auth));
+    if (options.catalogsService !== undefined) {
+      app.use(
+        '/api/v1/external',
+        createCatalogsRouter({
+          catalogsService: options.catalogsService,
+          tokens: options.auth.tokens,
+        }),
+      );
+    }
   }
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
   app.use(notFound);

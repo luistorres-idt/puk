@@ -2,6 +2,9 @@ import { createApp } from './app.js';
 import { TokenService } from './auth/tokens.js';
 import { loadEnvironment } from './config/environment.js';
 import { createPrismaClient } from './database/client.js';
+import { DevMockSheetsClient } from './integrations/google-sheets/dev-mock-sheets.client.js';
+import { GoogleSheetsClient } from './integrations/google-sheets/google-sheets.client.js';
+import { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
@@ -12,9 +15,11 @@ const tokenMetadata = {
   issuer: environment.JWT_ISSUER,
   refreshTtl: environment.JWT_REFRESH_TTL,
 };
+
 const usesPlaceholderKeys =
   environment.NODE_ENV !== 'production' &&
   environment.JWT_ACCESS_PRIVATE_KEY.startsWith('development-only');
+
 const tokens = usesPlaceholderKeys
   ? await TokenService.forDevelopment(tokenMetadata)
   : await TokenService.fromPem({
@@ -24,6 +29,28 @@ const tokens = usesPlaceholderKeys
       refreshPrivateKey: normalizePem(environment.JWT_REFRESH_PRIVATE_KEY),
       refreshPublicKey: normalizePem(environment.JWT_REFRESH_PUBLIC_KEY),
     });
+
+const usesPlaceholderSheets =
+  environment.NODE_ENV !== 'production' &&
+  (environment.GOOGLE_PRIVATE_KEY.startsWith('development-only') ||
+    environment.GOOGLE_SPREADSHEET_ID.startsWith('development-only'));
+
+const sheetsPort = usesPlaceholderSheets
+  ? new DevMockSheetsClient()
+  : new GoogleSheetsClient({
+      spreadsheetId: environment.GOOGLE_SPREADSHEET_ID,
+      clientsSheetName: environment.GOOGLE_CLIENTS_SHEET,
+      equipmentSheetName: environment.GOOGLE_EQUIPMENT_SHEET,
+      clientEmail: environment.GOOGLE_CLIENT_EMAIL,
+      privateKey: environment.GOOGLE_PRIVATE_KEY,
+      timeoutMs: environment.SHEETS_TIMEOUT_MS,
+    });
+
+const catalogsService = new GoogleSheetsCatalogService(
+  sheetsPort,
+  environment.CATALOG_CACHE_TTL_SECONDS,
+);
+
 const server = createApp({
   allowedOrigins: [environment.APP_ORIGIN],
   auth: {
@@ -39,6 +66,7 @@ const server = createApp({
     prisma,
     tokens,
   },
+  catalogsService,
   dependencyCheck: async () => {
     try {
       await prisma.$queryRaw`SELECT 1`;

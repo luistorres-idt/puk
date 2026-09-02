@@ -97,21 +97,21 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 5. Catálogos de Google Sheets
 
-- [ ] Implementar el adaptador autenticado de Google Sheets exclusivamente en la API.
-- [ ] Leer y validar clientes de la pestaña `Clientes`.
-- [ ] Leer, normalizar y validar equipos de la pestaña `SALIDAS`.
-- [ ] Implementar la identidad por ID e IMEI, incluyendo `PENDIENTE`, `N/A` y datos incompletos.
-- [ ] Implementar caché de corta duración con fecha de obtención e invalidación manual.
-- [ ] Forzar una lectura fresca antes de cualquier asignación.
-- [ ] Crear endpoints de búsqueda, detalle/revalidación y refresco de catálogos.
-- [ ] Crear selectores administrativos de cliente y equipos con estados de carga, error y recarga.
-- [ ] Simular respuestas de Sheets en pruebas; ninguna prueba automatizada debe escribir en producción.
+- [x] Implementar el adaptador autenticado de Google Sheets exclusivamente en la API.
+- [x] Leer y validar clientes de la pestaña `Clientes`.
+- [x] Leer, normalizar y validar equipos de la pestaña `SALIDAS`.
+- [x] Implementar la identidad por ID e IMEI, incluyendo `PENDIENTE`, `N/A` y datos incompletos.
+- [x] Implementar caché de corta duración con fecha de obtención e invalidación manual.
+- [x] Forzar una lectura fresca antes de cualquier asignación.
+- [x] Crear endpoints de búsqueda, detalle/revalidación y refresco de catálogos.
+- [x] Crear selectores administrativos de cliente y equipos con estados de carga, error y recarga.
+- [x] Simular respuestas de Sheets en pruebas; ninguna prueba automatizada debe escribir en producción.
 
 ### Criterio de salida
 
-- [ ] La UI permite buscar clientes y equipos y muestra cuándo se obtuvo el catálogo.
-- [ ] Un equipo sin identidad válida no puede seleccionarse.
-- [ ] Los casos de filas movidas, duplicadas o modificadas están cubiertos por pruebas.
+- [x] La UI permite buscar clientes y equipos y muestra cuándo se obtuvo el catálogo.
+- [x] Un equipo sin identidad válida no puede seleccionarse.
+- [x] Los casos de filas movidas, duplicadas o modificadas están cubiertos por pruebas.
 
 ## 6. Creación administrativa de órdenes
 
