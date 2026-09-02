@@ -1,8 +1,11 @@
 import * as v from 'valibot';
 
 export const HealthResponseSchema = v.object({
-  service: v.literal('api'),
-  status: v.literal('ok'),
+  data: v.object({
+    service: v.literal('api'),
+    status: v.picklist(['ok', 'degraded']),
+  }),
+  meta: v.object({ requestId: v.string() }),
 });
 
 export type HealthResponse = v.InferOutput<typeof HealthResponseSchema>;

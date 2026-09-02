@@ -1,11 +1,17 @@
-import type { HealthResponse } from '@puk/contracts';
 import type { RequestHandler } from 'express';
 
+import { sendSuccess } from '../../shared/http.js';
+
 export const getLiveness: RequestHandler = (_request, response) => {
-  const health: HealthResponse = {
+  sendSuccess(response, {
     service: 'api',
     status: 'ok',
-  };
-
-  response.status(200).json(health);
+  });
 };
+
+export function readiness(dependencyCheck: () => Promise<boolean>): RequestHandler {
+  return async (_request, response) => {
+    const ready = await dependencyCheck();
+    sendSuccess(response, { service: 'api', status: ready ? 'ok' : 'degraded' }, ready ? 200 : 503);
+  };
+}

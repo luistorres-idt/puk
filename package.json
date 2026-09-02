@@ -20,7 +20,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "prisma:validate": "prisma validate",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm --filter @puk/contracts build && pnpm -r --if-present test",
     "test:e2e": "pnpm --filter @puk/web test:e2e",
     "typecheck": "pnpm -r --if-present typecheck"
   },

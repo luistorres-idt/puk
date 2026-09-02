@@ -1,1 +1,1 @@
-export { healthRouter } from './health.router.js';
+export { createHealthRouter } from './health.router.js';

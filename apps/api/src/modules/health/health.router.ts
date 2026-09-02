@@ -1,7 +1,11 @@
 import { Router } from 'express';
 
-import { getLiveness } from './health.controller.js';
+import { getLiveness, readiness } from './health.controller.js';
 
-export const healthRouter: Router = Router();
+export function createHealthRouter(dependencyCheck: () => Promise<boolean>): Router {
+  const router = Router();
 
-healthRouter.get('/live', getLiveness);
+  router.get('/live', getLiveness);
+  router.get('/ready', readiness(dependencyCheck));
+  return router;
+}

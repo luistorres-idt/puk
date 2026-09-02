@@ -41,24 +41,24 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 2. Fundamentos transversales de la API
 
-- [ ] Implementar `requestId`, respuesta estándar de éxito y manejador global de errores.
-- [ ] Configurar Helmet, CORS con allowlist, límite JSON, cookies y `trust proxy`.
-- [ ] Configurar rate limiting general y límites particulares para autenticación y operaciones costosas.
-- [ ] Integrar Winston con logs estructurados y Morgan mediante un stream sanitizado.
-- [ ] Redactar cookies, tokens, contraseñas, secretos, URLs firmadas y datos privados en logs.
-- [ ] Implementar middleware Valibot para `params`, `query` y `body`.
-- [ ] Implementar paginación, filtros y ordenamiento mediante allowlists por endpoint.
-- [ ] Crear el modelo de capacidades de código y políticas contextuales por recurso.
-- [ ] Preparar OpenAPI 3.1, Swagger UI y generación de esquemas compatibles desde Valibot.
-- [ ] Añadir `/health/live` y `/health/ready`.
-- [ ] Definir puertos para Google Sheets y S3, sin acoplar casos de uso a sus SDK.
-- [ ] Configurar timeouts, clasificación de errores, reintentos y circuit breakers por integración.
+- [x] Implementar `requestId`, respuesta estándar de éxito y manejador global de errores.
+- [x] Configurar Helmet, CORS con allowlist, límite JSON, cookies y `trust proxy`.
+- [x] Configurar rate limiting general y límites particulares para autenticación y operaciones costosas.
+- [x] Integrar Winston con logs estructurados y Morgan mediante un stream sanitizado.
+- [x] Redactar cookies, tokens, contraseñas, secretos, URLs firmadas y datos privados en logs.
+- [x] Implementar middleware Valibot para `params`, `query` y `body`.
+- [x] Implementar paginación, filtros y ordenamiento mediante allowlists por endpoint.
+- [x] Crear el modelo de capacidades de código y políticas contextuales por recurso.
+- [x] Preparar OpenAPI 3.1, Swagger UI y generación de esquemas compatibles desde Valibot.
+- [x] Añadir `/health/live` y `/health/ready`.
+- [x] Definir puertos para Google Sheets y S3, sin acoplar casos de uso a sus SDK.
+- [x] Configurar timeouts, clasificación de errores, reintentos y circuit breakers por integración.
 
 ### Criterio de salida
 
-- [ ] Las rutas de ejemplo entregan el formato común, validan entradas y propagan `requestId`.
-- [ ] Los logs y errores no exponen información sensible.
-- [ ] El documento OpenAPI se genera y valida sin referencias rotas.
+- [x] Las rutas de ejemplo entregan el formato común, validan entradas y propagan `requestId`.
+- [x] Los logs y errores no exponen información sensible.
+- [x] El documento OpenAPI se genera y valida sin referencias rotas.
 
 ## 3. Persistencia y modelo de dominio
 

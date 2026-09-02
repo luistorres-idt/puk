@@ -2,7 +2,10 @@ import { createApp } from './app.js';
 import { loadEnvironment } from './config/environment.js';
 
 const environment = loadEnvironment();
-const server = createApp().listen(environment.PORT);
+const server = createApp({
+  allowedOrigins: [environment.APP_ORIGIN],
+  trustProxy: environment.TRUST_PROXY,
+}).listen(environment.PORT);
 
 server.on('error', (error) => {
   process.stderr.write(`API server error: ${error.message}\n`);

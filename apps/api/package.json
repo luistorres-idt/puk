@@ -7,8 +7,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
-    "docs:build": "tsx src/docs/build-openapi.ts",
-    "docs:validate": "tsx src/docs/validate-openapi.ts",
+    "docs:build": "pnpm build && node dist/docs/build-openapi.js",
+    "docs:validate": "pnpm build && node dist/docs/validate-openapi.js",
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
@@ -16,9 +16,18 @@
   "dependencies": {
     "@prisma/client": "7.10.0",
     "@puk/contracts": "workspace:*",
+    "@valibot/to-json-schema": "^1.7.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "valibot": "^1.1.0"
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "morgan": "^1.12.0",
+    "opossum": "^10.0.0",
+    "swagger-ui-express": "^5.0.1",
+    "valibot": "^1.1.0",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@puk/typescript-config": "workspace:*",
