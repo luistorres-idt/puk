@@ -1,0 +1,13 @@
+{
+  "extends": "@puk/typescript-config/vue.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "composite": true,
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "tsBuildInfoFile": "node_modules/.cache/web.tsbuildinfo",
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "playwright.config.ts"]
+}

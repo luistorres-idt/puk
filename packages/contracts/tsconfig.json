@@ -1,0 +1,9 @@
+{
+  "extends": "@puk/typescript-config/node.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "tsBuildInfoFile": "node_modules/.cache/contracts.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"]
+}

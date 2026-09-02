@@ -1,0 +1,33 @@
+{
+  "name": "@puk/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./dist/app.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/server.ts",
+    "docs:build": "tsx src/docs/build-openapi.ts",
+    "docs:validate": "tsx src/docs/validate-openapi.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@prisma/client": "7.10.0",
+    "@puk/contracts": "workspace:*",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "valibot": "^1.1.0"
+  },
+  "devDependencies": {
+    "@puk/typescript-config": "workspace:*",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.10.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.3"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@puk/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run src",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "valibot": "^1.1.0"
+  },
+  "devDependencies": {
+    "@puk/typescript-config": "workspace:*",
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.3"
+  }
+}

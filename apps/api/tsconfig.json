@@ -1,0 +1,13 @@
+{
+  "extends": "@puk/typescript-config/node.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "composite": true,
+    "paths": {
+      "@api/*": ["src/*"]
+    },
+    "rootDir": "src",
+    "tsBuildInfoFile": "node_modules/.cache/api.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"]
+}
