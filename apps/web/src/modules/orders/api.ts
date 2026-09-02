@@ -29,6 +29,7 @@ export interface EquipmentItem {
   brandSnapshot?: string | null;
   modelSnapshot?: string | null;
   equipmentConditionSnapshot?: string | null;
+  verificationStatus?: string | null;
 }
 
 export interface UnitItem {

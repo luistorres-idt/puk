@@ -155,58 +155,58 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 8. Flujo de trabajo del técnico
 
-- [ ] Implementar consulta de órdenes filtrada por el técnico autenticado.
-- [ ] Crear las vistas mobile-first de “Mis órdenes”, detalle, unidades y progreso.
-- [ ] Implementar la transición `ASSIGNED -> IN_PROGRESS` solo para el técnico asignado.
-- [ ] Implementar verificación de cada equipo como coincidencia.
-- [ ] Implementar reporte de discrepancias para IMEI, ID, serie, unidad y otros tipos.
-- [ ] Permitir continuar y cerrar aunque existan discrepancias no resueltas.
-- [ ] Implementar el checklist único por unidad con sus cinco categorías iniciales.
-- [ ] Validar `Bien`, `Mal` o `No aplica` y exigir observación cuando el resultado sea `Mal`.
-- [ ] Mostrar el progreso y los requisitos pendientes de cada unidad.
-- [ ] Impedir cambios del técnico en órdenes completadas o que no le pertenezcan.
+- [x] Implementar consulta de órdenes filtrada por el técnico autenticado.
+- [x] Crear las vistas mobile-first de “Mis órdenes”, detalle, unidades y progreso.
+- [x] Implementar la transición `ASSIGNED -> IN_PROGRESS` solo para el técnico asignado.
+- [x] Implementar verificación de cada equipo como coincidencia.
+- [x] Implementar reporte de discrepancias para IMEI, ID, serie, unidad y otros tipos.
+- [x] Permitir continuar y cerrar aunque existan discrepancias no resueltas.
+- [x] Implementar el checklist único por unidad con sus cinco categorías iniciales.
+- [x] Validar `Bien`, `Mal` o `No aplica` y exigir observación cuando el resultado sea `Mal`.
+- [x] Mostrar el progreso y los requisitos pendientes de cada unidad.
+- [x] Impedir cambios del técnico en órdenes completadas o que no le pertenezcan.
 
 ### Criterio de salida
 
-- [ ] Un técnico solo puede consultar y modificar sus órdenes asignadas.
-- [ ] Todas las reglas de transición, verificación, discrepancia y checklist tienen pruebas unitarias y de integración.
+- [x] Un técnico solo puede consultar y modificar sus órdenes asignadas.
+- [x] Todas las reglas de transición, verificación, discrepancia y checklist tienen pruebas unitarias y de integración.
 
 ## 9. Evidencias y firma
 
-- [ ] Implementar el adaptador S3 y configuración local con MinIO.
-- [ ] Crear el flujo de evidencia `PENDING -> COMPLETED` con URL prefirmada.
-- [ ] Generar las claves de objeto en el servidor según la estructura definida.
-- [ ] Validar existencia, tipo MIME, tamaño y metadatos antes de confirmar una subida.
-- [ ] Permitir JPEG, PNG y WebP dentro de los límites configurados.
-- [ ] Implementar eliminación lógica autorizada y limpieza de subidas huérfanas.
-- [ ] Crear captura móvil desde cámara/galería y compresión previa en Vue.
-- [ ] Exigir al menos una foto completada por categoría, incluso para `No aplica`.
-- [ ] Implementar captura del nombre y una firma PNG por orden.
-- [ ] Servir evidencias y firma mediante URLs temporales autorizadas o proxy seguro.
-- [ ] Auditar reemplazos o eliminaciones sin guardar binarios ni URLs firmadas en logs.
+- [x] Implementar el adaptador S3 y configuración local con MinIO.
+- [x] Crear el flujo de evidencia `PENDING -> COMPLETED` con URL prefirmada.
+- [x] Generar las claves de objeto en el servidor según la estructura definida.
+- [x] Validar existencia, tipo MIME, tamaño y metadatos antes de confirmar una subida.
+- [x] Permitir JPEG, PNG y WebP dentro de los límites configurados.
+- [x] Implementar eliminación lógica autorizada y limpieza de subidas huérfanas.
+- [x] Crear captura móvil desde cámara/galería y compresión previa en Vue.
+- [x] Exigir al menos una foto completada por categoría, incluso para `No aplica`.
+- [x] Implementar captura del nombre y una firma PNG por orden.
+- [x] Servir evidencias y firma mediante URLs temporales autorizadas o proxy seguro.
+- [x] Auditar reemplazos o eliminaciones sin guardar binarios ni URLs firmadas en logs.
 
 ### Criterio de salida
 
-- [ ] Los bytes de fotografías y firma existen solo en almacenamiento privado, no en PostgreSQL.
-- [ ] No se puede confirmar una subida inexistente, demasiado grande o con tipo no permitido.
-- [ ] Un usuario sin acceso a la orden no puede obtener URLs de sus objetos.
+- [x] Los bytes de fotografías y firma existen solo en almacenamiento privado, no en PostgreSQL.
+- [x] No se puede confirmar una subida inexistente, demasiado grande o con tipo no permitido.
+- [x] Un usuario sin acceso a la orden no puede obtener URLs de sus objetos.
 
 ## 10. Cierre, cita fallida y correcciones
 
-- [ ] Implementar el cálculo de completitud de todas las unidades en el backend.
-- [ ] Exigir equipos verificados, checklist completo, fotos por categoría, nombre y firma para el cierre normal.
-- [ ] Implementar cierre idempotente y transición a `COMPLETED`.
-- [ ] Implementar cita fallida exigiendo únicamente un motivo no vacío.
-- [ ] Implementar solicitud administrativa de corrección y retorno a trabajo técnico.
-- [ ] Conservar evidencias y firmas anteriores al reabrir y auditar cualquier reemplazo.
-- [ ] Implementar cancelación y reglas de inmutabilidad por estado.
-- [ ] Crear resumen previo al cierre y mensajes claros sobre requisitos faltantes.
+- [x] Implementar el cálculo de completitud de todas las unidades en el backend.
+- [x] Exigir equipos verificados, checklist completo, fotos por categoría, nombre y firma para el cierre normal.
+- [x] Implementar cierre idempotente y transición a `COMPLETED`.
+- [x] Implementar cita fallida exigiendo únicamente un motivo no vacío.
+- [x] Implementar solicitud administrativa de corrección y retorno a trabajo técnico.
+- [x] Conservar evidencias y firmas anteriores al reabrir y auditar cualquier reemplazo.
+- [x] Implementar cancelación y reglas de inmutabilidad por estado.
+- [x] Crear resumen previo al cierre y mensajes claros sobre requisitos faltantes.
 
 ### Criterio de salida
 
-- [ ] Una orden normal incompleta no puede cerrarse aunque la UI sea omitida.
-- [ ] Una discrepancia no bloquea el cierre si se satisfacen los demás requisitos.
-- [ ] Una cita fallida no solicita checklist, fotografías ni firma.
+- [x] Una orden normal incompleta no puede cerrarse aunque la UI sea omitida.
+- [x] Una discrepancia no bloquea el cierre si se satisfacen los demás requisitos.
+- [x] Una cita fallida no solicita checklist, fotografías ni firma.
 
 ## 11. Frontend completo y PWA básica
 

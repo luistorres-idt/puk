@@ -219,12 +219,30 @@ onMounted(() => {
         </NButton>
 
         <NButton
+          v-if="order.status !== 'DRAFT' && order.status !== 'CANCELLED'"
+          type="info"
+          secondary
+          @click="router.push(`/orders/${order.id}/execute`)"
+        >
+          Modo Técnico →
+        </NButton>
+
+        <NButton
           v-if="order.status !== 'COMPLETED' && order.status !== 'CANCELLED'"
           type="error"
           secondary
           @click="showCancelModal = true"
         >
           Cancelar Orden
+        </NButton>
+      </div>
+
+      <div v-else-if="order && order.status !== 'DRAFT' && order.status !== 'CANCELLED'">
+        <NButton
+          type="primary"
+          @click="router.push(`/orders/${order.id}/execute`)"
+        >
+          Abrir en Modo Técnico →
         </NButton>
       </div>
     </div>

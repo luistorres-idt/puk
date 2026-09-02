@@ -6,6 +6,9 @@ import { DevMockSheetsClient } from './integrations/google-sheets/dev-mock-sheet
 import { GoogleSheetsClient } from './integrations/google-sheets/google-sheets.client.js';
 import { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
 import { OrdersService, SyncService } from './modules/orders/index.js';
+import { ExecutionService } from './modules/execution/index.js';
+import { S3StorageClient } from './integrations/object-storage/s3.client.js';
+import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
@@ -62,6 +65,27 @@ const syncInterval = setInterval(() => {
 }, environment.OUTBOX_POLL_INTERVAL_MS);
 syncInterval.unref();
 
+const usesPlaceholderStorage =
+  environment.NODE_ENV !== 'production' &&
+  environment.S3_ACCESS_KEY_ID.startsWith('development-only');
+
+const storagePort = usesPlaceholderStorage
+  ? new DevMockStorageClient()
+  : new S3StorageClient({
+      endpoint: environment.S3_ENDPOINT,
+      region: environment.S3_REGION,
+      bucket: environment.S3_BUCKET,
+      accessKeyId: environment.S3_ACCESS_KEY_ID,
+      secretAccessKey: environment.S3_SECRET_ACCESS_KEY,
+      forcePathStyle: environment.S3_FORCE_PATH_STYLE,
+    });
+
+const executionService = new ExecutionService(prisma, storagePort, {
+  maxEvidenceBytes: environment.MAX_EVIDENCE_BYTES,
+  maxSignatureBytes: environment.MAX_SIGNATURE_BYTES,
+  presignedUrlTtlSeconds: environment.PRESIGNED_URL_TTL_SECONDS,
+});
+
 const server = createApp({
   allowedOrigins: [environment.APP_ORIGIN],
   auth: {
@@ -80,6 +104,7 @@ const server = createApp({
   catalogsService,
   ordersService,
   syncService,
+  executionService,
   dependencyCheck: async () => {
     try {
       await prisma.$queryRaw`SELECT 1`;
