@@ -19,8 +19,7 @@ export function createCatalogsRouter(options: {
     authorize('catalogs:read'),
     validate({ query: CatalogSearchQuerySchema }),
     async (request, response) => {
-      const search =
-        typeof request.query.search === 'string' ? request.query.search : undefined;
+      const search = typeof request.query.search === 'string' ? request.query.search : undefined;
       const { data, fetchedAt } = await options.catalogsService.getClients(
         search !== undefined ? { search } : {},
       );
@@ -33,8 +32,7 @@ export function createCatalogsRouter(options: {
     authorize('catalogs:read'),
     validate({ query: CatalogSearchQuerySchema }),
     async (request, response) => {
-      const search =
-        typeof request.query.search === 'string' ? request.query.search : undefined;
+      const search = typeof request.query.search === 'string' ? request.query.search : undefined;
       const { data, fetchedAt } = await options.catalogsService.getEquipment(
         search !== undefined ? { search } : {},
       );
@@ -42,33 +40,25 @@ export function createCatalogsRouter(options: {
     },
   );
 
-  router.get(
-    '/equipment/:externalKey',
-    authorize('catalogs:read'),
-    async (request, response) => {
-      const externalKey = String(request.params.externalKey);
-      const forceFresh = request.query.fresh === 'true';
-      const { equipment, fetchedAt } = await options.catalogsService.findEquipmentByKey(
-        externalKey,
-        forceFresh ? { forceFresh: true } : {},
-      );
+  router.get('/equipment/:externalKey', authorize('catalogs:read'), async (request, response) => {
+    const externalKey = String(request.params.externalKey);
+    const forceFresh = request.query.fresh === 'true';
+    const { equipment, fetchedAt } = await options.catalogsService.findEquipmentByKey(
+      externalKey,
+      forceFresh ? { forceFresh: true } : {},
+    );
 
-      if (!equipment) {
-        throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'Equipo no encontrado');
-      }
+    if (!equipment) {
+      throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'Equipo no encontrado');
+    }
 
-      sendSuccess(response, equipment, 200, { fetchedAt });
-    },
-  );
+    sendSuccess(response, equipment, 200, { fetchedAt });
+  });
 
-  router.post(
-    '/refresh',
-    authorize('orders:manage'),
-    async (_request, response) => {
-      options.catalogsService.invalidateCache();
-      sendSuccess(response, { refreshed: true }, 200);
-    },
-  );
+  router.post('/refresh', authorize('orders:manage'), async (_request, response) => {
+    options.catalogsService.invalidateCache();
+    sendSuccess(response, { refreshed: true }, 200);
+  });
 
   return router;
 }

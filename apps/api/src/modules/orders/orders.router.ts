@@ -31,47 +31,36 @@ export function createOrdersRouter(options: {
 
   // --- Orders CRUD ---
 
-  router.get(
-    '/',
-    validate({ query: OrderListQuerySchema }),
-    async (request, response) => {
-      const actor = {
-        id: request.auth!.userId,
-        role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-      };
-      const result = await options.ordersService.listOrders(
-        actor,
-        request.query as unknown as OrderListQuery,
-      );
-      sendSuccess(response, result.data, 200, { pagination: result.pagination });
-    },
-  );
+  router.get('/', validate({ query: OrderListQuerySchema }), async (request, response) => {
+    const actor = {
+      id: request.auth!.userId,
+      role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+    };
+    const result = await options.ordersService.listOrders(
+      actor,
+      request.query as unknown as OrderListQuery,
+    );
+    sendSuccess(response, result.data, 200, { pagination: result.pagination });
+  });
 
   router.post(
     '/',
     authorize('orders:manage'),
     validate({ body: CreateOrderSchema }),
     async (request, response) => {
-      const order = await options.ordersService.createOrder(
-        request.auth!.userId,
-        request.body,
-      );
+      const order = await options.ordersService.createOrder(request.auth!.userId, request.body);
       sendSuccess(response, order, 201);
     },
   );
 
-  router.get(
-    '/:id',
-    validate({ params: IdParamsSchema }),
-    async (request, response) => {
-      const actor = {
-        id: request.auth!.userId,
-        role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-      };
-      const order = await options.ordersService.getOrderById(String(request.params.id), actor);
-      sendSuccess(response, order);
-    },
-  );
+  router.get('/:id', validate({ params: IdParamsSchema }), async (request, response) => {
+    const actor = {
+      id: request.auth!.userId,
+      role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+    };
+    const order = await options.ordersService.getOrderById(String(request.params.id), actor);
+    sendSuccess(response, order);
+  });
 
   router.patch(
     '/:id',
@@ -211,20 +200,14 @@ export function createOrdersRouter(options: {
 
   // --- Sync Operations ---
 
-  router.get(
-    '/:id/sync',
-    validate({ params: IdParamsSchema }),
-    async (request, response) => {
-      if (!options.syncService) {
-        sendSuccess(response, { isFullySynced: true, operations: [] });
-        return;
-      }
-      const syncStatus = await options.syncService.getOrderSyncStatus(
-        String(request.params.id),
-      );
-      sendSuccess(response, syncStatus);
-    },
-  );
+  router.get('/:id/sync', validate({ params: IdParamsSchema }), async (request, response) => {
+    if (!options.syncService) {
+      sendSuccess(response, { isFullySynced: true, operations: [] });
+      return;
+    }
+    const syncStatus = await options.syncService.getOrderSyncStatus(String(request.params.id));
+    sendSuccess(response, syncStatus);
+  });
 
   router.post(
     '/:id/sync/retry',
@@ -235,9 +218,7 @@ export function createOrdersRouter(options: {
         sendSuccess(response, { retriedCount: 0 });
         return;
       }
-      const result = await options.syncService.retryFailedOperations(
-        String(request.params.id),
-      );
+      const result = await options.syncService.retryFailedOperations(String(request.params.id));
       // Process retried operations
       options.syncService.processPendingOperations().catch(() => {});
       sendSuccess(response, result);

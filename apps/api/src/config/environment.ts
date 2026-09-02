@@ -52,7 +52,7 @@ export const EnvironmentSchema = v.object({
   LOG_LEVEL: v.picklist(['debug', 'info', 'warn', 'error']),
   MAX_EVIDENCE_BYTES: integerFromString(1, 100 * 1024 * 1024),
   MAX_SIGNATURE_BYTES: integerFromString(1, 10 * 1024 * 1024),
-  MIN_PASSWORD_LENGTH: integerFromString(8, 128),
+  MIN_PASSWORD_LENGTH: v.fallback(integerFromString(8, 128), 12),
   NODE_ENV: v.picklist(['development', 'test', 'production']),
   OUTBOX_POLL_INTERVAL_MS: integerFromString(100, 300_000),
   PORT: integerFromString(1, 65_535),

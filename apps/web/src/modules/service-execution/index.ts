@@ -1,7 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 export * from './api.js';
-export { default as OrderExecutionView } from './views/OrderExecutionView.vue';
+export * from './queries.js';
 
 export const serviceExecutionRoutes: RouteRecordRaw[] = [
   {

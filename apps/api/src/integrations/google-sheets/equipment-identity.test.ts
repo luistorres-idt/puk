@@ -19,17 +19,21 @@ describe('equipment-identity', () => {
   it('uses ID as primary key when valid', () => {
     const row = [
       '2026-01-01', // A: Fecha
-      'CalAmp',     // B: Marca
-      'LMU-3030',   // C: Modelo
-      'ID-999',     // D: ID
-      '8675309',    // E: IMEI
+      'CalAmp', // B: Marca
+      'LMU-3030', // C: Modelo
+      'ID-999', // D: ID
+      '8675309', // E: IMEI
       '5512345678', // F: Linea
-      '8952...',    // G: ICCID
-      'Telcel',     // H: Compania
-      'NUEVO',      // I: Estado
-      'Cliente X',  // J: Cliente
-      'STOCK',      // K: Estado servicio
-      '', '', '', '', ''
+      '8952...', // G: ICCID
+      'Telcel', // H: Compania
+      'NUEVO', // I: Estado
+      'Cliente X', // J: Cliente
+      'STOCK', // K: Estado servicio
+      '',
+      '',
+      '',
+      '',
+      '',
     ];
 
     const parsed = parseEquipmentRow(row, 5);
@@ -45,9 +49,19 @@ describe('equipment-identity', () => {
       '2026-01-01',
       'Queclink',
       'GV300',
-      'PENDIENTE',  // D: ID
+      'PENDIENTE', // D: ID
       '3569874123', // E: IMEI
-      '', '', '', 'NUEVO', '', 'STOCK', '', '', '', '', ''
+      '',
+      '',
+      '',
+      'NUEVO',
+      '',
+      'STOCK',
+      '',
+      '',
+      '',
+      '',
+      '',
     ];
 
     const parsed = parseEquipmentRow(row, 10);
@@ -64,7 +78,17 @@ describe('equipment-identity', () => {
       'GV300',
       'N/A',
       'PENDIENTE',
-      '', '', '', '', '', '', '', '', '', '', ''
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
     ];
 
     const parsed = parseEquipmentRow(row, 15);

@@ -38,11 +38,19 @@ async function submit(): Promise<void> {
       <n-alert v-if="error" class="mb-4" type="error">{{ error }}</n-alert>
       <n-form @submit.prevent="submit">
         <n-form-item label="Correo">
-          <n-input v-model:value="email" autocomplete="username" type="text" />
+          <n-input
+            v-model:value="email"
+            aria-label="Correo"
+            placeholder="correo@ejemplo.com"
+            autocomplete="username"
+            type="text"
+          />
         </n-form-item>
         <n-form-item label="Contraseña">
           <n-input
             v-model:value="password"
+            aria-label="Contraseña"
+            placeholder="••••••••"
             autocomplete="current-password"
             show-password-on="click"
             type="password"

@@ -51,11 +51,7 @@ export class ExecutionService {
     this.presignedUrlTtlSeconds = options.presignedUrlTtlSeconds ?? 300;
   }
 
-  private async assertOrderAccess(
-    userId: string,
-    role: 'ADMIN' | 'TECHNICIAN',
-    orderId: string,
-  ) {
+  private async assertOrderAccess(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { technician: true },
@@ -331,7 +327,8 @@ export class ExecutionService {
       });
     }
 
-    const extension = input.mimeType === 'image/png' ? 'png' : input.mimeType === 'image/webp' ? 'webp' : 'jpg';
+    const extension =
+      input.mimeType === 'image/png' ? 'png' : input.mimeType === 'image/webp' ? 'webp' : 'jpg';
     const objectKey = `evidence/${orderId}/${unitId}/${category.toLowerCase()}/${randomUUID()}.${extension}`;
 
     const uploadUrl = await this.storagePort.createUploadUrl(
@@ -381,16 +378,16 @@ export class ExecutionService {
       throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'Registro de evidencia no encontrado');
     }
 
-    await this.assertOrderAccess(
-      userId,
-      role,
-      evidence.checklistItem.checklist.orderUnit.order.id,
-    );
+    await this.assertOrderAccess(userId, role, evidence.checklistItem.checklist.orderUnit.order.id);
 
     // Validate object exists in storage
     const head = await this.storagePort.headObject(evidence.objectKey);
     if (!head) {
-      throw new AppError(400, 'UPLOAD_NOT_FOUND', 'El archivo no fue encontrado en el almacenamiento');
+      throw new AppError(
+        400,
+        'UPLOAD_NOT_FOUND',
+        'El archivo no fue encontrado en el almacenamiento',
+      );
     }
 
     if (head.bytes > this.maxEvidenceBytes) {
@@ -431,11 +428,7 @@ export class ExecutionService {
       throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'Evidencia no encontrada');
     }
 
-    await this.assertOrderAccess(
-      userId,
-      role,
-      evidence.checklistItem.checklist.orderUnit.order.id,
-    );
+    await this.assertOrderAccess(userId, role, evidence.checklistItem.checklist.orderUnit.order.id);
 
     return this.prisma.evidence.update({
       where: { id: evidenceId },
@@ -464,11 +457,7 @@ export class ExecutionService {
       throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'Evidencia no disponible');
     }
 
-    await this.assertOrderAccess(
-      userId,
-      role,
-      evidence.checklistItem.checklist.orderUnit.order.id,
-    );
+    await this.assertOrderAccess(userId, role, evidence.checklistItem.checklist.orderUnit.order.id);
 
     const downloadUrl = await this.storagePort.createDownloadUrl(
       evidence.objectKey,
@@ -596,7 +585,9 @@ export class ExecutionService {
       // 1. All equipments verified
       for (const eq of unit.equipment) {
         if (eq.verificationStatus === EquipmentVerificationStatus.PENDING) {
-          missing.push(`Equipo ${eq.externalKey} en unidad ${unit.label} pendiente de verificación`);
+          missing.push(
+            `Equipo ${eq.externalKey} en unidad ${unit.label} pendiente de verificación`,
+          );
         }
       }
 
@@ -610,12 +601,18 @@ export class ExecutionService {
           const item = itemMap.get(cat);
           if (!item) {
             missing.push(`Falta categoría ${cat} en checklist de unidad ${unit.label}`);
-          } else {
-            // Check photo per category
-            if (!item.evidence || item.evidence.length === 0) {
-              missing.push(`Falta fotografía obligatoria para la categoría ${cat} en unidad ${unit.label}`);
-            }
           }
+        }
+
+        // Check minimum 3 photos per unit
+        const totalEvidence = checklist.items.reduce(
+          (sum, item) => sum + (item.evidence?.length ?? 0),
+          0,
+        );
+        if (totalEvidence < 3) {
+          missing.push(
+            `Se requieren al menos 3 fotografías de evidencia en unidad ${unit.label} (actualmente ${totalEvidence}/3)`,
+          );
         }
       }
     }
@@ -634,8 +631,15 @@ export class ExecutionService {
   public async completeOrder(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
     const order = await this.assertOrderAccess(userId, role, orderId);
 
-    if (order.status !== OrderStatus.IN_PROGRESS && order.status !== OrderStatus.REQUIRES_CORRECTION) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden completar órdenes en progreso');
+    if (
+      order.status !== OrderStatus.IN_PROGRESS &&
+      order.status !== OrderStatus.REQUIRES_CORRECTION
+    ) {
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden completar órdenes en progreso',
+      );
     }
 
     const completeness = await this.validateCompleteness(orderId);
@@ -696,7 +700,11 @@ export class ExecutionService {
     const order = await this.assertOrderAccess(userId, role, orderId);
 
     if (order.status !== OrderStatus.ASSIGNED && order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden marcar como cita fallida órdenes asignadas o en progreso');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden marcar como cita fallida órdenes asignadas o en progreso',
+      );
     }
 
     return domainTransaction(this.prisma, async (tx, effects) => {
@@ -733,18 +741,18 @@ export class ExecutionService {
     });
   }
 
-  public async requireCorrection(
-    adminUserId: string,
-    orderId: string,
-    input: RequireCorrection,
-  ) {
+  public async requireCorrection(adminUserId: string, orderId: string, input: RequireCorrection) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
     if (order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se puede solicitar corrección a órdenes completadas o en progreso');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se puede solicitar corrección a órdenes completadas o en progreso',
+      );
     }
 
     return domainTransaction(this.prisma, async (tx, effects) => {

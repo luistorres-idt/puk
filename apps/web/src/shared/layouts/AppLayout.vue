@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { NButton } from 'naive-ui';
+import { NButton, NTag } from 'naive-ui';
 import { useRouter } from 'vue-router';
-
+import { useOnline } from '@vueuse/core';
 import { useSessionStore } from '@/stores/session';
 
 const session = useSessionStore();
 const router = useRouter();
+const isOnline = useOnline();
 
 async function logout(): Promise<void> {
   await session.logout();
@@ -14,33 +15,83 @@ async function logout(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-slate-50">
-    <header class="border-b border-slate-200 bg-white">
+  <div class="flex min-h-screen flex-col bg-slate-50 text-slate-800">
+    <!-- Offline disclaimer banner -->
+    <div
+      v-if="!isOnline"
+      class="bg-amber-600 px-4 py-2 text-center text-xs font-semibold text-white shadow-inner"
+      role="alert"
+    >
+      Sin conexión a internet. Este sistema requiere conexión activa para registrar, guardar y
+      sincronizar órdenes.
+    </div>
+
+    <!-- Header navigation -->
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
       <div
-        class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6"
+        class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6"
       >
-        <router-link class="text-sm font-semibold tracking-wide text-blue-900 uppercase" to="/">
-          Bull Dog Solution
-        </router-link>
-        <nav v-if="session.user" class="flex items-center gap-3">
+        <div class="flex items-center gap-3">
           <router-link
-            class="text-sm text-slate-700 hover:text-blue-800"
+            class="flex items-center gap-2 text-sm font-bold tracking-tight text-blue-900 uppercase hover:text-blue-700"
+            to="/"
+          >
+            <div
+              class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-900 text-xs font-black text-white"
+            >
+              B
+            </div>
+            <span>Bull Dog Solution</span>
+          </router-link>
+
+          <n-tag
+            v-if="session.user"
+            size="small"
+            :type="session.user.role === 'ADMIN' ? 'primary' : 'info'"
+            round
+          >
+            {{ session.user.role === 'ADMIN' ? 'Admin' : 'Técnico' }}
+          </n-tag>
+        </div>
+
+        <nav v-if="session.user" class="flex items-center gap-2 sm:gap-4">
+          <router-link
+            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+            to="/"
+          >
+            Inicio
+          </router-link>
+          <router-link
+            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
             to="/orders"
           >
-            Órdenes
+            {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
           </router-link>
           <router-link
             v-if="session.user.role === 'ADMIN'"
-            class="text-sm text-slate-700 hover:text-blue-800"
+            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
             to="/technicians"
           >
             Técnicos
           </router-link>
-          <span class="hidden text-sm text-slate-500 sm:inline">{{ session.user.name }}</span>
-          <n-button quaternary size="small" @click="logout">Salir</n-button>
+
+          <span class="hidden text-xs text-slate-500 md:inline">
+            {{ session.user.name }}
+          </span>
+
+          <n-button quaternary size="small" @click="logout"> Salir </n-button>
         </nav>
       </div>
     </header>
-    <slot />
+
+    <!-- Main content slot -->
+    <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
+      <slot />
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-400">
+      Bull Dog Solution &bull; Conexión en línea requerida para operaciones
+    </footer>
   </div>
 </template>

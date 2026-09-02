@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router';
 
 import { authRoutes } from '@/modules/auth';
 import { homeRoutes } from '@/modules/home';
@@ -8,7 +8,7 @@ import { technicianRoutes } from '@/modules/technicians';
 import { useSessionStore } from '@/stores/session';
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: typeof window !== 'undefined' ? createWebHistory() : createMemoryHistory(),
   routes: [
     ...authRoutes,
     ...homeRoutes,

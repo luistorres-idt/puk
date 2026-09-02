@@ -9,11 +9,7 @@ export const ChecklistCategorySchema = v.picklist([
 ]);
 export type ChecklistCategory = v.InferOutput<typeof ChecklistCategorySchema>;
 
-export const ChecklistConditionSchema = v.picklist([
-  'GOOD',
-  'BAD',
-  'NOT_APPLICABLE',
-]);
+export const ChecklistConditionSchema = v.picklist(['GOOD', 'BAD', 'NOT_APPLICABLE']);
 export type ChecklistCondition = v.InferOutput<typeof ChecklistConditionSchema>;
 
 export const SaveChecklistItemSchema = v.pipe(

@@ -20,7 +20,10 @@ export function isValidIdentifier(value: string | null | undefined): boolean {
   return trimmed.length > 0 && !INVALID_IDENTIFIERS.has(trimmed);
 }
 
-export function parseEquipmentRow(rowValues: readonly string[], rowNumber: number): ExternalEquipment {
+export function parseEquipmentRow(
+  rowValues: readonly string[],
+  rowNumber: number,
+): ExternalEquipment {
   const getCol = (index: number): string | null => {
     const val = rowValues[index]?.trim();
     return val && val.length > 0 ? val : null;

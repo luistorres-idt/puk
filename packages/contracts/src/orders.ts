@@ -27,16 +27,9 @@ export const EquipmentVerificationStatusSchema = v.picklist([
   'MATCHED',
   'DISCREPANCY_REPORTED',
 ]);
-export type EquipmentVerificationStatus = v.InferOutput<
-  typeof EquipmentVerificationStatusSchema
->;
+export type EquipmentVerificationStatus = v.InferOutput<typeof EquipmentVerificationStatusSchema>;
 
-export const SyncStatusSchema = v.picklist([
-  'PENDING',
-  'PROCESSING',
-  'SYNCED',
-  'FAILED',
-]);
+export const SyncStatusSchema = v.picklist(['PENDING', 'PROCESSING', 'SYNCED', 'FAILED']);
 export type SyncStatus = v.InferOutput<typeof SyncStatusSchema>;
 
 export const CreateOrderSchema = v.object({

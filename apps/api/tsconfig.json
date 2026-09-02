@@ -1,7 +1,6 @@
 {
   "extends": "@puk/typescript-config/node.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "composite": true,
     "paths": {
       "@api/*": ["src/*"]

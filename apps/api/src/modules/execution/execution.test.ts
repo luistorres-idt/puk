@@ -62,37 +62,67 @@ describe('ExecutionService', () => {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           order: {
-            update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
-              id: where.id,
-              ...data,
-            })),
+            update: vi.fn(
+              async ({
+                where,
+                data,
+              }: {
+                where: { id: string };
+                data: Record<string, unknown>;
+              }) => ({
+                id: where.id,
+                ...data,
+              }),
+            ),
           },
           orderUnit: {
             updateMany: vi.fn(),
             findMany: vi.fn().mockResolvedValue([{ id: 'unit-1' }]),
           },
           orderEquipment: {
-            update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
-              id: where.id,
-              ...data,
-            })),
+            update: vi.fn(
+              async ({
+                where,
+                data,
+              }: {
+                where: { id: string };
+                data: Record<string, unknown>;
+              }) => ({
+                id: where.id,
+                ...data,
+              }),
+            ),
             updateMany: vi.fn(),
           },
           discrepancy: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'disc-1', ...data })),
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+              id: 'disc-1',
+              ...data,
+            })),
           },
           checklist: {
             findUnique: vi.fn(),
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'cl-1', ...data })),
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+              id: 'cl-1',
+              ...data,
+            })),
           },
           checklistItem: {
             upsert: vi.fn(),
           },
           evidence: {
-            update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
-              id: where.id,
-              ...data,
-            })),
+            update: vi.fn(
+              async ({
+                where,
+                data,
+              }: {
+                where: { id: string };
+                data: Record<string, unknown>;
+              }) => ({
+                id: where.id,
+                ...data,
+              }),
+            ),
           },
           auditLog: {
             createMany: vi.fn(),
@@ -245,12 +275,10 @@ describe('ExecutionService', () => {
       status: UploadStatus.COMPLETED,
     });
 
-    const completed = await service.completeEvidence(
-      'admin-1',
-      'ADMIN',
-      'ev-1',
-      { width: 1920, height: 1080 },
-    );
+    const completed = await service.completeEvidence('admin-1', 'ADMIN', 'ev-1', {
+      width: 1920,
+      height: 1080,
+    });
     expect(completed.status).toBe(UploadStatus.COMPLETED);
   });
 
@@ -301,5 +329,82 @@ describe('ExecutionService', () => {
     });
     expect(result.status).toBe(OrderStatus.REQUIRES_CORRECTION);
     expect(result.generalNotes).toContain('Corrección solicitada');
+  });
+
+  describe('technician isolation and access restrictions', () => {
+    it('blocks a technician from starting an order assigned to another technician', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        status: OrderStatus.ASSIGNED,
+        technicianId: 'tech-A',
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        technicianId: 'tech-B',
+      });
+
+      await expect(
+        service.startOrder('user-tech-b', 'TECHNICIAN', 'order-1'),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        status: 403,
+      });
+    });
+
+    it('blocks a technician from verifying equipment on another technician order', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        status: OrderStatus.IN_PROGRESS,
+        technicianId: 'tech-A',
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        technicianId: 'tech-B',
+      });
+
+      await expect(
+        service.verifyEquipment('user-tech-b', 'TECHNICIAN', 'order-1', 'unit-1', 'eq-1'),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        status: 403,
+      });
+    });
+
+    it('blocks a technician from reporting discrepancies on another technician order', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        status: OrderStatus.IN_PROGRESS,
+        technicianId: 'tech-A',
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        technicianId: 'tech-B',
+      });
+
+      await expect(
+        service.reportDiscrepancy('user-tech-b', 'TECHNICIAN', 'order-1', 'unit-1', 'eq-1', {
+          type: 'IMEI',
+          description: 'No match',
+        }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        status: 403,
+      });
+    });
+
+    it('blocks a technician from completing an order assigned to another technician', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        status: OrderStatus.IN_PROGRESS,
+        technicianId: 'tech-A',
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        technicianId: 'tech-B',
+      });
+
+      await expect(
+        service.completeOrder('user-tech-b', 'TECHNICIAN', 'order-1'),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        status: 403,
+      });
+    });
   });
 });

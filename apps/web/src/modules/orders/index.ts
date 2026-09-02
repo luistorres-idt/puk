@@ -1,9 +1,8 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 export * from './api.js';
-export { default as OrdersListView } from './views/OrdersListView.vue';
-export { default as OrderCreateWizardView } from './views/OrderCreateWizardView.vue';
-export { default as OrderDetailView } from './views/OrderDetailView.vue';
+export * from './formatters.js';
+export * from './queries.js';
 
 export const orderRoutes: RouteRecordRaw[] = [
   {

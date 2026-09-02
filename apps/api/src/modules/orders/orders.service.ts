@@ -10,7 +10,7 @@ import type {
 import { domainTransaction } from '../../database/transaction.js';
 import { updateOrderVersion } from '../../database/optimistic-lock.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
-import { OrderStatus, type Prisma } from '../../generated/prisma/client.js';
+import { OrderStatus, UploadStatus, type Prisma } from '../../generated/prisma/client.js';
 import type { GoogleSheetsCatalogService } from '../../integrations/google-sheets/google-sheets.service.js';
 import { AppError } from '../../shared/errors.js';
 
@@ -91,10 +91,7 @@ export class OrdersService {
     };
   }
 
-  public async getOrderById(
-    orderId: string,
-    actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
-  ) {
+  public async getOrderById(orderId: string, actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' }) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -103,7 +100,18 @@ export class OrdersService {
         units: {
           include: {
             equipment: true,
-            checklist: { include: { items: { include: { evidence: true } } } },
+            checklist: {
+              include: {
+                items: {
+                  include: {
+                    evidence: {
+                      where: { status: UploadStatus.COMPLETED },
+                      orderBy: { createdAt: 'asc' },
+                    },
+                  },
+                },
+              },
+            },
             discrepancies: true,
           },
         },
@@ -178,8 +186,15 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
-    if (existing.status !== OrderStatus.DRAFT && existing.status !== OrderStatus.REQUIRES_CORRECTION) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden editar órdenes en borrador o en corrección');
+    if (
+      existing.status !== OrderStatus.DRAFT &&
+      existing.status !== OrderStatus.REQUIRES_CORRECTION
+    ) {
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden editar órdenes en borrador o en corrección',
+      );
     }
 
     if (input.technicianId) {
@@ -192,7 +207,8 @@ export class OrdersService {
     const updateData: Prisma.OrderUncheckedUpdateManyInput = {};
     if (input.serviceType !== undefined) updateData.serviceType = input.serviceType;
     if (input.clientSheetId !== undefined) updateData.clientSheetId = input.clientSheetId;
-    if (input.clientNameSnapshot !== undefined) updateData.clientNameSnapshot = input.clientNameSnapshot;
+    if (input.clientNameSnapshot !== undefined)
+      updateData.clientNameSnapshot = input.clientNameSnapshot;
     if (input.technicianId !== undefined) updateData.technicianId = input.technicianId;
     if (input.scheduledAt !== undefined) updateData.scheduledAt = new Date(input.scheduledAt);
     if (input.isHomeService !== undefined) updateData.isHomeService = input.isHomeService;
@@ -223,14 +239,22 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
     if (order.status !== OrderStatus.DRAFT) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden agregar unidades a órdenes en borrador');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden agregar unidades a órdenes en borrador',
+      );
     }
 
     const duplicate = await this.prisma.orderUnit.findUnique({
       where: { orderId_serialNumber: { orderId, serialNumber: input.serialNumber } },
     });
     if (duplicate) {
-      throw new AppError(409, 'DUPLICATE_SERIAL_NUMBER', 'Ya existe una unidad con ese número de serie en la orden');
+      throw new AppError(
+        409,
+        'DUPLICATE_SERIAL_NUMBER',
+        'Ya existe una unidad con ese número de serie en la orden',
+      );
     }
 
     return domainTransaction(this.prisma, async (tx, effects) => {
@@ -262,7 +286,11 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
     if (order.status !== OrderStatus.DRAFT) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden editar unidades en órdenes en borrador');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden editar unidades en órdenes en borrador',
+      );
     }
 
     const existingUnit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
@@ -275,7 +303,11 @@ export class OrdersService {
         where: { orderId_serialNumber: { orderId, serialNumber: input.serialNumber } },
       });
       if (duplicate) {
-        throw new AppError(409, 'DUPLICATE_SERIAL_NUMBER', 'Ya existe una unidad con ese número de serie');
+        throw new AppError(
+          409,
+          'DUPLICATE_SERIAL_NUMBER',
+          'Ya existe una unidad con ese número de serie',
+        );
       }
     }
 
@@ -310,7 +342,11 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
     if (order.status !== OrderStatus.DRAFT) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden eliminar unidades en órdenes en borrador');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden eliminar unidades en órdenes en borrador',
+      );
     }
 
     const unit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
@@ -342,7 +378,11 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
     if (order.status !== OrderStatus.DRAFT) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden asignar equipos a órdenes en borrador');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden asignar equipos a órdenes en borrador',
+      );
     }
 
     const unit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
@@ -410,7 +450,11 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
     if (order.status !== OrderStatus.DRAFT) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'Solo se pueden desasignar equipos en órdenes en borrador');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'Solo se pueden desasignar equipos en órdenes en borrador',
+      );
     }
 
     const eq = await this.prisma.orderEquipment.findUnique({ where: { id: equipmentId } });
@@ -442,7 +486,11 @@ export class OrdersService {
     }
 
     if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.CANCELLED) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'No se puede cancelar una orden completada o cancelada');
+      throw new AppError(
+        400,
+        'INVALID_ORDER_STATE',
+        'No se puede cancelar una orden completada o cancelada',
+      );
     }
 
     return domainTransaction(this.prisma, async (tx, effects) => {
@@ -503,7 +551,11 @@ export class OrdersService {
     }
 
     if (!order.technicianId) {
-      throw new AppError(400, 'MISSING_TECHNICIAN', 'Debe asignar un técnico antes de confirmar la asignación');
+      throw new AppError(
+        400,
+        'MISSING_TECHNICIAN',
+        'Debe asignar un técnico antes de confirmar la asignación',
+      );
     }
 
     if (order.units.length === 0) {

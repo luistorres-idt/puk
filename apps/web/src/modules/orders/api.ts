@@ -1,5 +1,7 @@
 import type {
   AssignEquipment,
+  ChecklistCategory,
+  ChecklistCondition,
   CreateOrder,
   CreateUnit,
   OrderListQuery,
@@ -32,6 +34,30 @@ export interface EquipmentItem {
   verificationStatus?: string | null;
 }
 
+export interface ChecklistEvidenceItem {
+  id: string;
+  objectKey: string;
+  status: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  width?: number | null;
+  height?: number | null;
+  createdAt?: string;
+}
+
+export interface UnitChecklistItem {
+  id: string;
+  category: ChecklistCategory;
+  condition?: ChecklistCondition | null;
+  notes?: string | null;
+  evidence?: ChecklistEvidenceItem[];
+}
+
+export interface UnitChecklist {
+  id: string;
+  items?: UnitChecklistItem[];
+}
+
 export interface UnitItem {
   id: string;
   label: string;
@@ -40,6 +66,18 @@ export interface UnitItem {
   year?: number | null;
   status: string;
   equipment?: EquipmentItem[];
+  checklist?: UnitChecklist | null;
+}
+
+export interface SignatureItem {
+  id: string;
+  orderId: string;
+  signerName: string;
+  objectKey: string;
+  mimeType: string;
+  sizeBytes: number;
+  signedAt: string;
+  capturedById?: string;
 }
 
 export interface OrderDetail {
@@ -55,6 +93,7 @@ export interface OrderDetail {
   generalNotes?: string | null;
   technician?: { id: string; name: string } | null;
   units?: UnitItem[];
+  signature?: SignatureItem | null;
 }
 
 export interface OrderSummary {
@@ -68,7 +107,9 @@ export interface OrderSummary {
   _count?: { units: number };
 }
 
-export async function fetchOrders(query: OrderListQuery = {}): Promise<ApiResponse<OrderSummary[]>> {
+export async function fetchOrders(
+  query: OrderListQuery = {},
+): Promise<ApiResponse<OrderSummary[]>> {
   const response = await api.get<ApiResponse<OrderSummary[]>>('/orders', {
     params: query,
   });
@@ -101,21 +142,37 @@ export async function cancelOrder(id: string, reason?: string): Promise<OrderDet
 }
 
 export async function addUnit(orderId: string, data: CreateUnit): Promise<Record<string, unknown>> {
-  const response = await api.post<ApiResponse<Record<string, unknown>>>(`/orders/${orderId}/units`, data);
+  const response = await api.post<ApiResponse<Record<string, unknown>>>(
+    `/orders/${orderId}/units`,
+    data,
+  );
   return response.data.data;
 }
 
-export async function updateUnit(orderId: string, unitId: string, data: UpdateUnit): Promise<Record<string, unknown>> {
-  const response = await api.patch<ApiResponse<Record<string, unknown>>>(`/orders/${orderId}/units/${unitId}`, data);
+export async function updateUnit(
+  orderId: string,
+  unitId: string,
+  data: UpdateUnit,
+): Promise<Record<string, unknown>> {
+  const response = await api.patch<ApiResponse<Record<string, unknown>>>(
+    `/orders/${orderId}/units/${unitId}`,
+    data,
+  );
   return response.data.data;
 }
 
 export async function deleteUnit(orderId: string, unitId: string): Promise<{ deleted: boolean }> {
-  const response = await api.delete<ApiResponse<{ deleted: boolean }>>(`/orders/${orderId}/units/${unitId}`);
+  const response = await api.delete<ApiResponse<{ deleted: boolean }>>(
+    `/orders/${orderId}/units/${unitId}`,
+  );
   return response.data.data;
 }
 
-export async function assignEquipment(orderId: string, unitId: string, data: AssignEquipment): Promise<Record<string, unknown>> {
+export async function assignEquipment(
+  orderId: string,
+  unitId: string,
+  data: AssignEquipment,
+): Promise<Record<string, unknown>> {
   const response = await api.post<ApiResponse<Record<string, unknown>>>(
     `/orders/${orderId}/units/${unitId}/equipment`,
     data,
@@ -142,18 +199,38 @@ export async function fetchSyncStatus(orderId: string): Promise<{
   pending: number;
   operations: Array<Record<string, unknown>>;
 }> {
-  const response = await api.get<ApiResponse<{
-    isFullySynced: boolean;
-    total: number;
-    synced: number;
-    failed: number;
-    pending: number;
-    operations: Array<Record<string, unknown>>;
-  }>>(`/orders/${orderId}/sync`);
+  const response = await api.get<
+    ApiResponse<{
+      isFullySynced: boolean;
+      total: number;
+      synced: number;
+      failed: number;
+      pending: number;
+      operations: Array<Record<string, unknown>>;
+    }>
+  >(`/orders/${orderId}/sync`);
   return response.data.data;
 }
 
 export async function retrySync(orderId: string): Promise<{ retriedCount: number }> {
-  const response = await api.post<ApiResponse<{ retriedCount: number }>>(`/orders/${orderId}/sync/retry`);
+  const response = await api.post<ApiResponse<{ retriedCount: number }>>(
+    `/orders/${orderId}/sync/retry`,
+  );
+  return response.data.data;
+}
+
+export interface AuditLogItem {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorUserId?: string | null;
+  actor?: { id: string; name: string; email: string } | null;
+  payload?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export async function fetchOrderAudit(orderId: string): Promise<AuditLogItem[]> {
+  const response = await api.get<ApiResponse<AuditLogItem[]>>(`/orders/${orderId}/audit`);
   return response.data.data;
 }

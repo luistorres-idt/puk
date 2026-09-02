@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui';
+import {
+  NConfigProvider,
+  NDialogProvider,
+  NGlobalStyle,
+  NMessageProvider,
+  NNotificationProvider,
+} from 'naive-ui';
 
 import { themeOverrides } from './app/theme';
 </script>
@@ -7,8 +13,12 @@ import { themeOverrides } from './app/theme';
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
     <n-global-style />
-    <n-message-provider>
-      <router-view />
-    </n-message-provider>
+    <n-notification-provider>
+      <n-dialog-provider>
+        <n-message-provider>
+          <router-view />
+        </n-message-provider>
+      </n-dialog-provider>
+    </n-notification-provider>
   </n-config-provider>
 </template>

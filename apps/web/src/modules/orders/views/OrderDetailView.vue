@@ -1,63 +1,74 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
+  NAlert,
   NButton,
   NCard,
-  NTag,
-  NModal,
+  NEmpty,
+  NImage,
   NInput,
   NInputNumber,
-  NAlert,
-  NSpin,
+  NModal,
   NPopconfirm,
+  NSpin,
+  NTabPane,
+  NTabs,
+  NTag,
+  useMessage,
 } from 'naive-ui';
 import type { ExternalEquipment } from '@puk/contracts';
-import { EquipmentSelect } from '../../external-catalogs/index.js';
-import { useSessionStore } from '../../../stores/session.js';
+import type { UnitItem } from '../api.js';
 import {
-  fetchOrderById,
-  assignOrder,
-  cancelOrder,
-  addUnit,
-  deleteUnit,
-  assignEquipment,
-  removeEquipment,
-  fetchSyncStatus,
-  retrySync,
-  type OrderDetail,
-} from '../api.js';
+  CATEGORY_NAMES,
+  formatEquipmentStatus,
+  formatOrderStatus,
+  formatServiceType,
+  formatUnitStatus,
+  orderStatusTagType,
+  unitStatusTagType,
+} from '../formatters.js';
+import AppLayout from '@/shared/layouts/AppLayout.vue';
+import { EquipmentSelect } from '@/modules/external-catalogs';
+import { useSessionStore } from '@/stores/session';
+import {
+  useOrderAuditQuery,
+  useOrderMutations,
+  useOrderQuery,
+  useSyncStatusQuery,
+} from '../queries';
+import { getEvidenceUrl, getSignatureUrl, requireCorrection } from '@/modules/service-execution';
 
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
+const message = useMessage();
 
 const orderId = String(route.params.id);
-const order = ref<OrderDetail | null>(null);
-const syncInfo = ref<{
-  isFullySynced: boolean;
-  total: number;
-  synced: number;
-  failed: number;
-  pending: number;
-  operations: Array<Record<string, unknown>>;
-} | null>(null);
-const loading = ref(false);
-const error = ref<string | null>(null);
 
-function getErrorMessage(err: unknown, defaultMessage: string): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const response = (err as { response?: { data?: { error?: { message?: string } } } }).response;
-    return response?.data?.error?.message || defaultMessage;
-  }
-  return defaultMessage;
-}
+// Queries
+const orderQuery = useOrderQuery(orderId);
+const syncQuery = useSyncStatusQuery(orderId);
+const auditQuery = useOrderAuditQuery(orderId);
+const mutations = useOrderMutations(orderId);
+
+const order = computed(() => orderQuery.data.value);
+const syncInfo = computed(() => syncQuery.data.value);
+const auditLogs = computed(() => auditQuery.data.value ?? []);
+
+const activeTab = ref('units');
 
 // Modal states
 const showAddUnitModal = ref(false);
 const showAddEqModal = ref(false);
 const showCancelModal = ref(false);
+const showCorrectionModal = ref(false);
+const showImageModal = ref(false);
+const previewImageUrl = ref<string | null>(null);
+const previewImageTitle = ref<string>('');
+
 const cancelReason = ref('');
+const correctionNotes = ref('');
 const targetUnitId = ref<string | null>(null);
 
 // Unit form
@@ -72,50 +83,45 @@ const newUnit = ref({
 const selectedEquipmentKey = ref<string | null>(null);
 const selectedEquipment = ref<ExternalEquipment | null>(null);
 
-async function loadData() {
-  loading.value = true;
-  error.value = null;
-  try {
-    const [orderData, syncData] = await Promise.all([
-      fetchOrderById(orderId),
-      fetchSyncStatus(orderId).catch(() => null),
-    ]);
-    order.value = orderData;
-    syncInfo.value = syncData;
-  } catch (err: unknown) {
-    const message =
-      err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-        : undefined;
-    error.value = message || 'Error al cargar la orden';
-  } finally {
-    loading.value = false;
+function getErrorMessage(err: unknown, defaultMsg: string): string {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const res = (err as { response?: { data?: { error?: { message?: string } } } }).response;
+    return res?.data?.error?.message || defaultMsg;
   }
+  if (err instanceof Error) return err.message;
+  return defaultMsg;
 }
 
+// Actions
 async function handleAddUnit() {
-  if (!newUnit.value.label || !newUnit.value.makeModel || !newUnit.value.serialNumber) return;
+  if (!newUnit.value.label || !newUnit.value.makeModel || !newUnit.value.serialNumber) {
+    message.warning('Por favor completa los campos obligatorios de la unidad.');
+    return;
+  }
   try {
-    await addUnit(orderId, {
-      label: newUnit.value.label,
-      makeModel: newUnit.value.makeModel,
-      serialNumber: newUnit.value.serialNumber,
-      year: newUnit.value.year,
+    await mutations.insertUnit.mutateAsync({
+      id: orderId,
+      data: {
+        label: newUnit.value.label,
+        makeModel: newUnit.value.makeModel,
+        serialNumber: newUnit.value.serialNumber,
+        year: newUnit.value.year,
+      },
     });
     showAddUnitModal.value = false;
     newUnit.value = { label: '', makeModel: '', serialNumber: '', year: 2024 };
-    await loadData();
-  } catch (err: unknown) {
-    alert(getErrorMessage(err, 'Error al agregar unidad'));
+    message.success('Unidad agregada correctamente.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al agregar unidad'));
   }
 }
 
 async function handleDeleteUnit(unitId: string) {
   try {
-    await deleteUnit(orderId, unitId);
-    await loadData();
-  } catch (err: unknown) {
-    alert(getErrorMessage(err, 'Error al eliminar unidad'));
+    await mutations.removeUnit.mutateAsync({ id: orderId, unitId });
+    message.success('Unidad eliminada.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al eliminar unidad'));
   }
 }
 
@@ -133,347 +139,943 @@ function handleEquipmentSelect(eq: ExternalEquipment | null) {
 async function handleAddEquipment() {
   if (!targetUnitId.value || !selectedEquipment.value || !selectedEquipmentKey.value) return;
   try {
-    await assignEquipment(orderId, targetUnitId.value, {
-      externalKey: selectedEquipmentKey.value,
-      externalId: selectedEquipment.value.id,
-      imei: selectedEquipment.value.imei,
-      sheetRowHint: selectedEquipment.value.rowNumber,
-      brandSnapshot: selectedEquipment.value.brand,
-      modelSnapshot: selectedEquipment.value.model,
-      lineSnapshot: selectedEquipment.value.line,
-      iccidSnapshot: selectedEquipment.value.iccid,
-      carrierSnapshot: selectedEquipment.value.carrier,
-      equipmentConditionSnapshot: selectedEquipment.value.condition,
-      serviceStatusSnapshot: selectedEquipment.value.serviceStatus,
-      rawSnapshot: selectedEquipment.value.rawValues,
+    await mutations.attachEquipment.mutateAsync({
+      id: orderId,
+      unitId: targetUnitId.value,
+      data: {
+        externalKey: selectedEquipmentKey.value,
+        externalId: selectedEquipment.value.id,
+        imei: selectedEquipment.value.imei,
+        sheetRowHint: selectedEquipment.value.rowNumber,
+        brandSnapshot: selectedEquipment.value.brand,
+        modelSnapshot: selectedEquipment.value.model,
+        lineSnapshot: selectedEquipment.value.line,
+        iccidSnapshot: selectedEquipment.value.iccid,
+        carrierSnapshot: selectedEquipment.value.carrier,
+        equipmentConditionSnapshot: selectedEquipment.value.condition,
+        serviceStatusSnapshot: selectedEquipment.value.serviceStatus,
+        rawSnapshot: selectedEquipment.value.rawValues,
+      },
     });
     showAddEqModal.value = false;
-    await loadData();
-  } catch (err: unknown) {
-    alert(getErrorMessage(err, 'Error al asignar equipo'));
+    message.success('Equipo asignado correctamente.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al asignar equipo'));
   }
 }
 
 async function handleRemoveEquipment(unitId: string, equipmentId: string) {
   try {
-    await removeEquipment(orderId, unitId, equipmentId);
-    await loadData();
-  } catch (err: unknown) {
-    alert(getErrorMessage(err, 'Error al desasignar equipo'));
+    await mutations.detachEquipment.mutateAsync({ id: orderId, unitId, equipmentId });
+    message.success('Equipo removido de la unidad.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al desasignar equipo'));
   }
 }
 
 async function handleAssignAndSync() {
   try {
-    await assignOrder(orderId);
-    await loadData();
-  } catch (err: unknown) {
-    alert(getErrorMessage(err, 'Error al asignar orden'));
+    await mutations.assign.mutateAsync(orderId);
+    message.success('Orden asignada y encolada para sincronización.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al asignar orden'));
   }
 }
 
 async function handleCancelOrder() {
   try {
-    await cancelOrder(orderId, cancelReason.value || undefined);
+    await mutations.cancel.mutateAsync({ id: orderId, reason: cancelReason.value || undefined });
     showCancelModal.value = false;
-    await loadData();
-  } catch (err: unknown) {
-    alert(getErrorMessage(err, 'Error al cancelar orden'));
+    message.success('Orden cancelada exitosamente.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al cancelar orden'));
   }
 }
 
 async function handleRetrySync() {
   try {
-    await retrySync(orderId);
-    await loadData();
-  } catch (err: unknown) {
-    alert(getErrorMessage(err, 'Error al reintentar sincronización'));
+    const res = await mutations.retry.mutateAsync(orderId);
+    message.info(`Reintento ejecutado: ${res.retriedCount} operaciones reintentadas.`);
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al reintentar sincronización'));
   }
 }
 
-onMounted(() => {
-  loadData();
-});
+async function handleRequestCorrection() {
+  if (!correctionNotes.value.trim()) {
+    message.warning('Por favor ingresa los motivos de la corrección.');
+    return;
+  }
+  try {
+    await requireCorrection(orderId, { notes: correctionNotes.value.trim() });
+    showCorrectionModal.value = false;
+    correctionNotes.value = '';
+    orderQuery.refetch();
+    auditQuery.refetch();
+    message.success('Orden devuelta para corrección técnica.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'Error al solicitar corrección'));
+  }
+}
+
+async function viewEvidence(evidenceId: string, categoryTitle: string) {
+  try {
+    const res = await getEvidenceUrl(evidenceId);
+    previewImageUrl.value = res.downloadUrl;
+    previewImageTitle.value = `Evidencia: ${categoryTitle}`;
+    showImageModal.value = true;
+  } catch (err) {
+    message.error(getErrorMessage(err, 'No fue posible obtener la imagen de evidencia'));
+  }
+}
+
+async function viewSignature() {
+  try {
+    const res = await getSignatureUrl(orderId);
+    previewImageUrl.value = res.downloadUrl;
+    previewImageTitle.value = `Firma de ${res.signerName || 'Receptor'}`;
+    showImageModal.value = true;
+  } catch (err) {
+    message.error(getErrorMessage(err, 'No fue posible obtener la firma'));
+  }
+}
+
+const evidenceUrls = ref<Record<string, string>>({});
+const loadingEvidenceUrls = ref<Record<string, boolean>>({});
+const signatureUrl = ref<string | null>(null);
+const loadingSignature = ref(false);
+
+function getUnitAllEvidences(unit: UnitItem): Array<{ id: string; objectKey?: string }> {
+  if (!unit?.checklist?.items) return [];
+  const evidences: Array<{ id: string; objectKey?: string }> = [];
+  for (const item of unit.checklist.items) {
+    if (item.evidence) {
+      for (const ev of item.evidence) {
+        if (ev.status === 'COMPLETED' || !ev.status) {
+          evidences.push(ev);
+        }
+      }
+    }
+  }
+  return evidences;
+}
+
+async function loadEvidenceUrl(evidenceId: string) {
+  if (evidenceUrls.value[evidenceId] || loadingEvidenceUrls.value[evidenceId]) return;
+  loadingEvidenceUrls.value[evidenceId] = true;
+  try {
+    const res = await getEvidenceUrl(evidenceId);
+    evidenceUrls.value[evidenceId] = res.downloadUrl;
+  } catch {
+    // Ignore error
+  } finally {
+    loadingEvidenceUrls.value[evidenceId] = false;
+  }
+}
+
+async function loadSignatureUrl() {
+  if (!orderId || signatureUrl.value || loadingSignature.value) return;
+  loadingSignature.value = true;
+  try {
+    const res = await getSignatureUrl(orderId);
+    signatureUrl.value = res.downloadUrl;
+  } catch {
+    // Ignore error
+  } finally {
+    loadingSignature.value = false;
+  }
+}
+
+function preloadEvidencesAndSignature() {
+  if (!order.value) return;
+  if (order.value.signature) {
+    void loadSignatureUrl();
+  }
+  const units = order.value.units || [];
+  for (const unit of units) {
+    const evs = getUnitAllEvidences(unit);
+    for (const ev of evs) {
+      void loadEvidenceUrl(ev.id);
+    }
+  }
+}
+
+watch(
+  () => [activeTab.value, order.value],
+  () => {
+    if (activeTab.value === 'evidence') {
+      preloadEvidencesAndSignature();
+    }
+  },
+  { immediate: true, deep: true },
+);
+
+const statusColor = orderStatusTagType;
 </script>
 
 <template>
-  <div class="space-y-6 max-w-5xl mx-auto">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <NButton secondary @click="router.push('/orders')">← Volver</NButton>
-        <h1 class="text-2xl font-bold text-slate-800">
-          Orden <span class="font-mono text-indigo-600">{{ order?.folio }}</span>
-        </h1>
-        <NTag v-if="order" :type="order.status === 'COMPLETED' ? 'success' : order.status === 'ASSIGNED' ? 'info' : 'default'">
-          {{ order.status }}
-        </NTag>
+  <app-layout>
+    <div class="space-y-6">
+      <!-- Loading State -->
+      <div v-if="orderQuery.isPending.value" class="grid min-h-64 place-items-center">
+        <n-spin size="large" />
       </div>
 
-      <div v-if="order && session.user?.role === 'ADMIN'" class="flex gap-2">
-        <NButton
-          v-if="order.status === 'DRAFT' || order.status === 'REQUIRES_CORRECTION'"
-          type="primary"
-          @click="handleAssignAndSync"
-        >
-          Asignar y Sincronizar
-        </NButton>
+      <!-- Error State -->
+      <n-alert v-else-if="orderQuery.isError.value" type="error">
+        No fue posible cargar el detalle de la orden. Verifica tus permisos o conexión.
+      </n-alert>
 
-        <NButton
-          v-if="order.status !== 'DRAFT' && order.status !== 'CANCELLED'"
-          type="info"
-          secondary
-          @click="router.push(`/orders/${order.id}/execute`)"
-        >
-          Modo Técnico →
-        </NButton>
+      <template v-else-if="order">
+        <!-- Header & Action Bar -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <n-button secondary @click="router.push('/orders')">← Volver</n-button>
+            <h1 class="text-2xl font-bold text-slate-800">
+              Orden <span class="font-mono text-indigo-700">{{ order.folio }}</span>
+            </h1>
+            <n-tag :type="statusColor(order.status)" round>
+              {{ formatOrderStatus(order.status) }}
+            </n-tag>
+          </div>
 
-        <NButton
-          v-if="order.status !== 'COMPLETED' && order.status !== 'CANCELLED'"
-          type="error"
-          secondary
-          @click="showCancelModal = true"
-        >
-          Cancelar Orden
-        </NButton>
-      </div>
+          <!-- Actions -->
+          <div class="flex flex-wrap gap-2">
+            <n-button
+              v-if="
+                (order.status === 'DRAFT' || order.status === 'REQUIRES_CORRECTION') &&
+                session.user?.role === 'ADMIN'
+              "
+              type="primary"
+              :loading="mutations.assign.isPending.value"
+              @click="handleAssignAndSync"
+            >
+              Asignar y Sincronizar
+            </n-button>
 
-      <div v-else-if="order && order.status !== 'DRAFT' && order.status !== 'CANCELLED'">
-        <NButton
-          type="primary"
-          @click="router.push(`/orders/${order.id}/execute`)"
-        >
-          Abrir en Modo Técnico →
-        </NButton>
-      </div>
-    </div>
+            <n-button
+              v-if="order.status === 'COMPLETED' && session.user?.role === 'ADMIN'"
+              type="warning"
+              secondary
+              @click="showCorrectionModal = true"
+            >
+              Solicitar Corrección
+            </n-button>
 
-    <NAlert v-if="error" type="error" closable class="mb-4">
-      {{ error }}
-    </NAlert>
+            <n-button
+              v-if="order.status !== 'DRAFT' && order.status !== 'CANCELLED'"
+              type="info"
+              secondary
+              @click="router.push(`/orders/${order.id}/execute`)"
+            >
+              Modo Técnico →
+            </n-button>
 
-    <!-- Sync status banner (Phase 7) -->
-    <NCard v-if="syncInfo && syncInfo.total > 0" class="border-l-4 border-l-indigo-500 shadow-sm">
-      <div class="flex items-center justify-between">
-        <div>
-          <h3 class="font-semibold text-slate-800">Sincronización con Google Sheets</h3>
-          <p class="text-xs text-slate-500">
-            Operaciones sincronizadas: {{ syncInfo.synced }} / {{ syncInfo.total }}
-            <span v-if="syncInfo.failed > 0" class="text-red-500 font-bold ml-2">
-              ({{ syncInfo.failed }} fallidas)
-            </span>
-          </p>
+            <n-button
+              v-if="
+                order.status !== 'COMPLETED' &&
+                order.status !== 'CANCELLED' &&
+                session.user?.role === 'ADMIN'
+              "
+              type="error"
+              secondary
+              @click="showCancelModal = true"
+            >
+              Cancelar Orden
+            </n-button>
+          </div>
         </div>
 
-        <NButton
-          v-if="syncInfo.failed > 0 && session.user?.role === 'ADMIN'"
+        <!-- Sync status banner if applicable -->
+        <n-card
+          v-if="syncInfo && syncInfo.total > 0"
+          class="border-l-4 border-l-indigo-500 shadow-sm"
           size="small"
-          type="warning"
-          @click="handleRetrySync"
         >
-          Reintentar Sincronización
-        </NButton>
-      </div>
-    </NCard>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="font-semibold text-slate-800 text-sm">Sincronización con Google Sheets</h3>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Estado:
+                {{
+                  syncInfo.isFullySynced ? 'Completamente sincronizada' : 'Pendiente / en proceso'
+                }}
+                &bull; Operaciones: {{ syncInfo.synced }} / {{ syncInfo.total }}
+                <span v-if="syncInfo.failed > 0" class="text-red-600 font-bold ml-1">
+                  ({{ syncInfo.failed }} fallidas)
+                </span>
+              </p>
+            </div>
 
-    <NSpin :show="loading">
-      <div v-if="order" class="space-y-6">
-        <!-- Order Header Details -->
-        <NCard class="shadow-sm">
+            <n-button
+              v-if="syncInfo.failed > 0 && session.user?.role === 'ADMIN'"
+              size="small"
+              type="warning"
+              :loading="mutations.retry.isPending.value"
+              @click="handleRetrySync"
+            >
+              Reintentar Operaciones
+            </n-button>
+          </div>
+        </n-card>
+
+        <!-- General Order Information -->
+        <n-card class="shadow-sm">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <span class="text-xs text-slate-500 block">Cliente</span>
-              <span class="font-bold text-slate-800">{{ order.clientNameSnapshot }}</span>
-              <span class="text-xs text-slate-400 block font-mono">ID: {{ order.clientSheetId }}</span>
+              <span class="font-bold text-slate-800 text-base">{{ order.clientNameSnapshot }}</span>
+              <span class="text-xs text-slate-400 block font-mono"
+                >ID Hoja: {{ order.clientSheetId }}</span
+              >
             </div>
             <div>
               <span class="text-xs text-slate-500 block">Tipo de Servicio</span>
-              <span class="font-semibold text-slate-800">{{ order.serviceType }}</span>
+              <span class="font-semibold text-slate-800">{{ formatServiceType(order.serviceType) }}</span>
               <span class="text-xs text-slate-500 block">
                 {{ order.isHomeService ? 'A domicilio' : 'En taller' }}
+                {{ order.serviceAddress ? `(${order.serviceAddress})` : '' }}
               </span>
             </div>
             <div>
               <span class="text-xs text-slate-500 block">Técnico Asignado</span>
-              <span class="font-semibold text-slate-800">{{ order.technician?.name || 'Sin asignar' }}</span>
+              <span class="font-semibold text-slate-800">{{
+                order.technician?.name || 'Sin asignar'
+              }}</span>
               <span class="text-xs text-slate-400 block">
                 Cita: {{ new Date(order.scheduledAt).toLocaleString() }}
               </span>
             </div>
           </div>
-          <div v-if="order.generalNotes" class="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600">
-            <strong>Notas:</strong> {{ order.generalNotes }}
+          <div
+            v-if="order.generalNotes"
+            class="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600"
+          >
+            <strong>Notas generales:</strong> {{ order.generalNotes }}
           </div>
-        </NCard>
+        </n-card>
 
-        <!-- Units & Equipment Section -->
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <h2 class="text-lg font-bold text-slate-800">
-              Unidades de la Orden ({{ order.units?.length || 0 }})
-            </h2>
+        <!-- Tabs Section -->
+        <n-tabs v-model:value="activeTab" type="line" animated>
+          <!-- Tab 1: Unidades y Equipos -->
+          <n-tab-pane name="units" tab="Unidades y Equipos">
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-base font-bold text-slate-800">
+                  Unidades Registradas ({{ order.units?.length || 0 }})
+                </h2>
 
-            <NButton
-              v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
-              size="small"
-              type="primary"
-              secondary
-              @click="showAddUnitModal = true"
-            >
-              + Agregar Unidad
-            </NButton>
-          </div>
-
-          <div v-if="order.units?.length === 0" class="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-            <p class="text-sm text-slate-500">No hay unidades registradas en esta orden.</p>
-            <NButton
-              v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
-              size="small"
-              type="primary"
-              class="mt-2"
-              @click="showAddUnitModal = true"
-            >
-              Registrar Primera Unidad
-            </NButton>
-          </div>
-
-          <div v-for="unit in order.units" :key="unit.id" class="space-y-2">
-            <NCard class="shadow-sm">
-              <div class="flex items-start justify-between">
-                <div>
-                  <div class="flex items-center gap-2">
-                    <span class="font-bold text-base text-slate-800">{{ unit.label }}</span>
-                    <NTag size="small">{{ unit.status }}</NTag>
-                  </div>
-                  <p class="text-xs text-slate-500 mt-1">
-                    {{ unit.makeModel }} {{ unit.year ? `(${unit.year})` : '' }} • Serie: <span class="font-mono">{{ unit.serialNumber }}</span>
-                  </p>
-                </div>
-
-                <div v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'" class="flex gap-2">
-                  <NButton size="tiny" type="primary" secondary @click="openAddEquipment(unit.id)">
-                    + Asignar Equipo
-                  </NButton>
-                  <NPopconfirm @positive-click="handleDeleteUnit(unit.id)">
-                    <template #trigger>
-                      <NButton size="tiny" type="error" secondary>Eliminar</NButton>
-                    </template>
-                    ¿Eliminar esta unidad y sus equipos asignados?
-                  </NPopconfirm>
-                </div>
+                <n-button
+                  v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
+                  size="small"
+                  type="primary"
+                  secondary
+                  @click="showAddUnitModal = true"
+                >
+                  + Agregar Unidad
+                </n-button>
               </div>
 
-              <!-- Equipments of Unit -->
-              <div class="mt-4 pt-3 border-t border-slate-100">
-                <span class="text-xs font-semibold text-slate-600 block mb-2">
-                  Equipos asignados ({{ unit.equipment?.length || 0 }}):
-                </span>
+              <div
+                v-if="order.units?.length === 0"
+                class="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300"
+              >
+                <p class="text-sm text-slate-500">No hay unidades registradas en esta orden.</p>
+                <n-button
+                  v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
+                  size="small"
+                  type="primary"
+                  class="mt-3"
+                  @click="showAddUnitModal = true"
+                >
+                  Registrar Primera Unidad
+                </n-button>
+              </div>
 
-                <div v-if="unit.equipment?.length === 0" class="text-xs text-slate-400 italic">
-                  Sin equipos asignados a esta unidad.
-                </div>
-
-                <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div
-                    v-for="eq in unit.equipment"
-                    :key="eq.id"
-                    class="p-2 bg-slate-50 border border-slate-200 rounded flex justify-between items-center text-xs"
-                  >
+              <div v-for="unit in order.units" :key="unit.id" class="space-y-2">
+                <n-card class="shadow-sm" size="small">
+                  <div class="flex items-start justify-between">
                     <div>
-                      <span class="font-bold text-slate-800">{{ eq.brandSnapshot }} {{ eq.modelSnapshot }}</span>
-                      <span class="block text-slate-500 font-mono">
-                        [ID: {{ eq.externalId || 'N/A' }}] [IMEI: {{ eq.imei || 'N/A' }}]
-                      </span>
-                      <span class="text-slate-400 block">
-                        Estado: {{ eq.equipmentConditionSnapshot || 'N/A' }}
-                      </span>
+                      <div class="flex items-center gap-2">
+                        <span class="font-bold text-base text-slate-800">{{ unit.label }}</span>
+                        <n-tag size="small" :type="unitStatusTagType(unit.status)">
+                          {{ formatUnitStatus(unit.status) }}
+                        </n-tag>
+                      </div>
+                      <p class="text-xs text-slate-500 mt-1">
+                        {{ unit.makeModel }} {{ unit.year ? `(${unit.year})` : '' }} &bull; Serie /
+                        VIN:
+                        <span class="font-mono font-medium text-slate-700">{{
+                          unit.serialNumber
+                        }}</span>
+                      </p>
                     </div>
 
-                    <NButton
+                    <div
                       v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
-                      size="tiny"
-                      type="error"
-                      quaternary
-                      @click="handleRemoveEquipment(unit.id, eq.id)"
+                      class="flex gap-2"
                     >
-                      ✕
-                    </NButton>
+                      <n-button
+                        size="tiny"
+                        type="primary"
+                        secondary
+                        @click="openAddEquipment(unit.id)"
+                      >
+                        + Asignar Equipo
+                      </n-button>
+                      <n-popconfirm @positive-click="handleDeleteUnit(unit.id)">
+                        <template #trigger>
+                          <n-button size="tiny" type="error" secondary>Eliminar</n-button>
+                        </template>
+                        ¿Eliminar esta unidad y sus equipos asignados?
+                      </n-popconfirm>
+                    </div>
+                  </div>
+
+                  <!-- Equipment in Unit -->
+                  <div class="mt-4 pt-3 border-t border-slate-100">
+                    <span class="text-xs font-semibold text-slate-600 block mb-2">
+                      Equipos de Google Sheets asignados ({{ unit.equipment?.length || 0 }}):
+                    </span>
+
+                    <div v-if="unit.equipment?.length === 0" class="text-xs text-slate-400 italic">
+                      Sin equipos asignados a esta unidad.
+                    </div>
+
+                    <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div
+                        v-for="eq in unit.equipment"
+                        :key="eq.id"
+                        class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex justify-between items-center text-xs"
+                      >
+                        <div>
+                          <span class="font-bold text-slate-800"
+                            >{{ eq.brandSnapshot }} {{ eq.modelSnapshot }}</span
+                          >
+                          <span class="block text-slate-500 font-mono text-[11px] mt-0.5">
+                            ID: {{ eq.externalId || 'N/A' }} &bull; IMEI: {{ eq.imei || 'N/A' }}
+                          </span>
+                          <span class="text-slate-500 block text-[11px]">
+                            Condición: {{ eq.equipmentConditionSnapshot || 'N/A' }}
+                            <span
+                              v-if="eq.verificationStatus"
+                              class="ml-2 font-semibold text-indigo-600"
+                            >
+                              [{{ formatEquipmentStatus(eq.verificationStatus) }}]
+                            </span>
+                          </span>
+                        </div>
+
+                        <n-button
+                          v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
+                          size="tiny"
+                          type="error"
+                          quaternary
+                          @click="handleRemoveEquipment(unit.id, eq.id)"
+                        >
+                          Quitar
+                        </n-button>
+                      </div>
+                    </div>
+                  </div>
+                </n-card>
+              </div>
+            </div>
+          </n-tab-pane>
+
+          <!-- Tab 2: Evidencias y Firma -->
+          <n-tab-pane name="evidence" tab="Evidencias y Firma">
+            <div class="space-y-6">
+              <!-- Signature Section -->
+              <n-card class="shadow-sm" title="Firma de Conformidad" size="small">
+                <div
+                  v-if="(order as any).signature"
+                  class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                >
+                  <div class="space-y-1">
+                    <p class="text-sm font-semibold text-slate-800">
+                      Firmado por: {{ (order as any).signature.signerName || (order as any).signature.signerNameSnapshot }}
+                    </p>
+                    <p class="text-xs text-slate-500">
+                      Fecha de firma:
+                      {{ new Date((order as any).signature.signedAt).toLocaleString() }}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div
+                      v-if="signatureUrl"
+                      class="w-32 h-14 bg-slate-50 rounded border border-slate-200 p-1 flex items-center justify-center"
+                    >
+                      <n-image
+                        :src="signatureUrl"
+                        alt="Firma Digital"
+                        class="max-h-full max-w-full object-contain"
+                        :img-props="{ class: 'max-h-12 max-w-full object-contain' }"
+                      />
+                    </div>
+                    <n-button size="small" type="primary" secondary @click="viewSignature">
+                      Ver Firma Digital
+                    </n-button>
                   </div>
                 </div>
+                <n-empty v-else description="No se ha registrado firma en esta orden." />
+              </n-card>
+
+              <!-- Units & Evidence Section -->
+              <div class="space-y-4">
+                <h3 class="text-base font-bold text-slate-800">
+                  Checklist y Evidencias por Unidad
+                </h3>
+
+                <div v-for="unit in ((order as any).units || [])" :key="unit.id" class="space-y-2">
+                  <n-card class="shadow-sm" size="small">
+                    <div class="space-y-4">
+                      <!-- Unit Header -->
+                      <div
+                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3"
+                      >
+                        <div>
+                          <h4 class="font-bold text-slate-800 text-sm">
+                            Unidad: {{ unit.label }} <span class="font-normal text-slate-500">({{ unit.makeModel }})</span>
+                          </h4>
+                          <p v-if="unit.serialNumber" class="text-xs text-slate-400 mt-0.5">
+                            N° Serie / VIN: {{ unit.serialNumber }}
+                          </p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                          <n-tag
+                            size="small"
+                            :type="getUnitAllEvidences(unit).length >= 3 ? 'success' : 'warning'"
+                            round
+                          >
+                            {{ getUnitAllEvidences(unit).length }} fotos registradas
+                          </n-tag>
+                        </div>
+                      </div>
+
+                      <!-- 1. Checklist Table / Grid -->
+                      <div>
+                        <h5
+                          class="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2 flex items-center gap-1.5"
+                        >
+                          <span>Checklist de Recepción del Vehículo</span>
+                        </h5>
+
+                        <div
+                          v-if="!unit.checklist?.items || unit.checklist.items.length === 0"
+                          class="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-slate-200"
+                        >
+                          Checklist no iniciado o sin elementos.
+                        </div>
+
+                        <div
+                          v-else
+                          class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5"
+                        >
+                          <div
+                            v-for="item in unit.checklist.items"
+                            :key="item.id"
+                            class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1.5 flex flex-col justify-between"
+                          >
+                            <div>
+                              <div class="flex items-start justify-between gap-1 mb-1">
+                                <span class="font-semibold text-slate-800 leading-tight">
+                                  {{ CATEGORY_NAMES[item.category] || item.category }}
+                                </span>
+                                <n-tag
+                                  size="tiny"
+                                  :type="
+                                    item.condition === 'GOOD'
+                                      ? 'success'
+                                      : item.condition === 'BAD'
+                                        ? 'error'
+                                        : 'default'
+                                  "
+                                >
+                                  {{
+                                    item.condition === 'GOOD'
+                                      ? 'Bien'
+                                      : item.condition === 'BAD'
+                                        ? 'Mal'
+                                        : 'No aplica'
+                                  }}
+                                </n-tag>
+                              </div>
+
+                              <div
+                                v-if="item.notes"
+                                class="text-red-700 bg-red-50 p-1.5 rounded border border-red-100 text-[11px] leading-snug"
+                              >
+                                <span class="font-bold">Nota:</span> {{ item.notes }}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 2. Unit Evidence Gallery below Checklist -->
+                      <div class="pt-3 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-2.5">
+                          <h5
+                            class="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5"
+                          >
+                            <span>Galería de Evidencias Fotográficas</span>
+                            <span class="text-slate-400 font-normal">({{ getUnitAllEvidences(unit).length }})</span>
+                          </h5>
+                        </div>
+
+                        <div
+                          v-if="getUnitAllEvidences(unit).length === 0"
+                          class="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-lg border border-dashed border-slate-200 text-center"
+                        >
+                          No se adjuntaron fotografías para esta unidad.
+                        </div>
+
+                        <div
+                          v-else
+                          class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+                        >
+                          <div
+                            v-for="(ev, idx) in getUnitAllEvidences(unit)"
+                            :key="ev.id"
+                            class="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs hover:shadow-md transition-shadow group flex flex-col"
+                          >
+                            <div
+                              class="w-full h-28 flex items-center justify-center bg-slate-900/5 relative overflow-hidden"
+                            >
+                              <template v-if="evidenceUrls[ev.id]">
+                                <n-image
+                                  :src="evidenceUrls[ev.id]!"
+                                  :alt="`Evidencia #${idx + 1}`"
+                                  object-fit="cover"
+                                  class="w-full h-full flex items-center justify-center cursor-pointer"
+                                  :img-props="{ class: 'w-full h-28 object-cover rounded' }"
+                                />
+                              </template>
+                              <template v-else-if="loadingEvidenceUrls[ev.id]">
+                                <div class="flex flex-col items-center gap-1 text-slate-400">
+                                  <n-spin size="small" />
+                                  <span class="text-[10px]">Cargando...</span>
+                                </div>
+                              </template>
+                              <template v-else>
+                                <n-button
+                                  size="tiny"
+                                  secondary
+                                  @click="viewEvidence(ev.id, `${unit.label} - Foto #${Number(idx) + 1}`)"
+                                >
+                                  Ver foto {{ Number(idx) + 1 }}
+                                </n-button>
+                              </template>
+
+                              <!-- Badge index -->
+                              <div
+                                class="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded font-medium pointer-events-none"
+                              >
+                                #{{ Number(idx) + 1 }}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </n-card>
+                </div>
               </div>
-            </NCard>
+            </div>
+          </n-tab-pane>
+
+          <!-- Tab 3: Auditoría -->
+          <n-tab-pane name="audit" tab="Registro de Auditoría">
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-800">Historial de Eventos de la Orden</h3>
+                <n-button size="small" secondary @click="() => auditQuery.refetch()">
+                  Actualizar Registro
+                </n-button>
+              </div>
+
+              <div v-if="auditQuery.isPending.value" class="grid min-h-32 place-items-center">
+                <n-spin size="medium" />
+              </div>
+
+              <n-empty
+                v-else-if="auditLogs.length === 0"
+                description="No hay eventos de auditoría registrados."
+              />
+
+              <div v-else class="space-y-2">
+                <div
+                  v-for="log in auditLogs"
+                  :key="log.id"
+                  class="p-3 bg-white border border-slate-200 rounded-lg shadow-sm text-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
+                >
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-slate-800">{{ log.action }}</span>
+                      <span class="text-slate-400">&bull;</span>
+                      <span class="text-slate-600 font-medium">{{
+                        log.actor?.name || log.actor?.email || 'Sistema'
+                      }}</span>
+                    </div>
+                    <p
+                      v-if="log.payload"
+                      class="text-slate-500 font-mono text-[11px] mt-1 line-clamp-2"
+                    >
+                      {{ JSON.stringify(log.payload) }}
+                    </p>
+                  </div>
+
+                  <span class="text-slate-400 font-mono text-[11px] whitespace-nowrap">
+                    {{ new Date(log.createdAt).toLocaleString() }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </n-tab-pane>
+
+          <!-- Tab 4: Sincronización con Sheets -->
+          <n-tab-pane name="sync" tab="Sincronización Sheets">
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-800">Operaciones de Sincronización</h3>
+                <n-button
+                  v-if="session.user?.role === 'ADMIN'"
+                  size="small"
+                  type="primary"
+                  secondary
+                  :loading="mutations.retry.isPending.value"
+                  @click="handleRetrySync"
+                >
+                  Forzar Sincronización
+                </n-button>
+              </div>
+
+              <div v-if="syncQuery.isPending.value" class="grid min-h-32 place-items-center">
+                <n-spin size="medium" />
+              </div>
+
+              <div v-else-if="syncInfo && syncInfo.operations.length > 0" class="space-y-2">
+                <div
+                  v-for="(op, idx) in syncInfo.operations"
+                  :key="idx"
+                  class="p-3 bg-white border border-slate-200 rounded-lg shadow-sm text-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
+                >
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <n-tag
+                        size="tiny"
+                        :type="
+                          (op as any).status === 'COMPLETED'
+                            ? 'success'
+                            : (op as any).status === 'FAILED'
+                              ? 'error'
+                              : 'warning'
+                        "
+                      >
+                        {{ (op as any).status }}
+                      </n-tag>
+                      <span class="font-semibold text-slate-700"
+                        >Fila Sheets: {{ (op as any).sheetRowNumber || 'N/A' }}</span
+                      >
+                      <span class="text-slate-400 text-[11px]"
+                        >Intentos: {{ (op as any).attempts || 0 }}</span
+                      >
+                    </div>
+                    <p v-if="(op as any).lastError" class="text-red-500 font-mono text-[11px] mt-1">
+                      Error: {{ (op as any).lastError }}
+                    </p>
+                  </div>
+
+                  <span class="text-slate-400 text-[11px] font-mono">
+                    {{
+                      (op as any).createdAt ? new Date((op as any).createdAt).toLocaleString() : ''
+                    }}
+                  </span>
+                </div>
+              </div>
+
+              <n-empty
+                v-else
+                description="No existen operaciones de sincronización para esta orden."
+              />
+            </div>
+          </n-tab-pane>
+        </n-tabs>
+      </template>
+
+      <!-- Modal: Add Unit -->
+      <n-modal
+        v-model:show="showAddUnitModal"
+        preset="card"
+        title="Agregar Unidad a la Orden"
+        class="max-w-md"
+      >
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1"
+              >Identificador / Etiqueta</label
+            >
+            <n-input
+              v-model:value="newUnit.label"
+              placeholder="Ej: Camión 01, T-12, Unidad Norte..."
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Marca y Modelo</label>
+            <n-input
+              v-model:value="newUnit.makeModel"
+              placeholder="Ej: Kenworth T680, Ford F-150..."
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1"
+              >Número de Serie / VIN</label
+            >
+            <n-input
+              v-model:value="newUnit.serialNumber"
+              placeholder="Número de serie único de la unidad..."
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Año</label>
+            <n-input-number v-model:value="newUnit.year" :min="1980" :max="2030" class="w-full" />
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <n-button @click="showAddUnitModal = false">Cancelar</n-button>
+            <n-button
+              type="primary"
+              :loading="mutations.insertUnit.isPending.value"
+              @click="handleAddUnit"
+            >
+              Guardar Unidad
+            </n-button>
           </div>
         </div>
-      </div>
-    </NSpin>
+      </n-modal>
 
-    <!-- Modal: Add Unit -->
-    <NModal v-model:show="showAddUnitModal" preset="card" title="Agregar Unidad a la Orden" class="max-w-md">
-      <div class="space-y-4">
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Identificador / Etiqueta</label>
-          <NInput v-model:value="newUnit.label" placeholder="Ej: Camión 01, T-12, Unidad Norte..." />
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Marca y Modelo</label>
-          <NInput v-model:value="newUnit.makeModel" placeholder="Ej: Kenworth T680, Ford F-150..." />
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Número de Serie / VIN</label>
-          <NInput v-model:value="newUnit.serialNumber" placeholder="Número de serie único de la unidad..." />
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Año</label>
-          <NInputNumber v-model:value="newUnit.year" :min="1980" :max="2030" class="w-full" />
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <NButton @click="showAddUnitModal = false">Cancelar</NButton>
-          <NButton type="primary" @click="handleAddUnit">Guardar Unidad</NButton>
-        </div>
-      </div>
-    </NModal>
+      <!-- Modal: Add Equipment -->
+      <n-modal
+        v-model:show="showAddEqModal"
+        preset="card"
+        title="Asignar Equipo desde Google Sheets"
+        class="max-w-lg"
+      >
+        <div class="space-y-4">
+          <equipment-select v-model="selectedEquipmentKey" @select="handleEquipmentSelect" />
 
-    <!-- Modal: Add Equipment -->
-    <NModal v-model:show="showAddEqModal" preset="card" title="Asignar Equipo desde Google Sheets" class="max-w-lg">
-      <div class="space-y-4">
-        <EquipmentSelect
-          v-model="selectedEquipmentKey"
-          @select="handleEquipmentSelect"
-        />
+          <div v-if="selectedEquipment" class="p-3 bg-slate-50 rounded text-xs space-y-1">
+            <p>
+              <strong>Marca:</strong> {{ selectedEquipment.brand }} | <strong>Modelo:</strong>
+              {{ selectedEquipment.model }}
+            </p>
+            <p>
+              <strong>Línea:</strong> {{ selectedEquipment.line || 'N/A' }} |
+              <strong>Compañía:</strong> {{ selectedEquipment.carrier || 'N/A' }}
+            </p>
+            <p>
+              <strong>Estado:</strong> {{ selectedEquipment.condition || 'N/A' }} |
+              <strong>Servicio:</strong> {{ selectedEquipment.serviceStatus || 'N/A' }}
+            </p>
+          </div>
 
-        <div v-if="selectedEquipment" class="p-3 bg-slate-50 rounded text-xs space-y-1">
-          <p><strong>Marca:</strong> {{ selectedEquipment.brand }} | <strong>Modelo:</strong> {{ selectedEquipment.model }}</p>
-          <p><strong>Línea:</strong> {{ selectedEquipment.line || 'N/A' }} | <strong>Compañía:</strong> {{ selectedEquipment.carrier || 'N/A' }}</p>
-          <p><strong>Estado:</strong> {{ selectedEquipment.condition || 'N/A' }} | <strong>Servicio:</strong> {{ selectedEquipment.serviceStatus || 'N/A' }}</p>
+          <div class="flex justify-end gap-2 pt-2">
+            <n-button @click="showAddEqModal = false">Cancelar</n-button>
+            <n-button
+              type="primary"
+              :disabled="!selectedEquipmentKey || !selectedEquipment?.hasValidIdentity"
+              :loading="mutations.attachEquipment.isPending.value"
+              @click="handleAddEquipment"
+            >
+              Asignar a la Unidad
+            </n-button>
+          </div>
         </div>
+      </n-modal>
 
-        <div class="flex justify-end gap-2 pt-2">
-          <NButton @click="showAddEqModal = false">Cancelar</NButton>
-          <NButton
-            type="primary"
-            :disabled="!selectedEquipmentKey || !selectedEquipment?.hasValidIdentity"
-            @click="handleAddEquipment"
-          >
-            Asignar a la Unidad
-          </NButton>
+      <!-- Modal: Cancel Order -->
+      <n-modal
+        v-model:show="showCancelModal"
+        preset="card"
+        title="Cancelar Orden de Servicio"
+        class="max-w-md"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-slate-600">
+            ¿Estás seguro de cancelar esta orden? Los equipos asignados serán liberados para su uso
+            en otras órdenes.
+          </p>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1"
+              >Motivo de la Cancelación</label
+            >
+            <n-input
+              v-model:value="cancelReason"
+              type="textarea"
+              placeholder="Razón de la cancelación..."
+            />
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <n-button @click="showCancelModal = false">Cerrar</n-button>
+            <n-button
+              type="error"
+              :loading="mutations.cancel.isPending.value"
+              @click="handleCancelOrder"
+            >
+              Confirmar Cancelación
+            </n-button>
+          </div>
         </div>
-      </div>
-    </NModal>
+      </n-modal>
 
-    <!-- Modal: Cancel Order -->
-    <NModal v-model:show="showCancelModal" preset="card" title="Cancelar Orden de Servicio" class="max-w-md">
-      <div class="space-y-4">
-        <p class="text-sm text-slate-600">
-          ¿Estás seguro de cancelar esta orden? Los equipos asignados serán liberados para su uso en otras órdenes.
-        </p>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Motivo de la Cancelación</label>
-          <NInput v-model:value="cancelReason" type="textarea" placeholder="Razón de la cancelación..." />
+      <!-- Modal: Require Correction -->
+      <n-modal
+        v-model:show="showCorrectionModal"
+        preset="card"
+        title="Solicitar Corrección Técnica"
+        class="max-w-md"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-slate-600">
+            Devuelve la orden al estado REQUIRES_CORRECTION para que el técnico atienda
+            observaciones.
+          </p>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1"
+              >Observaciones o Requisitos</label
+            >
+            <n-input
+              v-model:value="correctionNotes"
+              type="textarea"
+              placeholder="Indica qué evidencias, firmas o checklist deben corregirse..."
+            />
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <n-button @click="showCorrectionModal = false">Cerrar</n-button>
+            <n-button type="warning" @click="handleRequestCorrection">
+              Devolver a Corrección
+            </n-button>
+          </div>
         </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <NButton @click="showCancelModal = false">Cerrar</NButton>
-          <NButton type="error" @click="handleCancelOrder">Confirmar Cancelación</NButton>
+      </n-modal>
+
+      <!-- Modal: Image Preview -->
+      <n-modal
+        v-model:show="showImageModal"
+        preset="card"
+        :title="previewImageTitle"
+        class="max-w-2xl"
+      >
+        <div class="flex justify-center p-2">
+          <img
+            v-if="previewImageUrl"
+            :src="previewImageUrl"
+            alt="Evidencia / Firma"
+            class="max-h-[70vh] rounded-lg object-contain"
+          />
         </div>
-      </div>
-    </NModal>
-  </div>
+      </n-modal>
+    </div>
+  </app-layout>
 </template>

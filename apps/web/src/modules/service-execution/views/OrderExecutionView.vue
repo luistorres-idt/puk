@@ -13,14 +13,17 @@ import {
   NSpin,
   NTabs,
   NTabPane,
+  useMessage,
 } from 'naive-ui';
-import type {
-  ChecklistCategory,
-  ChecklistCondition,
-  SaveChecklistItem,
-} from '@puk/contracts';
+import type { ChecklistCategory, ChecklistCondition, SaveChecklistItem } from '@puk/contracts';
+import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { useSessionStore } from '../../../stores/session.js';
-import { fetchOrderById, type OrderDetail } from '../../orders/index.js';
+import {
+  fetchOrderById,
+  formatServiceType,
+  type ChecklistEvidenceItem,
+  type OrderDetail,
+} from '../../orders/index.js';
 import {
   checkCompleteness,
   completeOrder,
@@ -40,6 +43,7 @@ import SignaturePad from '../components/SignaturePad.vue';
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
+const message = useMessage();
 
 const orderId = String(route.params.id);
 const order = ref<OrderDetail | null>(null);
@@ -88,15 +92,56 @@ const CATEGORY_NAMES: Record<ChecklistCategory, string> = {
   BODYWORK: 'Carrocería y Exteriores',
 };
 
-function initChecklistForUnit(unitId: string, existingItems?: Array<{ category: ChecklistCategory; condition: ChecklistCondition; notes?: string | null }>) {
+function formatOrderStatus(status?: string | null) {
+  switch (status) {
+    case 'DRAFT':
+      return 'Borrador';
+    case 'ASSIGNED':
+      return 'Asignada';
+    case 'IN_PROGRESS':
+      return 'En Progreso';
+    case 'REQUIRES_CORRECTION':
+      return 'Requiere Corrección';
+    case 'COMPLETED':
+      return 'Completada';
+    case 'FAILED_APPOINTMENT':
+      return 'Cita Fallida';
+    case 'CANCELLED':
+      return 'Cancelada';
+    default:
+      return status || '';
+  }
+}
+
+function formatEquipmentStatus(status?: string | null) {
+  switch (status) {
+    case 'MATCHED':
+      return 'Coincidente';
+    case 'DISCREPANCY_REPORTED':
+      return 'Discrepancia';
+    case 'PENDING':
+    default:
+      return 'Pendiente';
+  }
+}
+
+function initChecklistForUnit(
+  unitId: string,
+  existingItems?: Array<{
+    category: ChecklistCategory;
+    condition?: ChecklistCondition | null;
+    notes?: string | null;
+  }>,
+) {
+  const existingMap = checklistsByUnit.value[unitId];
   const map = {} as Record<ChecklistCategory, LocalChecklistItem>;
 
   for (const cat of CATEGORIES) {
-    const existing = existingItems?.find((i) => i.category === cat);
+    const fromDb = existingItems?.find((i) => i.category === cat);
     map[cat] = {
       category: cat,
-      condition: existing?.condition || 'GOOD',
-      notes: existing?.notes || '',
+      condition: existingMap?.[cat]?.condition ?? fromDb?.condition ?? 'GOOD',
+      notes: existingMap?.[cat]?.notes ?? fromDb?.notes ?? '',
     };
   }
   checklistsByUnit.value[unitId] = map;
@@ -109,6 +154,22 @@ function getUnitItem(unitId: string, category: ChecklistCategory): LocalChecklis
     unitChecklist = checklistsByUnit.value[unitId]!;
   }
   return unitChecklist[category];
+}
+
+function getUnitAllEvidences(unitId: string) {
+  const unit = order.value?.units?.find((u) => u.id === unitId);
+  if (!unit?.checklist?.items) return [];
+  const evidences: ChecklistEvidenceItem[] = [];
+  for (const item of unit.checklist.items) {
+    if (item.evidence) {
+      for (const ev of item.evidence) {
+        if (ev.status === 'COMPLETED') {
+          evidences.push(ev);
+        }
+      }
+    }
+  }
+  return evidences;
 }
 
 async function loadData() {
@@ -127,7 +188,7 @@ async function loadData() {
         activeUnitTab.value = orderData.units[0]?.id ?? '';
       }
       for (const unit of orderData.units) {
-        initChecklistForUnit(unit.id);
+        initChecklistForUnit(unit.id, unit.checklist?.items);
       }
     }
   } catch (err: unknown) {
@@ -141,18 +202,20 @@ async function loadData() {
 async function handleStartOrder() {
   try {
     await startOrder(orderId);
+    message.success('Orden de servicio iniciada.');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al iniciar la orden');
+    message.error(err instanceof Error ? err.message : 'Error al iniciar la orden');
   }
 }
 
 async function handleVerifyEquipment(unitId: string, equipmentId: string) {
   try {
     await verifyEquipment(orderId, unitId, equipmentId);
+    message.success('Equipo verificado como coincidente.');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al verificar equipo');
+    message.error(err instanceof Error ? err.message : 'Error al verificar equipo');
   }
 }
 
@@ -176,9 +239,10 @@ async function handleSaveDiscrepancy() {
       },
     );
     showDiscrepancyModal.value = false;
+    message.warning('Discrepancia reportada correctamente.');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al reportar discrepancia');
+    message.error(err instanceof Error ? err.message : 'Error al reportar discrepancia');
   }
 }
 
@@ -195,21 +259,26 @@ async function handleSaveUnitChecklist(unitId: string) {
   // Validate BAD notes
   for (const item of items) {
     if (item.condition === 'BAD' && (!item.notes || !item.notes.trim())) {
-      alert(`Debe indicar la observación para la categoría "${CATEGORY_NAMES[item.category]}" marcada como Mal.`);
+      message.error(
+        `Debe indicar la observación para la categoría "${CATEGORY_NAMES[item.category]}" marcada como Mal.`,
+      );
       return;
     }
   }
 
   try {
     await saveChecklist(orderId, unitId, items);
-    alert('Checklist guardado exitosamente');
+    message.success('Checklist guardado exitosamente');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al guardar checklist');
+    message.error(err instanceof Error ? err.message : 'Error al guardar checklist');
   }
 }
 
+const savingSignature = ref(false);
+
 async function handleSaveSignature(payload: { signerName: string; blob: Blob }) {
+  savingSignature.value = true;
   try {
     // 1. Presign
     const presign = await presignSignature(orderId, {
@@ -222,20 +291,22 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
     // 3. Complete
     await completeSignature(orderId, { signerName: payload.signerName }, presign.objectKey);
 
-    alert('Firma guardada exitosamente');
+    message.success('Firma guardada exitosamente');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al guardar firma');
+    message.error(err instanceof Error ? err.message : 'Error al guardar firma');
+  } finally {
+    savingSignature.value = false;
   }
 }
 
 async function handleCompleteOrder() {
   try {
     await completeOrder(orderId);
-    alert('¡Orden de servicio finalizada y cerrada con éxito!');
+    message.success('¡Orden de servicio finalizada y cerrada con éxito!');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al completar orden');
+    message.error(err instanceof Error ? err.message : 'Error al completar orden');
   }
 }
 
@@ -244,9 +315,10 @@ async function handleFailAppointment() {
   try {
     await failAppointment(orderId, { failedReason: failedReason.value.trim() });
     showFailedModal.value = false;
+    message.warning('Orden marcada como cita fallida.');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al marcar cita fallida');
+    message.error(err instanceof Error ? err.message : 'Error al marcar cita fallida');
   }
 }
 
@@ -255,9 +327,10 @@ async function handleRequireCorrection() {
   try {
     await requireCorrection(orderId, { notes: correctionNotes.value.trim() });
     showCorrectionModal.value = false;
+    message.info('Orden devuelta a corrección técnica.');
     await loadData();
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Error al solicitar corrección');
+    message.error(err instanceof Error ? err.message : 'Error al solicitar corrección');
   }
 }
 
@@ -267,300 +340,395 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto space-y-6 pb-12">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-      <div>
-        <div class="flex items-center gap-2">
-          <NButton secondary size="small" @click="router.push('/orders')">← Volver</NButton>
-          <h1 class="text-xl font-bold text-slate-800">
-            Trabajo Técnico: <span class="font-mono text-indigo-600">{{ order?.folio }}</span>
-          </h1>
+  <app-layout>
+    <div class="max-w-4xl mx-auto space-y-6 pb-12">
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <NButton secondary size="small" @click="router.push('/orders')">← Volver</NButton>
+            <h1 class="text-xl font-bold text-slate-800">
+              Trabajo Técnico: <span class="font-mono text-indigo-600">{{ order?.folio }}</span>
+            </h1>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            Cliente: <span class="font-bold">{{ order?.clientNameSnapshot }}</span> • Tipo:
+            <span class="font-semibold">{{ formatServiceType(order?.serviceType) }}</span>
+          </p>
         </div>
-        <p class="text-xs text-slate-500 mt-1">
-          Cliente: <span class="font-bold">{{ order?.clientNameSnapshot }}</span> •
-          Tipo: <span class="font-semibold">{{ order?.serviceType }}</span>
-        </p>
+
+        <div class="flex items-center gap-2">
+          <NTag
+            v-if="order"
+            size="medium"
+            :type="
+              order.status === 'COMPLETED'
+                ? 'success'
+                : order.status === 'IN_PROGRESS'
+                  ? 'warning'
+                  : 'info'
+            "
+          >
+            {{ formatOrderStatus(order.status) }}
+          </NTag>
+
+          <NButton v-if="order?.status === 'ASSIGNED'" type="primary" @click="handleStartOrder">
+            Iniciar Trabajo
+          </NButton>
+        </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <NTag
-          v-if="order"
-          size="medium"
-          :type="order.status === 'COMPLETED' ? 'success' : order.status === 'IN_PROGRESS' ? 'warning' : 'info'"
-        >
-          {{ order.status }}
-        </NTag>
+      <NAlert v-if="error" type="error" closable class="mb-4">
+        {{ error }}
+      </NAlert>
 
-        <NButton
-          v-if="order?.status === 'ASSIGNED'"
-          type="primary"
-          @click="handleStartOrder"
-        >
-          ▶ Iniciar Trabajo
-        </NButton>
-      </div>
-    </div>
-
-    <NAlert v-if="error" type="error" closable class="mb-4">
-      {{ error }}
-    </NAlert>
-
-    <NSpin :show="loading">
-      <div v-if="order" class="space-y-6">
-        <!-- Units Execution Stepper / Tabs -->
-        <NCard title="Unidades del Servicio" class="shadow-sm">
-          <NTabs v-model:value="activeUnitTab" type="line" animated>
-            <NTabPane
-              v-for="unit in order.units"
-              :key="unit.id"
-              :name="unit.id"
-              :tab="unit.label"
-            >
-              <div class="space-y-6 pt-2">
-                <div class="p-3 bg-slate-50 rounded text-xs text-slate-700">
-                  <p><strong>Vehículo:</strong> {{ unit.makeModel }} {{ unit.year ? `(${unit.year})` : '' }}</p>
-                  <p><strong>Serie / VIN:</strong> <span class="font-mono">{{ unit.serialNumber }}</span></p>
-                </div>
-
-                <!-- Equipments Verification Section -->
-                <div class="space-y-3">
-                  <h3 class="text-sm font-bold text-slate-800">
-                    Verificación de Equipos Asignados
-                  </h3>
-
-                  <div v-if="!unit.equipment || unit.equipment.length === 0" class="text-xs text-slate-400 italic">
-                    Sin equipos asignados a esta unidad.
+      <NSpin :show="loading">
+        <div v-if="order" class="space-y-6">
+          <!-- Units Execution Stepper / Tabs -->
+          <NCard title="Unidades del Servicio" class="shadow-sm">
+            <NTabs v-model:value="activeUnitTab" type="line" animated>
+              <NTabPane
+                v-for="unit in order.units"
+                :key="unit.id"
+                :name="unit.id"
+                :tab="unit.label"
+              >
+                <div class="space-y-6 pt-2">
+                  <div class="p-3 bg-slate-50 rounded text-xs text-slate-700">
+                    <p>
+                      <strong>Vehículo:</strong> {{ unit.makeModel }}
+                      {{ unit.year ? `(${unit.year})` : '' }}
+                    </p>
+                    <p>
+                      <strong>Serie / VIN:</strong>
+                      <span class="font-mono">{{ unit.serialNumber }}</span>
+                    </p>
                   </div>
 
-                  <div
-                    v-for="eq in unit.equipment"
-                    :key="eq.id"
-                    class="p-3 border rounded-lg space-y-2"
-                    :class="eq.verificationStatus === 'MATCHED' ? 'border-green-300 bg-green-50/40' : eq.verificationStatus === 'DISCREPANCY_REPORTED' ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-white'"
-                  >
-                    <div class="flex justify-between items-start">
-                      <div class="text-xs">
-                        <span class="font-bold text-slate-800 text-sm block">
-                          {{ eq.brandSnapshot }} {{ eq.modelSnapshot }}
-                        </span>
-                        <span class="font-mono text-slate-600 block">
-                          ID: {{ eq.externalId || 'N/A' }} | IMEI: {{ eq.imei || 'N/A' }}
-                        </span>
+                  <!-- Equipments Verification Section -->
+                  <div class="space-y-3">
+                    <h3 class="text-sm font-bold text-slate-800">
+                      Verificación de Equipos Asignados
+                    </h3>
+
+                    <div
+                      v-if="!unit.equipment || unit.equipment.length === 0"
+                      class="text-xs text-slate-400 italic"
+                    >
+                      Sin equipos asignados a esta unidad.
+                    </div>
+
+                    <div
+                      v-for="eq in unit.equipment"
+                      :key="eq.id"
+                      class="p-3 border rounded-lg space-y-2"
+                      :class="
+                        eq.verificationStatus === 'MATCHED'
+                          ? 'border-green-300 bg-green-50/40'
+                          : eq.verificationStatus === 'DISCREPANCY_REPORTED'
+                            ? 'border-amber-300 bg-amber-50/40'
+                            : 'border-slate-200 bg-white'
+                      "
+                    >
+                      <div class="flex justify-between items-start">
+                        <div class="text-xs">
+                          <span class="font-bold text-slate-800 text-sm block">
+                            {{ eq.brandSnapshot }} {{ eq.modelSnapshot }}
+                          </span>
+                          <span class="font-mono text-slate-600 block">
+                            ID: {{ eq.externalId || 'N/A' }} | IMEI: {{ eq.imei || 'N/A' }}
+                          </span>
+                        </div>
+
+                        <NTag
+                          size="small"
+                          :type="
+                            eq.verificationStatus === 'MATCHED'
+                              ? 'success'
+                              : eq.verificationStatus === 'DISCREPANCY_REPORTED'
+                                ? 'warning'
+                                : 'default'
+                          "
+                        >
+                          {{ formatEquipmentStatus(eq.verificationStatus) }}
+                        </NTag>
                       </div>
 
-                      <NTag
-                        size="small"
-                        :type="eq.verificationStatus === 'MATCHED' ? 'success' : eq.verificationStatus === 'DISCREPANCY_REPORTED' ? 'warning' : 'default'"
-                      >
-                        {{ eq.verificationStatus || 'PENDING' }}
-                      </NTag>
-                    </div>
+                      <div v-if="order.status === 'IN_PROGRESS'" class="flex gap-2 pt-1">
+                        <NButton
+                          size="tiny"
+                          type="success"
+                          secondary
+                          @click="handleVerifyEquipment(unit.id, eq.id)"
+                        >
+                          Coincide Físicamente
+                        </NButton>
 
-                    <div v-if="order.status === 'IN_PROGRESS'" class="flex gap-2 pt-1">
-                      <NButton
-                        size="tiny"
-                        type="success"
-                        secondary
-                        @click="handleVerifyEquipment(unit.id, eq.id)"
-                      >
-                        ✓ Coincide Físicamente
-                      </NButton>
-
-                      <NButton
-                        size="tiny"
-                        type="warning"
-                        secondary
-                        @click="openDiscrepancyModal(unit.id, eq.id)"
-                      >
-                        ⚠ Reportar Discrepancia
-                      </NButton>
+                        <NButton
+                          size="tiny"
+                          type="warning"
+                          secondary
+                          @click="openDiscrepancyModal(unit.id, eq.id)"
+                        >
+                          Reportar Discrepancia
+                        </NButton>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <!-- Checklist Section -->
-                <div class="space-y-4 pt-4 border-t border-slate-200">
-                  <h3 class="text-sm font-bold text-slate-800">
-                    Checklist de Recepción del Vehículo
-                  </h3>
+                  <!-- Checklist Section -->
+                  <div class="space-y-4 pt-4 border-t border-slate-200">
+                    <h3 class="text-sm font-bold text-slate-800">
+                      Checklist de Recepción del Vehículo
+                    </h3>
 
-                  <div
-                    v-for="catKey in CATEGORIES"
-                    :key="catKey"
-                    class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3 text-xs"
-                  >
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                      <span class="font-bold text-slate-800 text-sm">{{ CATEGORY_NAMES[catKey] }}</span>
-
-                      <NRadioGroup
-                        v-model:value="getUnitItem(unit.id, catKey).condition"
-                        name="condition"
-                        size="small"
+                    <div
+                      v-for="catKey in CATEGORIES"
+                      :key="catKey"
+                      class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3 text-xs"
+                    >
+                      <div
+                        class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
                       >
-                        <NRadio value="GOOD">Bien</NRadio>
-                        <NRadio value="BAD">Mal</NRadio>
-                        <NRadio value="NOT_APPLICABLE">No aplica</NRadio>
-                      </NRadioGroup>
+                        <span class="font-bold text-slate-800 text-sm">{{
+                          CATEGORY_NAMES[catKey]
+                        }}</span>
+
+                        <NRadioGroup
+                          v-model:value="getUnitItem(unit.id, catKey).condition"
+                          name="condition"
+                          size="small"
+                        >
+                          <NRadio value="GOOD">Bien</NRadio>
+                          <NRadio value="BAD">Mal</NRadio>
+                          <NRadio value="NOT_APPLICABLE">No aplica</NRadio>
+                        </NRadioGroup>
+                      </div>
+
+                      <!-- Notes required on BAD -->
+                      <div v-if="getUnitItem(unit.id, catKey).condition === 'BAD'" class="pt-1">
+                        <label class="block text-xs font-semibold text-red-600 mb-1">
+                          Observación obligatoria del daño / detalle *
+                        </label>
+                        <NInput
+                          v-model:value="getUnitItem(unit.id, catKey).notes"
+                          type="textarea"
+                          rows="2"
+                          placeholder="Describa el detalle observado..."
+                        />
+                      </div>
+
                     </div>
 
-                    <!-- Notes required on BAD -->
-                    <div
-                      v-if="getUnitItem(unit.id, catKey).condition === 'BAD'"
-                      class="pt-1"
-                    >
-                      <label class="block text-xs font-semibold text-red-600 mb-1">
-                        Observación obligatoria del daño / detalle *
-                      </label>
-                      <NInput
-                        v-model:value="getUnitItem(unit.id, catKey).notes"
-                        type="textarea"
-                        rows="2"
-                        placeholder="Describa el detalle observado..."
+                    <div v-if="order.status === 'IN_PROGRESS'" class="flex justify-end pt-2">
+                      <NButton
+                        type="primary"
+                        secondary
+                        size="small"
+                        @click="handleSaveUnitChecklist(unit.id)"
+                      >
+                        Guardar Checklist de Unidad
+                      </NButton>
+                    </div>
+
+                    <!-- Evidence upload for unit (minimum 3 photos) -->
+                    <div class="pt-4 border-t border-slate-200">
+                      <EvidenceCapture
+                        :order-id="orderId"
+                        :unit-id="unit.id"
+                        category="BODYWORK"
+                        :evidences="getUnitAllEvidences(unit.id)"
+                        :min-required="3"
+                        :disabled="order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'"
+                        @updated="loadData"
                       />
                     </div>
-
-                    <!-- Evidence upload for category -->
-                    <EvidenceCapture
-                      :order-id="orderId"
-                      :unit-id="unit.id"
-                      :category="catKey"
-                      @updated="loadData"
-                    />
-                  </div>
-
-                  <div v-if="order.status === 'IN_PROGRESS'" class="flex justify-end pt-2">
-                    <NButton
-                      type="primary"
-                      secondary
-                      size="small"
-                      @click="handleSaveUnitChecklist(unit.id)"
-                    >
-                      Guardar Checklist de Unidad
-                    </NButton>
                   </div>
                 </div>
+              </NTabPane>
+            </NTabs>
+          </NCard>
+
+          <!-- Signature Section -->
+          <SignaturePad
+            v-if="order && (order.status === 'IN_PROGRESS' || order.status === 'REQUIRES_CORRECTION' || order.signature)"
+            :order-id="orderId"
+            :existing-signature="order.signature"
+            :disabled="order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'"
+            :saving="savingSignature"
+            @save="handleSaveSignature"
+          />
+
+          <!-- Completeness & Closure Section -->
+          <NCard title="Cierre y Finalización del Servicio" class="shadow-sm">
+            <div class="space-y-4">
+              <div
+                v-if="completeness"
+                class="p-3 rounded-lg border text-xs"
+                :class="
+                  completeness.isComplete
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-amber-50 border-amber-200'
+                "
+              >
+                <span class="font-bold block mb-1">
+                  {{
+                    completeness.isComplete
+                      ? 'Todos los requisitos de cierre están cumplidos'
+                      : 'Requisitos pendientes para finalizar:'
+                  }}
+                </span>
+                <ul
+                  v-if="!completeness.isComplete"
+                  class="list-disc list-inside space-y-0.5 text-amber-900"
+                >
+                  <li v-for="(req, idx) in completeness.missingRequirements" :key="idx">
+                    {{ req }}
+                  </li>
+                </ul>
               </div>
-            </NTabPane>
-          </NTabs>
-        </NCard>
 
-        <!-- Signature Section -->
-        <SignaturePad
-          v-if="order.status === 'IN_PROGRESS' || order.status === 'REQUIRES_CORRECTION'"
-          @save="handleSaveSignature"
-        />
+              <div class="flex flex-wrap gap-3 items-center justify-between pt-2">
+                <NButton
+                  v-if="order.status === 'IN_PROGRESS' || order.status === 'ASSIGNED'"
+                  type="error"
+                  secondary
+                  size="small"
+                  @click="showFailedModal = true"
+                >
+                  Reportar Cita Fallida
+                </NButton>
 
-        <!-- Completeness & Closure Section -->
-        <NCard title="Cierre y Finalización del Servicio" class="shadow-sm">
-          <div class="space-y-4">
-            <div v-if="completeness" class="p-3 rounded-lg border text-xs" :class="completeness.isComplete ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'">
-              <span class="font-bold block mb-1">
-                {{ completeness.isComplete ? '✓ Todos los requisitos de cierre están cumplidos' : 'Requisitos pendientes para finalizar:' }}
-              </span>
-              <ul v-if="!completeness.isComplete" class="list-disc list-inside space-y-0.5 text-amber-900">
-                <li v-for="(req, idx) in completeness.missingRequirements" :key="idx">
-                  {{ req }}
-                </li>
-              </ul>
+                <NButton
+                  v-if="order.status === 'COMPLETED' && session.user?.role === 'ADMIN'"
+                  type="warning"
+                  secondary
+                  size="small"
+                  @click="showCorrectionModal = true"
+                >
+                  Solicitar Corrección (Admin)
+                </NButton>
+
+                <NButton
+                  v-if="order.status === 'IN_PROGRESS' || order.status === 'REQUIRES_CORRECTION'"
+                  type="primary"
+                  size="medium"
+                  :disabled="!completeness?.isComplete"
+                  @click="handleCompleteOrder"
+                >
+                  Finalizar y Cerrar Servicio
+                </NButton>
+              </div>
             </div>
+          </NCard>
+        </div>
+      </NSpin>
 
-            <div class="flex flex-wrap gap-3 items-center justify-between pt-2">
-              <NButton
-                v-if="order.status === 'IN_PROGRESS' || order.status === 'ASSIGNED'"
-                type="error"
-                secondary
-                size="small"
-                @click="showFailedModal = true"
-              >
-                Reportar Cita Fallida
-              </NButton>
-
-              <NButton
-                v-if="order.status === 'COMPLETED' && session.user?.role === 'ADMIN'"
-                type="warning"
-                secondary
-                size="small"
-                @click="showCorrectionModal = true"
-              >
-                Solicitar Corrección (Admin)
-              </NButton>
-
-              <NButton
-                v-if="order.status === 'IN_PROGRESS' || order.status === 'REQUIRES_CORRECTION'"
-                type="primary"
-                size="medium"
-                :disabled="!completeness?.isComplete"
-                @click="handleCompleteOrder"
-              >
-                Finalizar y Cerrar Servicio
-              </NButton>
-            </div>
+      <!-- Discrepancy Modal -->
+      <NModal
+        v-model:show="showDiscrepancyModal"
+        preset="card"
+        title="Reportar Discrepancia de Equipo"
+        class="max-w-md"
+      >
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1"
+              >Tipo de Discrepancia</label
+            >
+            <NRadioGroup v-model:value="discrepancyType" size="small">
+              <NRadio value="IMEI">IMEI</NRadio>
+              <NRadio value="ID">ID</NRadio>
+              <NRadio value="SERIAL">Serie</NRadio>
+              <NRadio value="UNIT">Unidad</NRadio>
+              <NRadio value="OTHER">Otro</NRadio>
+            </NRadioGroup>
           </div>
-        </NCard>
-      </div>
-    </NSpin>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1"
+              >Descripción de la discrepancia *</label
+            >
+            <NInput
+              v-model:value="discrepancyDesc"
+              type="textarea"
+              rows="3"
+              placeholder="Detalle lo observado en campo..."
+            />
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <NButton @click="showDiscrepancyModal = false">Cancelar</NButton>
+            <NButton type="warning" @click="handleSaveDiscrepancy">Guardar Discrepancia</NButton>
+          </div>
+        </div>
+      </NModal>
 
-    <!-- Discrepancy Modal -->
-    <NModal v-model:show="showDiscrepancyModal" preset="card" title="Reportar Discrepancia de Equipo" class="max-w-md">
-      <div class="space-y-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Tipo de Discrepancia</label>
-          <NRadioGroup v-model:value="discrepancyType" size="small">
-            <NRadio value="IMEI">IMEI</NRadio>
-            <NRadio value="ID">ID</NRadio>
-            <NRadio value="SERIAL">Serie</NRadio>
-            <NRadio value="UNIT">Unidad</NRadio>
-            <NRadio value="OTHER">Otro</NRadio>
-          </NRadioGroup>
+      <!-- Failed Appointment Modal -->
+      <NModal
+        v-model:show="showFailedModal"
+        preset="card"
+        title="Reportar Cita Fallida"
+        class="max-w-md"
+      >
+        <div class="space-y-3">
+          <p class="text-xs text-slate-500">
+            Al marcar la orden como cita fallida no se requiere checklist, fotos ni firma. Los
+            equipos asignados serán liberados para su reasignación.
+          </p>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1"
+              >Motivo de la Cita Fallida *</label
+            >
+            <NInput
+              v-model:value="failedReason"
+              type="textarea"
+              rows="3"
+              placeholder="Ej: Cliente ausente, taller cerrado, unidad descompuesta..."
+            />
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <NButton @click="showFailedModal = false">Cancelar</NButton>
+            <NButton type="error" :disabled="!failedReason.trim()" @click="handleFailAppointment">
+              Confirmar Cita Fallida
+            </NButton>
+          </div>
         </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Descripción de la discrepancia *</label>
-          <NInput v-model:value="discrepancyDesc" type="textarea" rows="3" placeholder="Detalle lo observado en campo..." />
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <NButton @click="showDiscrepancyModal = false">Cancelar</NButton>
-          <NButton type="warning" @click="handleSaveDiscrepancy">Guardar Discrepancia</NButton>
-        </div>
-      </div>
-    </NModal>
+      </NModal>
 
-    <!-- Failed Appointment Modal -->
-    <NModal v-model:show="showFailedModal" preset="card" title="Reportar Cita Fallida" class="max-w-md">
-      <div class="space-y-3">
-        <p class="text-xs text-slate-500">
-          Al marcar la orden como cita fallida no se requiere checklist, fotos ni firma. Los equipos asignados serán liberados para su reasignación.
-        </p>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Motivo de la Cita Fallida *</label>
-          <NInput v-model:value="failedReason" type="textarea" rows="3" placeholder="Ej: Cliente ausente, taller cerrado, unidad descompuesta..." />
+      <!-- Admin Correction Modal -->
+      <NModal
+        v-model:show="showCorrectionModal"
+        preset="card"
+        title="Solicitar Corrección al Técnico"
+        class="max-w-md"
+      >
+        <div class="space-y-3">
+          <p class="text-xs text-slate-500">
+            La orden regresará al estado "Requiere Corrección" para que el técnico complete los
+            requisitos indicados.
+          </p>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1"
+              >Instrucciones de Corrección *</label
+            >
+            <NInput
+              v-model:value="correctionNotes"
+              type="textarea"
+              rows="3"
+              placeholder="Detalle qué evidencia o dato debe ser subsanado..."
+            />
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <NButton @click="showCorrectionModal = false">Cancelar</NButton>
+            <NButton
+              type="warning"
+              :disabled="!correctionNotes.trim()"
+              @click="handleRequireCorrection"
+            >
+              Solicitar Corrección
+            </NButton>
+          </div>
         </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <NButton @click="showFailedModal = false">Cancelar</NButton>
-          <NButton type="error" :disabled="!failedReason.trim()" @click="handleFailAppointment">
-            Confirmar Cita Fallida
-          </NButton>
-        </div>
-      </div>
-    </NModal>
-
-    <!-- Admin Correction Modal -->
-    <NModal v-model:show="showCorrectionModal" preset="card" title="Solicitar Corrección al Técnico" class="max-w-md">
-      <div class="space-y-3">
-        <p class="text-xs text-slate-500">
-          La orden regresará al estado "Requiere Corrección" para que el técnico complete los requisitos indicados.
-        </p>
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Instrucciones de Corrección *</label>
-          <NInput v-model:value="correctionNotes" type="textarea" rows="3" placeholder="Detalle qué evidencia o dato debe ser subsanado..." />
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <NButton @click="showCorrectionModal = false">Cancelar</NButton>
-          <NButton type="warning" :disabled="!correctionNotes.trim()" @click="handleRequireCorrection">
-            Solicitar Corrección
-          </NButton>
-        </div>
-      </div>
-    </NModal>
-  </div>
+      </NModal>
+    </div>
+  </app-layout>
 </template>

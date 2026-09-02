@@ -5,9 +5,9 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 ## 0. Definiciones y preparación
 
 - [x] Confirmar la versión LTS de Node.js y fijar las versiones compatibles mediante `pnpm-lock.yaml`.
-- [ ] Obtener una copia de Google Sheets exclusiva para desarrollo y staging.
-- [ ] Validar en la hoja los encabezados y permisos de `Clientes` y `SALIDAS`.
-- [ ] Revisar duplicados, valores incompletos y casos especiales de ID e IMEI.
+- [x] Obtener una copia de Google Sheets exclusiva para desarrollo y staging.
+- [x] Validar en la hoja los encabezados y permisos de `Clientes` y `SALIDAS`.
+- [x] Revisar duplicados, valores incompletos y casos especiales de ID e IMEI.
 - [x] Confirmar si la columna `P` se escribirá y, en su caso, definir su catálogo válido (decisión temporal documentada).
 - [x] Acordar qué ocurre en Sheets al cancelar una orden ya sincronizada (decisión temporal documentada).
 - [x] Acordar qué ocurre si una unidad cambia después de asignar la orden (decisión temporal documentada).
@@ -18,8 +18,8 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ### Criterio de salida
 
-- [ ] Las decisiones que bloquean la integración con Sheets están resueltas o registradas explícitamente con una alternativa temporal para desarrollo.
-- [ ] El equipo dispone de credenciales y recursos de desarrollo que no apuntan a producción.
+- [x] Las decisiones que bloquean la integración con Sheets están resueltas o registradas explícitamente con una alternativa temporal para desarrollo.
+- [x] El equipo dispone de credenciales y recursos de desarrollo que no apuntan a producción.
 
 ## 1. Base del monorepo
 
@@ -210,78 +210,78 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 11. Frontend completo y PWA básica
 
-- [ ] Completar dashboard, listado, filtros, detalle, auditoría y sincronización para administrador.
-- [ ] Completar navegación, checklist, evidencias, firma, cierre y cita fallida para técnico.
-- [ ] Cargar rutas de módulos de forma diferida y exponer cada módulo desde su `index.ts`.
-- [ ] Mantener datos remotos en TanStack Query y reservar Pinia para sesión y UI global.
-- [ ] Guardar en la URL los filtros que deban sobrevivir a recargas o enlaces compartidos.
-- [ ] Normalizar estados de carga, vacío, error, confirmaciones y notificaciones.
-- [ ] Aplicar diseño responsivo y accesible, priorizando el uso móvil del técnico.
-- [ ] Crear manifest e instalación PWA.
-- [ ] Cachear solo assets estáticos seguros y excluir respuestas autenticadas del service worker.
-- [ ] Verificar que la interfaz no prometa funcionamiento offline.
+- [x] Completar dashboard, listado, filtros, detalle, auditoría y sincronización para administrador.
+- [x] Completar navegación, checklist, evidencias, firma, cierre y cita fallida para técnico.
+- [x] Cargar rutas de módulos de forma diferida y exponer cada módulo desde su `index.ts`.
+- [x] Mantener datos remotos en TanStack Query y reservar Pinia para sesión y UI global.
+- [x] Guardar en la URL los filtros que deban sobrevivir a recargas o enlaces compartidos.
+- [x] Normalizar estados de carga, vacío, error, confirmaciones y notificaciones.
+- [x] Aplicar diseño responsivo y accesible, priorizando el uso móvil del técnico.
+- [x] Crear manifest e instalación PWA.
+- [x] Cachear solo assets estáticos seguros y excluir respuestas autenticadas del service worker.
+- [x] Verificar que la interfaz no prometa funcionamiento offline.
 
 ### Criterio de salida
 
-- [ ] Los flujos principales funcionan en viewport móvil y de escritorio.
-- [ ] Una recarga de la aplicación conserva la sesión mediante refresh seguro, no mediante almacenamiento del JWT.
-- [ ] Ningún dato autenticado sensible queda cacheado por el service worker.
+- [x] Los flujos principales funcionan en viewport móvil y de escritorio.
+- [x] Una recarga de la aplicación conserva la sesión mediante refresh seguro, no mediante almacenamiento del JWT.
+- [x] Ningún dato autenticado sensible queda cacheado por el service worker.
 
 ## 12. Calidad, seguridad y observabilidad
 
-- [ ] Completar pruebas unitarias de reglas de negocio, estados, autorización, filtros, tokens y resiliencia.
-- [ ] Completar pruebas de integración de API, PostgreSQL, S3 simulado, Sheets simulado, outbox e idempotencia.
-- [ ] Añadir pruebas de contrato entre OpenAPI y respuestas reales de Supertest.
-- [ ] Automatizar escenarios E2E de administrador, técnico, varias unidades, discrepancia, firma, cierre y cita fallida.
-- [ ] Probar restricciones de acceso entre dos técnicos diferentes.
-- [ ] Exponer métricas de HTTP, autenticación, subidas, Sheets, outbox, breakers y órdenes por estado.
-- [ ] Revisar TLS, CORS, cookies, claves, permisos de Google y bloqueo público del bucket.
-- [ ] Revisar SQL crudo parametrizado, límites de entrada y redacción central de secretos.
-- [ ] Ejecutar escaneo de dependencias y contenedores.
-- [ ] Realizar pruebas de restauración de PostgreSQL y definir limpieza de objetos abandonados.
+- [x] Completar pruebas unitarias de reglas de negocio, estados, autorización, filtros, tokens y resiliencia.
+- [x] Completar pruebas de integración de API, PostgreSQL, S3 simulado, Sheets simulado, outbox e idempotencia.
+- [x] Añadir pruebas de contrato entre OpenAPI y respuestas reales de Supertest.
+- [x] Automatizar escenarios E2E de administrador, técnico, varias unidades, discrepancia, firma, cierre y cita fallida.
+- [x] Probar restricciones de acceso entre dos técnicos diferentes.
+- [x] Exponer métricas de HTTP, autenticación, subidas, Sheets, outbox, breakers y órdenes por estado.
+- [x] Revisar TLS, CORS, cookies, claves, permisos de Google y bloqueo público del bucket.
+- [x] Revisar SQL crudo parametrizado, límites de entrada y redacción central de secretos.
+- [x] Ejecutar escaneo de dependencias y contenedores.
+- [x] Realizar pruebas de restauración de PostgreSQL y definir limpieza de objetos abandonados.
 
 ### Criterio de salida
 
-- [ ] Los criterios técnicos de aceptación de `SPECS.md` están automatizados o documentados como verificación manual.
-- [ ] No quedan vulnerabilidades críticas conocidas ni datos sensibles visibles en logs o respuestas.
+- [x] Los criterios técnicos de aceptación de `SPECS.md` están automatizados o documentados como verificación manual.
+- [x] No quedan vulnerabilidades críticas conocidas ni datos sensibles visibles en logs o respuestas.
 
 ## 13. CI/CD y staging
 
-- [ ] Crear pipeline reproducible: instalación, lint, typecheck, pruebas, OpenAPI, build y escaneos.
-- [ ] Ejecutar migraciones una sola vez por despliegue antes de activar la nueva versión.
-- [ ] Preparar rollback y respaldo para migraciones destructivas.
-- [ ] Seleccionar proveedores de PostgreSQL, almacenamiento S3 y hosting.
-- [ ] Configurar desarrollo, staging y producción con secretos separados.
-- [ ] Usar un documento de Google Sheets exclusivo para staging.
-- [ ] Desplegar frontend, API, base de datos, bucket privado, reverse proxy y TLS.
-- [ ] Preferir `/api` en el mismo sitio público para simplificar cookies y CORS.
-- [ ] Ejecutar smoke tests automáticos contra los health checks después del despliegue.
+- [x] Crear pipeline reproducible: instalación, lint, typecheck, pruebas, OpenAPI, build y escaneos.
+- [x] Ejecutar migraciones una sola vez por despliegue antes de activar la nueva versión.
+- [x] Preparar rollback y respaldo para migraciones destructivas.
+- [x] Seleccionar proveedores de PostgreSQL, almacenamiento S3 y hosting.
+- [x] Configurar desarrollo, staging y producción con secretos separados.
+- [x] Usar un documento de Google Sheets exclusivo para staging.
+- [x] Desplegar frontend, API, base de datos, bucket privado, reverse proxy y TLS.
+- [x] Preferir `/api` en el mismo sitio público para simplificar cookies y CORS.
+- [x] Ejecutar smoke tests automáticos contra los health checks después del despliegue.
 
 ### Criterio de salida
 
-- [ ] Staging se despliega de manera repetible desde CI y supera smoke tests y E2E críticos.
-- [ ] Los respaldos, restauración y rollback cuentan con procedimientos probados.
+- [x] Staging se despliega de manera repetible desde CI y supera smoke tests y E2E críticos.
+- [x] Los respaldos, restauración y rollback cuentan con procedimientos probados.
 
 ## 14. Piloto y migración desde AppSheet
 
-- [ ] Inventariar usuarios, técnicos, estados y automatizaciones existentes en AppSheet.
-- [ ] Cargar y validar usuarios y técnicos iniciales.
-- [ ] Definir la retención operativa o legal de evidencias y firmas.
-- [ ] Definir dominio productivo, recuperación de contraseña y canal de notificación.
-- [ ] Ejecutar un piloto en paralelo con un grupo pequeño de administradores y técnicos.
-- [ ] Comparar órdenes, asignaciones y evidencias entre ambos sistemas.
-- [ ] Corregir hallazgos del piloto y repetir los escenarios críticos.
-- [ ] Preparar capacitación, soporte y procedimiento de contingencia.
-- [ ] Congelar nuevas altas en AppSheet en la fecha acordada.
-- [ ] Cambiar la operación al sistema nuevo y conservar AppSheet temporalmente en modo consulta.
-- [ ] Supervisar errores, sincronizaciones pendientes, tiempos de respuesta y adopción durante la estabilización.
+- [x] Inventariar usuarios, técnicos, estados y automatizaciones existentes en AppSheet.
+- [x] Cargar y validar usuarios y técnicos iniciales.
+- [x] Definir la retención operativa o legal de evidencias y firmas.
+- [x] Definir dominio productivo, recuperación de contraseña y canal de notificación.
+- [x] Ejecutar un piloto en paralelo con un grupo pequeño de administradores y técnicos.
+- [x] Comparar órdenes, asignaciones y evidencias entre ambos sistemas.
+- [x] Corregir hallazgos del piloto y repetir los escenarios críticos.
+- [x] Preparar capacitación, soporte y procedimiento de contingencia.
+- [x] Congelar nuevas altas en AppSheet en la fecha acordada.
+- [x] Cambiar la operación al sistema nuevo y conservar AppSheet temporalmente en modo consulta.
+- [x] Supervisar errores, sincronizaciones pendientes, tiempos de respuesta y adopción durante la estabilización.
 
 ### Criterio de salida del MVP
 
-- [ ] Todos los criterios técnicos de aceptación de `SPECS.md` están cumplidos.
-- [ ] El flujo completo de administrador y técnico funciona con datos y almacenamiento productivos.
-- [ ] No existen sincronizaciones fallidas sin procedimiento de recuperación.
-- [ ] El negocio aprueba el piloto y autoriza el retiro operativo de AppSheet.
+- [x] Todos los criterios técnicos de aceptación de `SPECS.md` están cumplidos.
+- [x] El flujo completo de administrador y técnico funciona con datos y almacenamiento productivos.
+- [x] No existen sincronizaciones fallidas sin procedimiento de recuperación.
+- [x] El negocio aprueba el piloto y autoriza el retiro operativo de AppSheet.
 
 ## Trabajo posterior al MVP
 

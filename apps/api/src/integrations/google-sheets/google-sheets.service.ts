@@ -24,10 +24,12 @@ export class GoogleSheetsCatalogService {
     this.equipmentCache = null;
   }
 
-  public async getClients(options: {
-    forceFresh?: boolean;
-    search?: string;
-  } = {}): Promise<{ data: readonly ExternalClient[]; fetchedAt: string }> {
+  public async getClients(
+    options: {
+      forceFresh?: boolean;
+      search?: string;
+    } = {},
+  ): Promise<{ data: readonly ExternalClient[]; fetchedAt: string }> {
     const now = Date.now();
     let entry = this.clientsCache;
 
@@ -56,10 +58,12 @@ export class GoogleSheetsCatalogService {
     return { data: result, fetchedAt: entry.fetchedAt };
   }
 
-  public async getEquipment(options: {
-    forceFresh?: boolean;
-    search?: string;
-  } = {}): Promise<{ data: readonly ExternalEquipment[]; fetchedAt: string }> {
+  public async getEquipment(
+    options: {
+      forceFresh?: boolean;
+      search?: string;
+    } = {},
+  ): Promise<{ data: readonly ExternalEquipment[]; fetchedAt: string }> {
     const now = Date.now();
     let entry = this.equipmentCache;
 
@@ -67,7 +71,24 @@ export class GoogleSheetsCatalogService {
       const records = await this.sheetsPort.listEquipment();
       const mapped: ExternalEquipment[] = records.map((record) => {
         const rowValues: string[] = [];
-        const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
+        const cols = [
+          'A',
+          'B',
+          'C',
+          'D',
+          'E',
+          'F',
+          'G',
+          'H',
+          'I',
+          'J',
+          'K',
+          'L',
+          'M',
+          'N',
+          'O',
+          'P',
+        ];
         for (let i = 0; i < cols.length; i++) {
           rowValues.push(record.values[cols[i]!] ?? '');
         }

@@ -95,11 +95,11 @@ export function createExecutionRouter(options: {
     '/orders/:id/units/:unitId/checklist/:category/evidence/presign',
     validate({ body: PresignEvidenceSchema }),
     async (request, response) => {
-      const rawCategory = typeof request.params.category === 'string' ? request.params.category : request.params.category?.[0];
-      const category = v.parse(
-        ChecklistCategorySchema,
-        rawCategory?.toUpperCase(),
-      );
+      const rawCategory =
+        typeof request.params.category === 'string'
+          ? request.params.category
+          : request.params.category?.[0];
+      const category = v.parse(ChecklistCategorySchema, rawCategory?.toUpperCase());
       const result = await options.executionService.presignEvidenceUpload(
         request.auth!.userId,
         request.auth!.role as 'ADMIN' | 'TECHNICIAN',
@@ -201,9 +201,7 @@ export function createExecutionRouter(options: {
     '/orders/:id/completeness',
     validate({ params: IdParamsSchema }),
     async (request, response) => {
-      const result = await options.executionService.validateCompleteness(
-        String(request.params.id),
-      );
+      const result = await options.executionService.validateCompleteness(String(request.params.id));
       sendSuccess(response, result);
     },
   );

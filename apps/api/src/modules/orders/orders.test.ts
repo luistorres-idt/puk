@@ -84,21 +84,54 @@ describe('OrdersService & SyncService', () => {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           order: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'order-1', ...data })),
-            update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data })),
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+              id: 'order-1',
+              ...data,
+            })),
+            update: vi.fn(
+              async ({
+                where,
+                data,
+              }: {
+                where: { id: string };
+                data: Record<string, unknown>;
+              }) => ({ id: where.id, ...data }),
+            ),
             findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => ({
               id: where.id,
               version: 2,
             })),
           },
           orderUnit: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'unit-1', ...data })),
-            update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data })),
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+              id: 'unit-1',
+              ...data,
+            })),
+            update: vi.fn(
+              async ({
+                where,
+                data,
+              }: {
+                where: { id: string };
+                data: Record<string, unknown>;
+              }) => ({ id: where.id, ...data }),
+            ),
             delete: vi.fn(),
           },
           orderEquipment: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'eq-1', ...data })),
-            update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data })),
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+              id: 'eq-1',
+              ...data,
+            })),
+            update: vi.fn(
+              async ({
+                where,
+                data,
+              }: {
+                where: { id: string };
+                data: Record<string, unknown>;
+              }) => ({ id: where.id, ...data }),
+            ),
             delete: vi.fn(),
           },
           auditLog: {

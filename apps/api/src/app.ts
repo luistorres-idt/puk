@@ -12,10 +12,15 @@ import { createAuthRouter, type AuthRouterOptions } from './modules/auth/index.j
 import { createHealthRouter } from './modules/health/index.js';
 import { createAdministrationRouter } from './modules/administration/index.js';
 import { createCatalogsRouter } from './modules/catalogs/index.js';
-import { createOrdersRouter, type OrdersService, type SyncService } from './modules/orders/index.js';
+import {
+  createOrdersRouter,
+  type OrdersService,
+  type SyncService,
+} from './modules/orders/index.js';
 import { createExecutionRouter, type ExecutionService } from './modules/execution/index.js';
 import type { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
 import { httpLogger } from './observability/logger.js';
+import { metrics, metricsMiddleware } from './observability/metrics.js';
 
 export interface AppOptions {
   allowedOrigins?: readonly string[];
@@ -35,6 +40,7 @@ export function createApp(options: AppOptions = {}): Express {
   app.disable('x-powered-by');
   app.set('trust proxy', options.trustProxy ?? false);
   app.use(requestId);
+  app.use(metricsMiddleware);
   app.use(helmet());
   app.use(
     cors({
@@ -48,6 +54,17 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(cookieParser());
   app.use(httpLogger);
   app.use(generalRateLimit);
+
+  app.get('/metrics', async (_request, response) => {
+    response.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    const body = await metrics.toPrometheusFormat(options.auth?.prisma);
+    response.send(body);
+  });
+
+  app.get('/health/metrics', async (_request, response) => {
+    const snapshot = await metrics.getSnapshot(options.auth?.prisma);
+    response.json(snapshot);
+  });
 
   app.use('/health', createHealthRouter(options.dependencyCheck ?? (async () => true)));
   if (options.auth !== undefined) {
