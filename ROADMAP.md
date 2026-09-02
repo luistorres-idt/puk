@@ -4,17 +4,17 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 0. Definiciones y preparación
 
-- [ ] Confirmar la versión LTS de Node.js y fijar las versiones compatibles mediante `pnpm-lock.yaml`.
+- [x] Confirmar la versión LTS de Node.js y fijar las versiones compatibles mediante `pnpm-lock.yaml`.
 - [ ] Obtener una copia de Google Sheets exclusiva para desarrollo y staging.
 - [ ] Validar en la hoja los encabezados y permisos de `Clientes` y `SALIDAS`.
 - [ ] Revisar duplicados, valores incompletos y casos especiales de ID e IMEI.
-- [ ] Confirmar si la columna `P` se escribirá y, en su caso, definir su catálogo válido.
-- [ ] Acordar qué ocurre en Sheets al cancelar una orden ya sincronizada.
-- [ ] Acordar qué ocurre si una unidad cambia después de asignar la orden.
-- [ ] Definir la regla de disponibilidad mientras `Estado del Servicio` (columna `K`) no cambie.
-- [ ] Definir límites finales de cantidad y tamaño de fotografías.
-- [ ] Documentar variables de entorno, secretos requeridos y responsables de cada credencial.
-- [ ] Crear una matriz de trazabilidad entre reglas de negocio, endpoints y pruebas de aceptación.
+- [x] Confirmar si la columna `P` se escribirá y, en su caso, definir su catálogo válido (decisión temporal documentada).
+- [x] Acordar qué ocurre en Sheets al cancelar una orden ya sincronizada (decisión temporal documentada).
+- [x] Acordar qué ocurre si una unidad cambia después de asignar la orden (decisión temporal documentada).
+- [x] Definir la regla de disponibilidad mientras `Estado del Servicio` (columna `K`) no cambie.
+- [x] Definir límites finales de cantidad y tamaño de fotografías para desarrollo.
+- [x] Documentar variables de entorno, secretos requeridos y responsables de cada credencial.
+- [x] Crear una matriz de trazabilidad entre reglas de negocio, endpoints y pruebas de aceptación.
 
 ### Criterio de salida
 
