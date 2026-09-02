@@ -1,0 +1,248 @@
+import { Router } from 'express';
+import {
+  AssignEquipmentSchema,
+  CancelOrderSchema,
+  CreateOrderSchema,
+  CreateUnitSchema,
+  EquipmentParamsSchema,
+  IdParamsSchema,
+  OrderListQuerySchema,
+  UnitParamsSchema,
+  UpdateOrderSchema,
+  UpdateUnitSchema,
+  type OrderListQuery,
+} from '@puk/contracts';
+import { authenticate, authorize } from '../../auth/authenticate.js';
+import type { TokenService } from '../../auth/tokens.js';
+import type { PrismaClient } from '../../generated/prisma/client.js';
+import { validate } from '../../middleware/validate.js';
+import { sendSuccess } from '../../shared/http.js';
+import type { OrdersService } from './orders.service.js';
+import type { SyncService } from './sync.service.js';
+
+export function createOrdersRouter(options: {
+  ordersService: OrdersService;
+  syncService?: SyncService;
+  prisma: PrismaClient;
+  tokens: TokenService;
+}): Router {
+  const router = Router();
+  router.use(authenticate(options.tokens));
+
+  // --- Orders CRUD ---
+
+  router.get(
+    '/',
+    validate({ query: OrderListQuerySchema }),
+    async (request, response) => {
+      const actor = {
+        id: request.auth!.userId,
+        role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+      };
+      const result = await options.ordersService.listOrders(
+        actor,
+        request.query as unknown as OrderListQuery,
+      );
+      sendSuccess(response, result.data, 200, { pagination: result.pagination });
+    },
+  );
+
+  router.post(
+    '/',
+    authorize('orders:manage'),
+    validate({ body: CreateOrderSchema }),
+    async (request, response) => {
+      const order = await options.ordersService.createOrder(
+        request.auth!.userId,
+        request.body,
+      );
+      sendSuccess(response, order, 201);
+    },
+  );
+
+  router.get(
+    '/:id',
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      const actor = {
+        id: request.auth!.userId,
+        role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+      };
+      const order = await options.ordersService.getOrderById(String(request.params.id), actor);
+      sendSuccess(response, order);
+    },
+  );
+
+  router.patch(
+    '/:id',
+    authorize('orders:manage'),
+    validate({ body: UpdateOrderSchema, params: IdParamsSchema }),
+    async (request, response) => {
+      const updated = await options.ordersService.updateOrder(
+        request.auth!.userId,
+        String(request.params.id),
+        request.body,
+      );
+      sendSuccess(response, updated);
+    },
+  );
+
+  router.post(
+    '/:id/assign',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      const updated = await options.ordersService.assignAndSyncOrder(
+        request.auth!.userId,
+        String(request.params.id),
+      );
+      // Process pending sync operations immediately in background or synchronously
+      if (options.syncService) {
+        options.syncService.processPendingOperations().catch(() => {});
+      }
+      sendSuccess(response, updated);
+    },
+  );
+
+  router.post(
+    '/:id/cancel',
+    authorize('orders:manage'),
+    validate({ body: CancelOrderSchema, params: IdParamsSchema }),
+    async (request, response) => {
+      const updated = await options.ordersService.cancelOrder(
+        request.auth!.userId,
+        String(request.params.id),
+        request.body.reason,
+      );
+      sendSuccess(response, updated);
+    },
+  );
+
+  router.get(
+    '/:id/audit',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      const logs = await options.prisma.auditLog.findMany({
+        where: { entityId: String(request.params.id) },
+        orderBy: { createdAt: 'desc' },
+        include: { actor: { select: { id: true, name: true, email: true } } },
+      });
+      sendSuccess(response, logs);
+    },
+  );
+
+  // --- Units ---
+
+  router.post(
+    '/:id/units',
+    authorize('orders:manage'),
+    validate({ body: CreateUnitSchema, params: IdParamsSchema }),
+    async (request, response) => {
+      const unit = await options.ordersService.addUnit(
+        request.auth!.userId,
+        String(request.params.id),
+        request.body,
+      );
+      sendSuccess(response, unit, 201);
+    },
+  );
+
+  router.patch(
+    '/:id/units/:unitId',
+    authorize('orders:manage'),
+    validate({ body: UpdateUnitSchema, params: UnitParamsSchema }),
+    async (request, response) => {
+      const updated = await options.ordersService.updateUnit(
+        request.auth!.userId,
+        String(request.params.id),
+        String(request.params.unitId),
+        request.body,
+      );
+      sendSuccess(response, updated);
+    },
+  );
+
+  router.delete(
+    '/:id/units/:unitId',
+    authorize('orders:manage'),
+    validate({ params: UnitParamsSchema }),
+    async (request, response) => {
+      await options.ordersService.deleteUnit(
+        request.auth!.userId,
+        String(request.params.id),
+        String(request.params.unitId),
+      );
+      sendSuccess(response, { deleted: true });
+    },
+  );
+
+  // --- Equipment ---
+
+  router.post(
+    '/:id/units/:unitId/equipment',
+    authorize('orders:manage'),
+    validate({ body: AssignEquipmentSchema, params: UnitParamsSchema }),
+    async (request, response) => {
+      const eq = await options.ordersService.assignEquipment(
+        request.auth!.userId,
+        String(request.params.id),
+        String(request.params.unitId),
+        request.body,
+      );
+      sendSuccess(response, eq, 201);
+    },
+  );
+
+  router.delete(
+    '/:id/units/:unitId/equipment/:equipmentId',
+    authorize('orders:manage'),
+    validate({ params: EquipmentParamsSchema }),
+    async (request, response) => {
+      await options.ordersService.removeEquipment(
+        request.auth!.userId,
+        String(request.params.id),
+        String(request.params.unitId),
+        String(request.params.equipmentId),
+      );
+      sendSuccess(response, { removed: true });
+    },
+  );
+
+  // --- Sync Operations ---
+
+  router.get(
+    '/:id/sync',
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      if (!options.syncService) {
+        sendSuccess(response, { isFullySynced: true, operations: [] });
+        return;
+      }
+      const syncStatus = await options.syncService.getOrderSyncStatus(
+        String(request.params.id),
+      );
+      sendSuccess(response, syncStatus);
+    },
+  );
+
+  router.post(
+    '/:id/sync/retry',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      if (!options.syncService) {
+        sendSuccess(response, { retriedCount: 0 });
+        return;
+      }
+      const result = await options.syncService.retryFailedOperations(
+        String(request.params.id),
+      );
+      // Process retried operations
+      options.syncService.processPendingOperations().catch(() => {});
+      sendSuccess(response, result);
+    },
+  );
+
+  return router;
+}

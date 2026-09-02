@@ -115,43 +115,43 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 6. Creación administrativa de órdenes
 
-- [ ] Implementar los servicios y endpoints para crear y editar órdenes en borrador.
-- [ ] Implementar alta, edición y eliminación de unidades mientras la orden esté en borrador.
-- [ ] Impedir números de serie duplicados dentro de una orden.
-- [ ] Implementar asignación y desasignación de varios equipos por unidad.
-- [ ] Guardar snapshots del cliente y de cada equipo externo.
-- [ ] Implementar asignación y reasignación de técnico.
-- [ ] Implementar cancelación según las reglas acordadas para Sheets.
-- [ ] Aplicar control de versión y devolver `409` ante ediciones obsoletas.
-- [ ] Crear el flujo administrativo por pasos: cliente, servicio, unidades, equipos, técnico y revisión.
-- [ ] Crear lista, filtros y detalle de órdenes según las convenciones de la API.
-- [ ] Registrar auditoría de cambios relevantes de la orden.
+- [x] Implementar los servicios y endpoints para crear y editar órdenes en borrador.
+- [x] Implementar alta, edición y eliminación de unidades mientras la orden esté en borrador.
+- [x] Impedir números de serie duplicados dentro de una orden.
+- [x] Implementar asignación y desasignación de varios equipos por unidad.
+- [x] Guardar snapshots del cliente y de cada equipo externo.
+- [x] Implementar asignación y reasignación de técnico.
+- [x] Implementar cancelación según las reglas acordadas para Sheets.
+- [x] Aplicar control de versión y devolver `409` ante ediciones obsoletas.
+- [x] Crear el flujo administrativo por pasos: cliente, servicio, unidades, equipos, técnico y revisión.
+- [x] Crear lista, filtros y detalle de órdenes según las convenciones de la API.
+- [x] Registrar auditoría de cambios relevantes de la orden.
 
 ### Criterio de salida
 
-- [ ] Un administrador crea una orden con varias unidades y varios equipos por unidad.
-- [ ] Otro administrador no puede sobrescribir silenciosamente una versión obsoleta.
-- [ ] Un técnico no puede crear, editar, asignar ni cancelar órdenes.
+- [x] Un administrador crea una orden con varias unidades y varios equipos por unidad.
+- [x] Otro administrador no puede sobrescribir silenciosamente una versión obsoleta.
+- [x] Un técnico no puede crear, editar, asignar ni cancelar órdenes.
 
 ## 7. Asignación, sincronización y outbox
 
-- [ ] Revalidar cada equipo por ID/IMEI y comparar su snapshot inmediatamente antes de asignar.
-- [ ] Comprobar en PostgreSQL que cada equipo no pertenezca a otra orden activa.
-- [ ] Devolver `409 SHEET_ROW_CONFLICT` sin sobrescribir cambios externos.
-- [ ] Escribir únicamente `J`, `L`, `M`, `N`, `O` y, si se aprueba, `P` mediante `batchUpdate`.
-- [ ] Proteger explícitamente las columnas `A`, `I`, `K` y cualquier rango no autorizado.
-- [ ] Crear `SheetSyncOperation` en la misma transacción local que la asignación.
-- [ ] Implementar claves de idempotencia para asignación y sincronización.
-- [ ] Implementar worker con bloqueo seguro, backoff exponencial, jitter y máximo de intentos.
-- [ ] Verificar el estado remoto antes de reintentar escrituras con resultado ambiguo.
-- [ ] Añadir estado visible de sincronización y reintento manual para administradores.
-- [ ] Registrar métricas y logs del worker, cola y circuit breaker.
+- [x] Revalidar cada equipo por ID/IMEI y comparar su snapshot inmediatamente antes de asignar.
+- [x] Comprobar en PostgreSQL que cada equipo no pertenezca a otra orden activa.
+- [x] Devolver `409 SHEET_ROW_CONFLICT` sin sobrescribir cambios externos.
+- [x] Escribir únicamente `J`, `L`, `M`, `N`, `O` y, si se aprueba, `P` mediante `batchUpdate`.
+- [x] Proteger explícitamente las columnas `A`, `I`, `K` y cualquier rango no autorizado.
+- [x] Crear `SheetSyncOperation` en la misma transacción local que la asignación.
+- [x] Implementar claves de idempotencia para asignación y sincronización.
+- [x] Implementar worker con bloqueo seguro, backoff exponencial, jitter y máximo de intentos.
+- [x] Verificar el estado remoto antes de reintentar escrituras con resultado ambiguo.
+- [x] Añadir estado visible de sincronización y reintento manual para administradores.
+- [x] Registrar métricas y logs del worker, cola y circuit breaker.
 
 ### Criterio de salida
 
-- [ ] Una asignación correcta modifica exclusivamente las celdas autorizadas.
-- [ ] Una operación fallida permanece visible, se puede reintentar y no se duplica.
-- [ ] La orden no aparece como completamente sincronizada mientras existan operaciones fallidas.
+- [x] Una asignación correcta modifica exclusivamente las celdas autorizadas.
+- [x] Una operación fallida permanece visible, se puede reintentar y no se duplica.
+- [x] La orden no aparece como completamente sincronizada mientras existan operaciones fallidas.
 
 ## 8. Flujo de trabajo del técnico
 

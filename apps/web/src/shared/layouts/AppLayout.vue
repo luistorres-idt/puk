@@ -24,6 +24,12 @@ async function logout(): Promise<void> {
         </router-link>
         <nav v-if="session.user" class="flex items-center gap-3">
           <router-link
+            class="text-sm text-slate-700 hover:text-blue-800"
+            to="/orders"
+          >
+            Órdenes
+          </router-link>
+          <router-link
             v-if="session.user.role === 'ADMIN'"
             class="text-sm text-slate-700 hover:text-blue-800"
             to="/technicians"

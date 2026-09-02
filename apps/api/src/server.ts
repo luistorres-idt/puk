@@ -5,6 +5,7 @@ import { createPrismaClient } from './database/client.js';
 import { DevMockSheetsClient } from './integrations/google-sheets/dev-mock-sheets.client.js';
 import { GoogleSheetsClient } from './integrations/google-sheets/google-sheets.client.js';
 import { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
+import { OrdersService, SyncService } from './modules/orders/index.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
@@ -51,6 +52,16 @@ const catalogsService = new GoogleSheetsCatalogService(
   environment.CATALOG_CACHE_TTL_SECONDS,
 );
 
+const ordersService = new OrdersService(prisma, catalogsService);
+const syncService = new SyncService(prisma, sheetsPort, {
+  maxRetries: environment.SHEETS_RETRY_LIMIT,
+});
+
+const syncInterval = setInterval(() => {
+  syncService.processPendingOperations().catch(() => {});
+}, environment.OUTBOX_POLL_INTERVAL_MS);
+syncInterval.unref();
+
 const server = createApp({
   allowedOrigins: [environment.APP_ORIGIN],
   auth: {
@@ -67,6 +78,8 @@ const server = createApp({
     tokens,
   },
   catalogsService,
+  ordersService,
+  syncService,
   dependencyCheck: async () => {
     try {
       await prisma.$queryRaw`SELECT 1`;

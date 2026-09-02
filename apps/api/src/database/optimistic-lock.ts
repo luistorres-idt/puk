@@ -5,7 +5,7 @@ export async function updateOrderVersion(
   transaction: Prisma.TransactionClient,
   orderId: string,
   expectedVersion: number,
-  data: Omit<Prisma.OrderUpdateManyMutationInput, 'version'>,
+  data: Omit<Prisma.OrderUncheckedUpdateManyInput, 'version'>,
 ): Promise<void> {
   const updated = await transaction.order.updateMany({
     data: { ...data, version: { increment: 1 } },

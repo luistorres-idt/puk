@@ -2,12 +2,13 @@ import { createRouter, createWebHistory } from 'vue-router';
 
 import { authRoutes } from '@/modules/auth';
 import { homeRoutes } from '@/modules/home';
+import { orderRoutes } from '@/modules/orders';
 import { technicianRoutes } from '@/modules/technicians';
 import { useSessionStore } from '@/stores/session';
 
 export const router = createRouter({
   history: createWebHistory(),
-  routes: [...authRoutes, ...homeRoutes, ...technicianRoutes],
+  routes: [...authRoutes, ...homeRoutes, ...technicianRoutes, ...orderRoutes],
   scrollBehavior: () => ({ left: 0, top: 0 }),
 });
 
