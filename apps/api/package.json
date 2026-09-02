@@ -14,9 +14,11 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "7.10.0",
     "@puk/contracts": "workspace:*",
     "@valibot/to-json-schema": "^1.7.1",
+    "argon2": "^0.45.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
@@ -25,6 +27,7 @@
     "helmet": "^8.3.0",
     "morgan": "^1.12.0",
     "opossum": "^10.0.0",
+    "pg": "^8.23.0",
     "swagger-ui-express": "^5.0.1",
     "valibot": "^1.1.0",
     "winston": "^3.19.0"
@@ -33,6 +36,7 @@
     "@puk/typescript-config": "workspace:*",
     "@types/express": "^5.0.3",
     "@types/node": "^24.10.0",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.3",
     "supertest": "^7.1.4",
     "tsx": "^4.20.6",

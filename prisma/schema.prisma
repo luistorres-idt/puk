@@ -7,3 +7,336 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  ADMIN
+  TECHNICIAN
+}
+
+enum OrderServiceType {
+  INSTALLATION
+  REVIEW
+  UNINSTALLATION
+  FAILED_APPOINTMENT
+}
+
+enum OrderStatus {
+  DRAFT
+  ASSIGNED
+  IN_PROGRESS
+  REQUIRES_CORRECTION
+  COMPLETED
+  FAILED_APPOINTMENT
+  CANCELLED
+}
+
+enum UnitStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ChecklistCategory {
+  DASHBOARD
+  WINDOWS
+  ACCESSORIES
+  TRIMS
+  BODYWORK
+}
+
+enum ChecklistCondition {
+  GOOD
+  BAD
+  NOT_APPLICABLE
+}
+
+enum EquipmentVerificationStatus {
+  PENDING
+  MATCHED
+  DISCREPANCY_REPORTED
+}
+
+enum UploadStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+  DELETED
+}
+
+enum SyncStatus {
+  PENDING
+  PROCESSING
+  SYNCED
+  FAILED
+}
+
+model User {
+  id                    String           @id @default(uuid()) @db.Uuid
+  email                 String           @unique
+  passwordHash          String
+  name                  String
+  role                  UserRole
+  technicianId          String?          @unique @db.Uuid
+  active                Boolean          @default(true)
+  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
+  technician            Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  createdOrders         Order[]          @relation("OrderCreator")
+  verifiedEquipment     OrderEquipment[] @relation("EquipmentVerifier")
+  completedChecks       Checklist[]      @relation("ChecklistCompleter")
+  uploadedEvidence      Evidence[]       @relation("EvidenceUploader")
+  capturedSignatures    Signature[]      @relation("SignatureCapturer")
+  reportedDiscrepancies Discrepancy[]    @relation("DiscrepancyReporter")
+  resolvedDiscrepancies Discrepancy[]    @relation("DiscrepancyResolver")
+  refreshSessions       RefreshSession[]
+  auditLogs             AuditLog[]       @relation("AuditActor")
+
+  @@index([role, active])
+}
+
+model Technician {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  workshop  String?
+  address   String?
+  city      String?
+  state     String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User?
+  orders    Order[]
+
+  @@index([active, name])
+}
+
+model Order {
+  id                 String               @id @default(uuid()) @db.Uuid
+  folio              String               @unique
+  serviceType        OrderServiceType
+  status             OrderStatus          @default(DRAFT)
+  clientSheetId      String
+  clientNameSnapshot String
+  technicianId       String?              @db.Uuid
+  scheduledAt        DateTime             @db.Timestamptz(3)
+  isHomeService      Boolean              @default(false)
+  serviceAddress     String?
+  generalNotes       String?
+  failedReason       String?
+  version            Int                  @default(1)
+  createdById        String               @db.Uuid
+  startedAt          DateTime?            @db.Timestamptz(3)
+  completedAt        DateTime?            @db.Timestamptz(3)
+  cancelledAt        DateTime?            @db.Timestamptz(3)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
+  technician         Technician?          @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  createdBy          User                 @relation("OrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  units              OrderUnit[]
+  signature          Signature?
+  discrepancies      Discrepancy[]
+  syncOperations     SheetSyncOperation[]
+
+  @@index([technicianId, status, scheduledAt])
+  @@index([clientSheetId, createdAt])
+  @@index([status, scheduledAt])
+}
+
+model OrderUnit {
+  id            String           @id @default(uuid()) @db.Uuid
+  orderId       String           @db.Uuid
+  label         String
+  makeModel     String
+  year          Int?
+  serialNumber  String
+  status        UnitStatus       @default(PENDING)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+  order         Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  equipment     OrderEquipment[]
+  checklist     Checklist?
+  discrepancies Discrepancy[]
+
+  @@unique([orderId, serialNumber])
+  @@index([orderId, status])
+}
+
+model OrderEquipment {
+  id                         String                      @id @default(uuid()) @db.Uuid
+  orderUnitId                String                      @db.Uuid
+  sheetName                  String                      @default("SALIDAS")
+  sheetRowHint               Int?
+  externalId                 String?
+  imei                       String?
+  externalKey                String
+  activeAssignment           Boolean                     @default(false)
+  brandSnapshot              String?
+  modelSnapshot              String?
+  lineSnapshot               String?
+  iccidSnapshot              String?
+  carrierSnapshot            String?
+  equipmentConditionSnapshot String?
+  serviceStatusSnapshot      String?
+  rawSnapshot                Json                        @db.JsonB
+  verificationStatus         EquipmentVerificationStatus @default(PENDING)
+  verifiedAt                 DateTime?                   @db.Timestamptz(3)
+  verifiedById               String?                     @db.Uuid
+  createdAt                  DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                    @updatedAt @db.Timestamptz(3)
+  orderUnit                  OrderUnit                   @relation(fields: [orderUnitId], references: [id], onDelete: Cascade)
+  verifiedBy                 User?                       @relation("EquipmentVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  discrepancies              Discrepancy[]
+
+  @@unique([orderUnitId, externalKey])
+  @@index([externalKey])
+  @@index([verifiedById])
+}
+
+model Checklist {
+  id            String          @id @default(uuid()) @db.Uuid
+  orderUnitId   String          @unique @db.Uuid
+  completedById String?         @db.Uuid
+  completedAt   DateTime?       @db.Timestamptz(3)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
+  orderUnit     OrderUnit       @relation(fields: [orderUnitId], references: [id], onDelete: Cascade)
+  completedBy   User?           @relation("ChecklistCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+  items         ChecklistItem[]
+
+  @@index([completedById])
+}
+
+model ChecklistItem {
+  id          String              @id @default(uuid()) @db.Uuid
+  checklistId String              @db.Uuid
+  category    ChecklistCategory
+  condition   ChecklistCondition?
+  notes       String?
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(3)
+  checklist   Checklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  evidence    Evidence[]
+
+  @@unique([checklistId, category])
+  @@index([checklistId])
+}
+
+model Evidence {
+  id              String        @id @default(uuid()) @db.Uuid
+  checklistItemId String        @db.Uuid
+  objectKey       String        @unique
+  mimeType        String
+  sizeBytes       Int
+  checksum        String?
+  width           Int?
+  height          Int?
+  status          UploadStatus  @default(PENDING)
+  uploadedById    String        @db.Uuid
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  completedAt     DateTime?     @db.Timestamptz(3)
+  deletedAt       DateTime?     @db.Timestamptz(3)
+  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  uploadedBy      User          @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([checklistItemId, status])
+  @@index([uploadedById])
+  @@index([status, createdAt])
+}
+
+model Signature {
+  id           String   @id @default(uuid()) @db.Uuid
+  orderId      String   @unique @db.Uuid
+  signerName   String
+  objectKey    String   @unique
+  mimeType     String
+  sizeBytes    Int
+  signedAt     DateTime @db.Timestamptz(3)
+  capturedById String   @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  capturedBy   User     @relation("SignatureCapturer", fields: [capturedById], references: [id], onDelete: Restrict)
+
+  @@index([capturedById])
+}
+
+model Discrepancy {
+  id               String          @id @default(uuid()) @db.Uuid
+  orderId          String          @db.Uuid
+  orderUnitId      String          @db.Uuid
+  orderEquipmentId String?         @db.Uuid
+  type             String
+  description      String
+  expectedSnapshot Json            @db.JsonB
+  observedSnapshot Json            @db.JsonB
+  reportedById     String          @db.Uuid
+  reportedAt       DateTime        @default(now()) @db.Timestamptz(3)
+  resolvedAt       DateTime?       @db.Timestamptz(3)
+  resolvedById     String?         @db.Uuid
+  resolutionNotes  String?
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderUnit        OrderUnit       @relation(fields: [orderUnitId], references: [id], onDelete: Cascade)
+  orderEquipment   OrderEquipment? @relation(fields: [orderEquipmentId], references: [id], onDelete: SetNull)
+  reportedBy       User            @relation("DiscrepancyReporter", fields: [reportedById], references: [id], onDelete: Restrict)
+  resolvedBy       User?           @relation("DiscrepancyResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId, resolvedAt])
+  @@index([orderUnitId])
+  @@index([orderEquipmentId])
+  @@index([reportedById])
+  @@index([resolvedById])
+}
+
+model RefreshSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  jti           String    @unique @db.Uuid
+  tokenHash     String
+  userAgent     String?
+  ipAddress     String?   @db.Inet
+  expiresAt     DateTime  @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  replacedByJti String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  action      String
+  entityType  String
+  entityId    String?
+  before      Json?    @db.JsonB
+  after       Json?    @db.JsonB
+  requestId   String?
+  ipAddress   String?  @db.Inet
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([requestId])
+}
+
+model SheetSyncOperation {
+  id               String     @id @default(uuid()) @db.Uuid
+  orderId          String?    @db.Uuid
+  operationType    String
+  idempotencyKey   String     @unique
+  payload          Json       @db.JsonB
+  status           SyncStatus @default(PENDING)
+  attempts         Int        @default(0)
+  lastErrorCode    String?
+  lastErrorMessage String?
+  nextAttemptAt    DateTime?  @db.Timestamptz(3)
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+  syncedAt         DateTime?  @db.Timestamptz(3)
+  order            Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, status])
+  @@index([status, nextAttemptAt, createdAt])
+}

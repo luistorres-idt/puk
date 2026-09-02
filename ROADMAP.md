@@ -62,19 +62,19 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 3. Persistencia y modelo de dominio
 
-- [ ] Modelar en Prisma usuarios, técnicos, órdenes, unidades, equipos asignados, checklist e items.
-- [ ] Modelar evidencias, firmas, discrepancias, sesiones de refresh, auditoría y operaciones de sincronización.
-- [ ] Añadir enumeraciones y restricciones de unicidad descritas en la especificación.
-- [ ] Crear la restricción SQL parcial que impide asignar un equipo a dos órdenes activas.
-- [ ] Implementar `Order.version` para concurrencia optimista.
-- [ ] Incorporar tablas de outbox o la persistencia equivalente para efectos externos críticos.
-- [ ] Crear migraciones iniciales, índices de consulta y un seed mínimo de desarrollo.
-- [ ] Definir helpers transaccionales para cambios de dominio, auditoría y outbox en una sola transacción.
+- [x] Modelar en Prisma usuarios, técnicos, órdenes, unidades, equipos asignados, checklist e items.
+- [x] Modelar evidencias, firmas, discrepancias, sesiones de refresh, auditoría y operaciones de sincronización.
+- [x] Añadir enumeraciones y restricciones de unicidad descritas en la especificación.
+- [x] Crear la restricción SQL parcial que impide asignar un equipo a dos órdenes activas.
+- [x] Implementar `Order.version` para concurrencia optimista.
+- [x] Incorporar tablas de outbox o la persistencia equivalente para efectos externos críticos.
+- [x] Crear migraciones iniciales, índices de consulta y un seed mínimo de desarrollo.
+- [x] Definir helpers transaccionales para cambios de dominio, auditoría y outbox en una sola transacción.
 
 ### Criterio de salida
 
-- [ ] La base puede crearse desde cero ejecutando migraciones y seed.
-- [ ] Las restricciones de unicidad, propiedad y concurrencia cuentan con pruebas automatizadas.
+- [x] La base puede crearse desde cero ejecutando migraciones y seed.
+- [x] Las restricciones de unicidad, propiedad y concurrencia cuentan con pruebas automatizadas.
 
 ## 4. Autenticación, usuarios y técnicos
 

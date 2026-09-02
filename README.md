@@ -191,6 +191,9 @@ Las columnas `A`, `I` y `K` nunca son modificadas. Antes de cada escritura, la A
    pnpm prisma:seed
    ```
 
+   El seed local crea `admin@example.invalid` y `technician@example.invalid`. Cambia
+   `SEED_ADMIN_PASSWORD` antes de ejecutarlo fuera de un entorno local; en producción es obligatorio.
+
 5. Iniciar API y web:
 
    ```bash
