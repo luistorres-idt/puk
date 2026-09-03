@@ -285,6 +285,11 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## Trabajo posterior al MVP
 
+- [x] Implementar el reporte PDF de orden de servicio definido en `docs/service-order-report-spec.md`.
+- [ ] Aprobar el recurso oficial de logotipo y la plantilla visual del reporte.
+- [x] Generar y versionar automáticamente el reporte al completar o corregir una orden.
+- [x] Añadir descarga privada, reintentos y auditoría del PDF.
+- [ ] Aprobar documentos de referencia y añadir pruebas de regresión visual del PDF.
 - [ ] Evaluar modo offline completo solo con una estrategia explícita de conflictos y sincronización.
 - [ ] Evaluar una columna protegida `SISTEMA_ID` en Sheets para identidad estable.
 - [ ] Evaluar RBAC persistido cuando aparezcan más perfiles configurables.

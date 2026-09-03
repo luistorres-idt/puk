@@ -25,6 +25,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Seguimiento del estado y progreso de cada servicio.
 - Detección visible de conflictos cuando una fila de Sheets cambia externamente.
 - Consulta de evidencias, firma, discrepancias, auditoría y sincronización.
+- Reporte PDF de cada orden completada con portada, detalle por unidad/equipo y fotografías en formato amplio.
 - Reintento controlado de operaciones fallidas con Google Sheets.
 
 ### Operación técnica

@@ -31,6 +31,7 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 - Fotografías obligatorias por categoría del checklist.
 - Reporte de discrepancias sin bloquear el trabajo del técnico.
 - Una firma del cliente por orden.
+- Reporte PDF de la orden de servicio completada, conforme a [docs/service-order-report-spec.md](./docs/service-order-report-spec.md).
 - Almacenamiento privado compatible con S3.
 - Auditoría de acciones relevantes.
 - Registro y reintento de sincronizaciones con Google Sheets.
@@ -1353,6 +1354,7 @@ Las migraciones se ejecutan una vez por despliegue, antes de activar la nueva ve
 ### Fase 4 — Operación
 
 - Auditoría.
+- Reporte PDF de orden de servicio.
 - Observabilidad.
 - Pruebas end-to-end.
 - Seguridad y hardening.
