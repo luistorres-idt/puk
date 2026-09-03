@@ -1,0 +1,363 @@
+---
+marp: true
+theme: default
+paginate: true
+header: "Bull Dog Solution — Manual de Usuario y Presentación Operativa"
+footer: "Versión 1.0 | Sistema de Órdenes de Servicio"
+style: |
+  section {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 40px;
+    font-size: 1.25rem;
+  }
+  h1 {
+    color: #1e3a8a;
+  }
+  h2 {
+    color: #2563eb;
+  }
+  .highlight {
+    background-color: #fef08a;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: bold;
+  }
+  .badge-admin { background: #dbeafe; color: #1e40af; }
+  .badge-tech { background: #dcfce7; color: #166534; }
+  .badge-error { background: #fee2e2; color: #991b1b; }
+
+  .flow-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 18px 0;
+  }
+  .flow-card {
+    background: #f8fafc;
+    border: 2px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 6px;
+    text-align: center;
+    font-size: 0.88rem;
+    line-height: 1.25;
+  }
+  .flow-card.admin {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1e40af;
+  }
+  .flow-card.tech {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+  }
+  .flow-card.final {
+    border-color: #fde047;
+    background: #fefce8;
+    color: #854d0e;
+    font-weight: bold;
+  }
+  .flow-alt {
+    background: #fef2f2;
+    border-left: 4px solid #ef4444;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    margin: 12px 0;
+    color: #991b1b;
+  }
+  .step-num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.1);
+    font-size: 0.75rem;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+---
+
+# Bull Dog Solution
+## Sistema de Gestión de Órdenes de Servicio
+### Manual de Usuario y Guía Operativa Paso a Paso
+
+> Este documento sirve como **presentación interactiva** (compatible con Marp / Slides) y **manual de usuario vivo** para el equipo administrativo y técnico. Actualízalo conforme se integren nuevas características (*features*).
+
+---
+
+## Índice General
+
+1. [Visión General y Propósito](#3)
+2. [Arquitectura y Roles del Sistema](#4)
+3. [Flujo General del Servicio](#5)
+4. [Módulo Administrador: Preparación y Asignación](#6)
+5. [Módulo Técnico: Operación en Campo (Mobile First)](#10)
+6. [Reglas del Checklist y Evidencias Fotográficas](#12)
+7. [Manejo de Discrepancias y Citas Fallidas](#14)
+8. [Módulo de Reportes y Descarga de Actas](#16)
+9. [Sincronización con Google Sheets y Resiliencia](#18)
+10. [Preguntas Frecuentes y Resolución de Problemas](#19)
+11. [Registro de Nuevas Funcionalidades (Changelog)](#20)
+
+---
+
+## 1. Visión General y Propósito
+
+El sistema sustituye la operativa manual y las limitaciones de AppSheet por una plataforma web moderna, rápida y trazable.
+
+- **Para la Oficina (Administradores):**
+  - Control centralizado de órdenes, clientes, unidades y asignación de técnicos.
+  - Conexión directa con Google Sheets para catálogos oficiales sin duplicidad.
+  - Auditoría de estados y exportación de reportes ejecutivos.
+
+- **Para el Campo (Técnicos):**
+  - Aplicación web optimizada para teléfonos móviles (PWA).
+  - Verificación ágil de equipos telemáticos (GPS / Sensores).
+  - Checklist digital obligatorio con fotografías y firma del cliente en pantalla.
+  - Capacidad de reportar discrepancias sin detener el trabajo.
+
+---
+
+## 2. Arquitectura y Roles del Sistema
+
+El sistema maneja dos perfiles de usuario claramente delimitados:
+
+| Rol | Entorno Principal | Responsabilidades Clave |
+| :--- | :--- | :--- |
+| <span class="badge badge-admin">ADMINISTRADOR</span> | Web Desktop (Computadora) | • Crea órdenes en borrador.<br>• Consulta clientes y equipos de Sheets.<br>• Asigna y reasigna técnicos.<br>• Consulta auditoría, reportes y supervisa sincronizaciones. |
+| <span class="badge badge-tech">TÉCNICO</span> | Web Mobile / PWA (Smartphone) | • Consulta órdenes asignadas a su nombre.<br>• Inicia el servicio en la unidad vehicular.<br>• Valida IMEI/series y levanta discrepancias.<br>• Llena checklist con fotos obligatorias.<br>• Recoge firma digital del cliente y finaliza orden. |
+
+---
+
+## 3. Flujo General del Servicio
+
+<div class="flow-grid">
+  <div class="flow-card admin"><span class="step-num">1</span><br><b>Admin</b> crea Borrador</div>
+  <div class="flow-card admin"><span class="step-num">2</span><br>Asigna Unidades y Equipos</div>
+  <div class="flow-card admin"><span class="step-num">3</span><br>Asigna Técnico Responsable</div>
+  <div class="flow-card tech"><span class="step-num">4</span><br><b>Técnico</b> inicia Servicio</div>
+  <div class="flow-card tech"><span class="step-num">5</span><br>Valida Hardware e IMEI</div>
+  <div class="flow-card tech"><span class="step-num">6</span><br>Checklist + 5 Fotos</div>
+  <div class="flow-card tech"><span class="step-num">7</span><br>Firma Digital Cliente</div>
+  <div class="flow-card final"><span class="step-num">8</span><br>Cierre y Reporte PDF</div>
+</div>
+
+<div class="flow-alt">
+  <b>Ruta de Excepción:</b> En caso de unidad ausente o cliente no disponible ➔ 
+  <span class="badge badge-error">Cierre como Cita Fallida (con motivo)</span>
+</div>
+
+> **Regla de oro:** El técnico no puede cerrar un servicio normal si falta alguna fotografía, si alguna unidad no tiene su checklist completo o si falta la firma con nombre del cliente.
+
+---
+
+## 4. Guía Administrador: 1. Crear Orden
+
+1. Inicia sesión con tus credenciales de Administrador en el portal web.
+2. Dirígete a la sección **Órdenes de Servicio** y haz clic en **`+ Nueva Orden`**.
+3. Selecciona el **Cliente** (la lista se alimenta del catálogo oficial de Google Sheets).
+4. Elige el **Tipo de Servicio**:
+   - `Instalación`: Colocación inicial de nuevos equipos.
+   - `Revisión`: Diagnóstico, mantenimiento o corrección técnica.
+   - `Desinstalación`: Retiro de hardware de la unidad.
+5. El sistema generará un **Folio único** y la orden quedará inicialmente en estado **`DRAFT` (Borrador)**.
+
+---
+
+## 4. Guía Administrador: 2. Unidades y Equipos
+
+Una orden puede contener **múltiples unidades vehiculares** y cada unidad puede tener **varios equipos** asignados:
+
+1. Dentro del detalle de la orden en borrador, haz clic en **`Agregar Unidad`**.
+   - Ingresa el identificador económico, placas y/o VIN.
+2. En cada unidad, presiona **`Asignar Equipo`**:
+   - Selecciona el hardware disponible en la pestaña `SALIDAS` de Google Sheets (identificado por ID, IMEI y Número de Serie).
+3. **Control de Conflictos:**
+   - Si otra persona modificó la fila en Google Sheets mientras preparabas la orden, el sistema te mostrará una alerta de versión para evitar sobreescrituras accidentales.
+
+---
+
+## 4. Guía Administrador: 3. Asignación del Técnico
+
+1. Una vez cargadas todas las unidades y equipos correspondientes, selecciona el **Técnico Responsable** del menú desplegable de técnicos activos.
+2. Haz clic en el botón **`Asignar y Notificar`**:
+   - La orden cambia a estado **`ASSIGNED`**.
+   - El worker en segundo plano encola la reserva de equipos en la tabla Outbox para actualizar Google Sheets.
+   - La orden aparece de inmediato en la bandeja de trabajo del técnico seleccionado en su dispositivo móvil.
+
+---
+
+## 4. Guía Administrador: 4. Monitoreo y Estados
+
+Desde la tabla principal de órdenes puedes filtrar por estado:
+
+- `DRAFT`: En preparación por el administrador.
+- `ASSIGNED`: Lista para que el técnico acuda a la cita.
+- `IN_PROGRESS`: El técnico presionó "Iniciar Servicio" en campo.
+- `COMPLETED`: Servicio concluido con checklist, fotos y firma.
+- `REQUIRES_CORRECTION`: Observada por administración para revisión.
+- `FAILED_APPOINTMENT`: Cita no realizada (con motivo registrado).
+- `CANCELLED`: Cancelada antes de su ejecución.
+
+---
+
+## 5. Guía Técnico: 1. Bandeja Móvil
+
+1. Accede desde el navegador de tu celular al enlace de la aplicación (puedes agregarla a la pantalla de inicio como PWA).
+2. Ingresa con tu correo y contraseña de técnico.
+3. En la pantalla principal verás tu lista de **Servicios Asignados**:
+   - Verás el folio, cliente, dirección o taller, y número de unidades.
+4. Al llegar a la ubicación del vehículo, presiona la orden y pulsa el botón verde **`Iniciar Servicio`**:
+   - El estado de la orden pasa a `IN_PROGRESS` registrando la hora de inicio.
+
+---
+
+## 5. Guía Técnico: 2. Verificación de Equipos
+
+Por cada unidad asignada, debes inspeccionar físicamente el hardware:
+
+1. Selecciona la unidad y entra a la sección **Equipos Asignados**.
+2. Compara el IMEI y el Número de Serie físico contra lo indicado en la pantalla.
+3. Si los datos coinciden exactamente, pulsa **`Verificar (Coincide)`**.
+4. **¿Qué hacer si hay un error o el equipo es diferente?**
+   - Pulsa **`Reportar Discrepancia`**.
+   - Escribe el IMEI o serie real que tienes en mano y una breve nota.
+   - El equipo se marca con alerta visual, pero **te permite continuar trabajando**. ¡No te bloquea el servicio!
+
+---
+
+## 6. Reglas del Checklist Post-Servicio
+
+Al terminar los trabajos mecánicos/eléctricos, debes realizar la inspección de entrega en cada unidad. Existen **5 categorías obligatorias**:
+
+1. **Tablero (`DASHBOARD`)**
+2. **Cristales (`WINDOWS`)**
+3. **Accesorios (`ACCESSORIES`)**
+4. **Molduras (`TRIMS`)**
+5. **Carrocería (`BODYWORK`)**
+
+### Estados permitidos por categoría:
+- **`Bien` (`GOOD`)**: Todo en orden sin daños causados ni preexistentes.
+- **`Mal` (`BAD`)**: **Requiere escribir obligatoriamente una observación detallada** del daño o anomalía.
+- **`No aplica` (`NOT_APPLICABLE`)**: La unidad no cuenta con dicho componente.
+
+---
+
+## 6. Reglas de Evidencias Fotográficas
+
+> ⚠️ **REGLA ESTRICTA DE CALIDAD:**  
+> **Cada una de las 5 categorías requiere al menos una fotografía obligatoria**, incluso si se marcó como `No aplica`.
+
+1. Pulsa sobre el icono de cámara en la categoría correspondiente.
+2. Toma una foto clara y bien iluminada desde tu teléfono.
+3. La foto se sube automáticamente a almacenamiento privado seguro (S3).
+4. El sistema mostrará una miniatura con confirmación verde.
+5. Si alguna unidad no tiene las 5 fotos requeridas, el botón de finalizar orden permanecerá inactivo.
+
+---
+
+## 7. Firma del Cliente y Finalización
+
+Cuando todas las unidades tengan sus equipos verificados y sus checklists completos con fotos:
+
+1. Se habilitará el paso final: **`Conformidad del Cliente`**.
+2. Ingresa el **Nombre Completo** de la persona que recibe el servicio.
+3. Opcionalmente registra su cargo o documento de identidad.
+4. Pídele al cliente que firme directamente en la pantalla de tu celular en el recuadro táctil.
+5. Pulsa **`Finalizar Orden de Servicio`**:
+   - La orden pasa a **`COMPLETED`**.
+   - Se sella la fecha y hora final.
+   - El sistema genera el acta técnica digital con validez de entrega.
+
+---
+
+## 7. Manejo de Citas Fallidas
+
+Si acudes al lugar pero el servicio no se puede realizar (cliente ausente, unidad en viaje, vehículo descompuesto, negativa de acceso):
+
+1. En la pantalla de la orden iniciada, selecciona el botón **`Registrar Cita Fallida`**.
+2. Selecciona o escribe el **Motivo Detallado de la Falla** (obligatorio).
+3. Confirma la acción:
+   - La orden pasa al estado **`FAILED_APPOINTMENT`**.
+   - No se exige checklist, fotografías ni firma del cliente.
+   - El administrador y el área de logística reciben la notificación para reprogramación o cobro de visita técnica.
+
+---
+
+## 8. Módulo de Reportes: Actas en PDF
+
+Para cada orden completada, el sistema genera automáticamente un **Acta / Certificado de Servicio**:
+
+- **¿Dónde consultarlo?**  
+  Tanto el administrador como el cliente pueden descargar el PDF desde el detalle de la orden.
+- **¿Qué incluye el documento?**
+  - Folio y logotipo oficial de Bull Dog Solution.
+  - Tiempos de atención (inicio y término).
+  - Datos de unidades y tabla de hardware verificado con notas de discrepancias.
+  - Tabla del checklist vehicular (Bien / Mal / Observaciones).
+  - Galería de fotografías incrustadas con marca de fecha y hora.
+  - Firma digitalizada y nombre del cliente firmante.
+
+---
+
+## 8. Módulo de Reportes Ejecutivos y Exportación
+
+Desde el menú **Reportes** (perfil Administrador), se cuenta con las siguientes opciones de exportación:
+
+1. **Reporte Consolidado de Órdenes:** Exportación a Excel (XLSX) y CSV con filtros por rango de fechas, clientes y tipo de servicio.
+2. **Reporte de Discrepancias:** Listado de todos los equipos con diferencias de IMEI/Serie reportados en campo para ajuste de inventario.
+3. **Métricas de Técnicos:** Tasa de servicios completados, tiempos promedio por servicio y efectividad de visitas.
+4. **Reporte de Citas Fallidas:** Resumen de causas recurrentes de no atención.
+5. **Auditoría:** Registro de quién modificó o reasignó cada orden y cuándo.
+
+---
+
+## 9. Sincronización con Google Sheets y Resiliencia
+
+El sistema está diseñado para que una falla en Internet o en las cuotas de Google no detenga la operación:
+
+- **Patrón Outbox:**  
+  Cuando se asigna un equipo o se actualiza una orden, la acción se guarda primero en la base de datos PostgreSQL y un worker la envía a Google Sheets en segundo plano.
+- **Reintentos Automáticos:**  
+  Si Google Sheets no responde, el sistema reintenta periódicamente sin perder información.
+- **Monitor de Sincronización:**  
+  Los administradores cuentan con un panel donde pueden ver si hay operaciones pendientes (`PENDING`) o con error (`FAILED`) y forzar su reintento con un solo clic.
+
+---
+
+## 10. Preguntas Frecuentes y Resolución de Problemas
+
+- **¿Qué hago si no hay señal celular en el taller?**  
+  Toma las fotos con tu cámara nativa; en cuanto tengas conexión móvil o Wi-Fi, abre la orden para completar el checklist y subir las evidencias.
+- **¿Puedo cambiar de técnico una orden ya asignada?**  
+  Sí, el administrador puede reasignarla desde el panel web mientras la orden no haya sido finalizada.
+- **¿Por qué no se habilita el botón de finalizar orden?**  
+  Verifica que: (1) Todas las unidades tengan checklist completo, (2) Todas las categorías tengan al menos 1 foto, (3) Todos los equipos estén verificados o con discrepancia reportada, y (4) Se haya ingresado el nombre y firma del cliente.
+
+---
+
+## 11. Registro de Nuevas Funcionalidades (Changelog)
+
+> *Utiliza esta sección para registrar los cambios que se agreguen a la aplicación en fases posteriores.*
+
+| Fecha | Versión | Tipo | Descripción del Cambio / Nueva Feature | Responsable |
+| :--- | :--- | :--- | :--- | :--- |
+| **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets. | Equipo Core |
+| *Próximamente* | `v1.1.0` | Feature | Modo offline progresivo con persistencia local en dispositivo móvil. | Por definir |
+| *Próximamente* | `v1.2.0` | Feature | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar. | Por definir |
+| *Próximamente* | `v1.3.0` | Feature | Módulo de tarifas y cálculo de liquidación a técnicos. | Por definir |
+
+---
+
+# ¿Preguntas o Soporte Técnico?
+Para reportar fallas en el sistema o sugerir mejoras:
+- **Área de Operaciones:** operaciones@bulldogsolution.com
+- **Soporte de Plataforma:** soporte-ti@bulldogsolution.com
+- **Repositorio y Documentación Técnica:** [SPECS.md](./SPECS.md) | [ERS.md](./docs/ERS.md)
