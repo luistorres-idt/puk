@@ -18,7 +18,7 @@ import {
   useMessage,
 } from 'naive-ui';
 import type { ExternalEquipment } from '@puk/contracts';
-import type { UnitItem } from '../api.js';
+import { fetchReportDownload, type UnitItem } from '../api.js';
 import {
   CATEGORY_NAMES,
   formatEquipmentStatus,
@@ -35,6 +35,7 @@ import {
   useOrderAuditQuery,
   useOrderMutations,
   useOrderQuery,
+  useOrderReportQuery,
   useSyncStatusQuery,
 } from '../queries';
 import { getEvidenceUrl, getSignatureUrl, requireCorrection } from '@/modules/service-execution';
@@ -50,11 +51,13 @@ const orderId = String(route.params.id);
 const orderQuery = useOrderQuery(orderId);
 const syncQuery = useSyncStatusQuery(orderId);
 const auditQuery = useOrderAuditQuery(orderId);
+const reportQuery = useOrderReportQuery(orderId);
 const mutations = useOrderMutations(orderId);
 
 const order = computed(() => orderQuery.data.value);
 const syncInfo = computed(() => syncQuery.data.value);
 const auditLogs = computed(() => auditQuery.data.value ?? []);
+const report = computed(() => reportQuery.data.value);
 
 const activeTab = ref('units');
 
@@ -199,6 +202,41 @@ async function handleRetrySync() {
   } catch (err) {
     message.error(getErrorMessage(err, 'Error al reintentar sincronización'));
   }
+}
+
+async function handleGenerateReport() {
+  try {
+    await mutations.requestReport.mutateAsync(orderId);
+    await reportQuery.refetch();
+    message.success('La generación del reporte fue solicitada.');
+  } catch (err) {
+    message.error(getErrorMessage(err, 'No fue posible solicitar el reporte'));
+  }
+}
+
+async function handleDownloadReport() {
+  try {
+    const download = await fetchReportDownload(orderId);
+    const link = document.createElement('a');
+    link.href = download.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = download.fileName;
+    link.click();
+  } catch (err) {
+    message.error(getErrorMessage(err, 'No fue posible descargar el reporte'));
+  }
+}
+
+function reportStatusLabel(status?: string): string {
+  return (
+    {
+      PENDING: 'Pendiente',
+      PROCESSING: 'Generando',
+      READY: 'Disponible',
+      FAILED: 'Falló',
+    }[status ?? ''] ?? 'No generado'
+  );
 }
 
 async function handleRequestCorrection() {
@@ -419,6 +457,73 @@ const statusColor = orderStatusTagType;
           </div>
         </n-card>
 
+        <!-- Service order PDF report -->
+        <n-card
+          v-if="order.status === 'COMPLETED'"
+          class="border-l-4 border-l-blue-600 shadow-sm"
+          size="small"
+        >
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-semibold text-slate-800 text-sm">Reporte de orden de servicio</h3>
+                <n-tag
+                  size="small"
+                  :type="
+                    report?.status === 'READY'
+                      ? 'success'
+                      : report?.status === 'FAILED'
+                        ? 'error'
+                        : 'info'
+                  "
+                >
+                  {{ reportStatusLabel(report?.status) }}
+                </n-tag>
+              </div>
+              <p v-if="report?.status === 'READY'" class="text-xs text-slate-500 mt-1">
+                Versión {{ report.version }}
+                <span v-if="report.generatedAt">
+                  &bull; Generado {{ new Date(report.generatedAt).toLocaleString() }}
+                </span>
+              </p>
+              <p v-else-if="report?.status === 'FAILED'" class="text-xs text-red-600 mt-1">
+                {{ report.failureReason || 'La generación no pudo completarse.' }}
+              </p>
+              <p v-else class="text-xs text-slate-500 mt-1">
+                El PDF incluye portada, unidades, equipos, checklist, firma y fotografías.
+              </p>
+            </div>
+
+            <div class="flex gap-2">
+              <n-button
+                v-if="report?.status === 'READY'"
+                type="primary"
+                size="small"
+                @click="handleDownloadReport"
+              >
+                Descargar PDF
+              </n-button>
+              <n-button
+                v-if="(!report || report.status === 'FAILED') && session.user?.role === 'ADMIN'"
+                type="warning"
+                size="small"
+                :loading="mutations.requestReport.isPending.value"
+                @click="handleGenerateReport"
+              >
+                {{ report?.status === 'FAILED' ? 'Reintentar' : 'Generar reporte' }}
+              </n-button>
+              <n-button
+                v-if="report?.status === 'PENDING' || report?.status === 'PROCESSING'"
+                size="small"
+                secondary
+                @click="() => reportQuery.refetch()"
+              >
+                Actualizar
+              </n-button>
+            </div>
+          </div>
+        </n-card>
+
         <!-- General Order Information -->
         <n-card class="shadow-sm">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
@@ -431,7 +536,9 @@ const statusColor = orderStatusTagType;
             </div>
             <div>
               <span class="text-xs text-slate-500 block">Tipo de Servicio</span>
-              <span class="font-semibold text-slate-800">{{ formatServiceType(order.serviceType) }}</span>
+              <span class="font-semibold text-slate-800">{{
+                formatServiceType(order.serviceType)
+              }}</span>
               <span class="text-xs text-slate-500 block">
                 {{ order.isHomeService ? 'A domicilio' : 'En taller' }}
                 {{ order.serviceAddress ? `(${order.serviceAddress})` : '' }}
@@ -594,7 +701,11 @@ const statusColor = orderStatusTagType;
                 >
                   <div class="space-y-1">
                     <p class="text-sm font-semibold text-slate-800">
-                      Firmado por: {{ (order as any).signature.signerName || (order as any).signature.signerNameSnapshot }}
+                      Firmado por:
+                      {{
+                        (order as any).signature.signerName ||
+                        (order as any).signature.signerNameSnapshot
+                      }}
                     </p>
                     <p class="text-xs text-slate-500">
                       Fecha de firma:
@@ -627,7 +738,7 @@ const statusColor = orderStatusTagType;
                   Checklist y Evidencias por Unidad
                 </h3>
 
-                <div v-for="unit in ((order as any).units || [])" :key="unit.id" class="space-y-2">
+                <div v-for="unit in (order as any).units || []" :key="unit.id" class="space-y-2">
                   <n-card class="shadow-sm" size="small">
                     <div class="space-y-4">
                       <!-- Unit Header -->
@@ -636,7 +747,8 @@ const statusColor = orderStatusTagType;
                       >
                         <div>
                           <h4 class="font-bold text-slate-800 text-sm">
-                            Unidad: {{ unit.label }} <span class="font-normal text-slate-500">({{ unit.makeModel }})</span>
+                            Unidad: {{ unit.label }}
+                            <span class="font-normal text-slate-500">({{ unit.makeModel }})</span>
                           </h4>
                           <p v-if="unit.serialNumber" class="text-xs text-slate-400 mt-0.5">
                             N° Serie / VIN: {{ unit.serialNumber }}
@@ -721,7 +833,9 @@ const statusColor = orderStatusTagType;
                             class="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5"
                           >
                             <span>Galería de Evidencias Fotográficas</span>
-                            <span class="text-slate-400 font-normal">({{ getUnitAllEvidences(unit).length }})</span>
+                            <span class="text-slate-400 font-normal"
+                              >({{ getUnitAllEvidences(unit).length }})</span
+                            >
                           </h5>
                         </div>
 
@@ -763,7 +877,9 @@ const statusColor = orderStatusTagType;
                                 <n-button
                                   size="tiny"
                                   secondary
-                                  @click="viewEvidence(ev.id, `${unit.label} - Foto #${Number(idx) + 1}`)"
+                                  @click="
+                                    viewEvidence(ev.id, `${unit.label} - Foto #${Number(idx) + 1}`)
+                                  "
                                 >
                                   Ver foto {{ Number(idx) + 1 }}
                                 </n-button>

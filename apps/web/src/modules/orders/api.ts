@@ -234,3 +234,40 @@ export async function fetchOrderAudit(orderId: string): Promise<AuditLogItem[]> 
   const response = await api.get<ApiResponse<AuditLogItem[]>>(`/orders/${orderId}/audit`);
   return response.data.data;
 }
+
+export interface ServiceOrderReport {
+  id: string;
+  orderId: string;
+  version: number;
+  status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+  sizeBytes?: number | null;
+  checksum?: string | null;
+  failureReason?: string | null;
+  generatedAt?: string | null;
+  createdAt: string;
+}
+
+export async function fetchCurrentReport(orderId: string): Promise<ServiceOrderReport | null> {
+  const response = await api.get<ApiResponse<ServiceOrderReport | null>>(
+    `/orders/${orderId}/report`,
+  );
+  return response.data.data;
+}
+
+export async function generateReport(orderId: string): Promise<ServiceOrderReport> {
+  const response = await api.post<ApiResponse<ServiceOrderReport>>(
+    `/orders/${orderId}/report/generate`,
+  );
+  return response.data.data;
+}
+
+export async function fetchReportDownload(orderId: string): Promise<{
+  url: string;
+  expiresInSeconds: number;
+  fileName: string;
+}> {
+  const response = await api.get<
+    ApiResponse<{ url: string; expiresInSeconds: number; fileName: string }>
+  >(`/orders/${orderId}/report/download`);
+  return response.data.data;
+}

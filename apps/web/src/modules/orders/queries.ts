@@ -17,8 +17,10 @@ import {
   deleteUnit,
   fetchOrderAudit,
   fetchOrderById,
+  fetchCurrentReport,
   fetchOrders,
   fetchSyncStatus,
+  generateReport,
   removeEquipment,
   retrySync,
   updateOrder,
@@ -54,6 +56,19 @@ export function useOrderAuditQuery(orderId: MaybeRef<string>) {
     queryKey: ['order-audit', orderId],
     queryFn: () => fetchOrderAudit(unref(orderId)),
     enabled: () => Boolean(unref(orderId)),
+  });
+}
+
+export function useOrderReportQuery(orderId: MaybeRef<string>) {
+  return useQuery({
+    queryKey: ['order-report', orderId],
+    queryFn: () => fetchCurrentReport(unref(orderId)),
+    enabled: () => Boolean(unref(orderId)),
+    refetchInterval: (query) =>
+      query.state.data?.status === 'PENDING' || query.state.data?.status === 'PROCESSING'
+        ? 3000
+        : false,
+    retry: false,
   });
 }
 
@@ -94,6 +109,14 @@ export function useOrderMutations(orderId?: MaybeRef<string>) {
   const retry = useMutation({
     mutationFn: (id: string) => retrySync(id),
     onSuccess: (_, id) => invalidate(id),
+  });
+
+  const requestReport = useMutation({
+    mutationFn: (id: string) => generateReport(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['order-report', id] });
+      queryClient.invalidateQueries({ queryKey: ['order-audit', id] });
+    },
   });
 
   const insertUnit = useMutation({
@@ -141,6 +164,7 @@ export function useOrderMutations(orderId?: MaybeRef<string>) {
     modifyUnit,
     removeUnit,
     retry,
+    requestReport,
     update,
   };
 }
