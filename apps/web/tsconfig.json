@@ -4,7 +4,7 @@
     "baseUrl": ".",
     "composite": true,
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
     "tsBuildInfoFile": "node_modules/.cache/web.tsbuildinfo",
     "types": ["vite/client", "node"]
