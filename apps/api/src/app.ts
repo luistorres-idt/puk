@@ -18,6 +18,7 @@ import {
   type SyncService,
 } from './modules/orders/index.js';
 import { createExecutionRouter, type ExecutionService } from './modules/execution/index.js';
+import { createReportsRouter, type ReportsService } from './modules/reports/index.js';
 import type { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
 import { httpLogger } from './observability/logger.js';
 import { metrics, metricsMiddleware } from './observability/metrics.js';
@@ -29,6 +30,7 @@ export interface AppOptions {
   ordersService?: OrdersService;
   syncService?: SyncService;
   executionService?: ExecutionService;
+  reportsService?: ReportsService;
   dependencyCheck?: () => Promise<boolean>;
   trustProxy?: boolean;
 }
@@ -95,6 +97,15 @@ export function createApp(options: AppOptions = {}): Express {
         '/api/v1',
         createExecutionRouter({
           executionService: options.executionService,
+          tokens: options.auth.tokens,
+        }),
+      );
+    }
+    if (options.reportsService !== undefined) {
+      app.use(
+        '/api/v1/orders',
+        createReportsRouter({
+          reportsService: options.reportsService,
           tokens: options.auth.tokens,
         }),
       );

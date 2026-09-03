@@ -34,12 +34,16 @@ export interface ExecutionServiceOptions {
   maxEvidenceBytes?: number;
   maxSignatureBytes?: number;
   presignedUrlTtlSeconds?: number;
+  reportGeneration?: {
+    requestGeneration(orderId: string, actorUserId?: string): Promise<unknown>;
+  };
 }
 
 export class ExecutionService {
   private readonly maxEvidenceBytes: number;
   private readonly maxSignatureBytes: number;
   private readonly presignedUrlTtlSeconds: number;
+  private readonly reportGeneration: ExecutionServiceOptions['reportGeneration'];
 
   public constructor(
     private readonly prisma: PrismaClient,
@@ -49,6 +53,7 @@ export class ExecutionService {
     this.maxEvidenceBytes = options.maxEvidenceBytes ?? 10 * 1024 * 1024; // 10MB
     this.maxSignatureBytes = options.maxSignatureBytes ?? 1024 * 1024; // 1MB
     this.presignedUrlTtlSeconds = options.presignedUrlTtlSeconds ?? 300;
+    this.reportGeneration = options.reportGeneration;
   }
 
   private async assertOrderAccess(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
@@ -652,7 +657,7 @@ export class ExecutionService {
       );
     }
 
-    return domainTransaction(this.prisma, async (tx, effects) => {
+    const completedOrder = await domainTransaction(this.prisma, async (tx, effects) => {
       // Mark units as completed
       await tx.orderUnit.updateMany({
         where: { orderId },
@@ -689,6 +694,11 @@ export class ExecutionService {
 
       return updated;
     });
+
+    // El cierre de la orden no se revierte si el trabajo de generación no puede encolarse.
+    // El administrador puede solicitarlo nuevamente desde el detalle de la orden.
+    await this.reportGeneration?.requestGeneration(orderId, userId).catch(() => undefined);
+    return completedOrder;
   }
 
   public async failAppointment(

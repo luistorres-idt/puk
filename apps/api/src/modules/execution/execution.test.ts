@@ -303,6 +303,39 @@ describe('ExecutionService', () => {
     });
   });
 
+  it('requests the PDF report after completing an order', async () => {
+    const requestGeneration = vi.fn().mockResolvedValue({ id: 'report-1' });
+    const reportService = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort, {
+      reportGeneration: { requestGeneration },
+    });
+    const checklistItems = ['DASHBOARD', 'WINDOWS', 'ACCESSORIES', 'TRIMS', 'BODYWORK'].map(
+      (category, index) => ({
+        category,
+        condition: 'GOOD',
+        evidence: index === 0 ? [{ id: 'ev-1' }, { id: 'ev-2' }, { id: 'ev-3' }] : [],
+      }),
+    );
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.IN_PROGRESS,
+      technicianId: 'tech-1',
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Unidad 01',
+          equipment: [{ externalKey: 'EQ-001', verificationStatus: 'MATCHED' }],
+          checklist: { items: checklistItems },
+        },
+      ],
+      signature: { signerName: 'Cliente' },
+    });
+
+    const result = await reportService.completeOrder('admin-1', 'ADMIN', 'order-1');
+
+    expect(result.status).toBe(OrderStatus.COMPLETED);
+    expect(requestGeneration).toHaveBeenCalledWith('order-1', 'admin-1');
+  });
+
   it('marks an appointment as failed with a reason and releases equipment', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',

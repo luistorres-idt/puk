@@ -9,6 +9,7 @@ import { OrdersService, SyncService } from './modules/orders/index.js';
 import { ExecutionService } from './modules/execution/index.js';
 import { S3StorageClient } from './integrations/object-storage/s3.client.js';
 import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
+import { ReportsService } from './modules/reports/index.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
@@ -80,10 +81,22 @@ const storagePort = usesPlaceholderStorage
       forcePathStyle: environment.S3_FORCE_PATH_STYLE,
     });
 
+const reportsService = new ReportsService(
+  prisma,
+  storagePort,
+  environment.PRESIGNED_URL_TTL_SECONDS,
+);
+
+const reportsInterval = setInterval(() => {
+  reportsService.processPendingReports().catch(() => {});
+}, environment.OUTBOX_POLL_INTERVAL_MS);
+reportsInterval.unref();
+
 const executionService = new ExecutionService(prisma, storagePort, {
   maxEvidenceBytes: environment.MAX_EVIDENCE_BYTES,
   maxSignatureBytes: environment.MAX_SIGNATURE_BYTES,
   presignedUrlTtlSeconds: environment.PRESIGNED_URL_TTL_SECONDS,
+  reportGeneration: reportsService,
 });
 
 const server = createApp({
@@ -105,6 +118,7 @@ const server = createApp({
   ordersService,
   syncService,
   executionService,
+  reportsService,
   dependencyCheck: async () => {
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -122,6 +136,8 @@ server.on('error', (error) => {
 });
 
 function stopServer(): void {
+  clearInterval(reportsInterval);
+  clearInterval(syncInterval);
   const forceExitTimeout = setTimeout(() => process.exit(1), 10_000);
   forceExitTimeout.unref();
 

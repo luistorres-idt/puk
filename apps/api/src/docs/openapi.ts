@@ -159,5 +159,63 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/v1/orders/{id}/report': {
+      get: {
+        operationId: 'getCurrentServiceOrderReport',
+        summary: 'Get current service order PDF status',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Current report metadata or null' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Order does not belong to the technician' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/reports': {
+      get: {
+        operationId: 'listServiceOrderReports',
+        summary: 'List generated report versions',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Versioned reports' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Order does not belong to the technician' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/report/generate': {
+      post: {
+        operationId: 'generateServiceOrderReport',
+        summary: 'Generate or retry the service order PDF',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '202': { description: 'Report generation requested' },
+          '400': { description: 'Order is not completed' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Administrator permission required' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/report/download': {
+      get: {
+        operationId: 'downloadServiceOrderReport',
+        summary: 'Get a temporary private PDF download URL',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Temporary download URL and file name' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Order does not belong to the technician' },
+          '409': { description: 'Report is not ready' },
+        },
+      },
+    },
   },
 } as const;
