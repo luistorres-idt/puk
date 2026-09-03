@@ -26,6 +26,8 @@ export interface SheetsPort {
 export interface ObjectStoragePort {
   createDownloadUrl(key: string, expiresInSeconds: number): Promise<string>;
   createUploadUrl(key: string, mimeType: string, expiresInSeconds: number): Promise<string>;
+  getObject(key: string): Promise<Uint8Array | null>;
   headObject(key: string): Promise<{ bytes: number; mimeType: string } | null>;
+  putObject(key: string, body: Uint8Array, mimeType: string): Promise<void>;
   removeObject(key: string): Promise<void>;
 }

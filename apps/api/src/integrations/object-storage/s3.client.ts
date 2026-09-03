@@ -76,6 +76,33 @@ export class S3StorageClient implements ObjectStoragePort {
     }
   }
 
+  public async getObject(key: string): Promise<Uint8Array | null> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      );
+      return response.Body ? response.Body.transformToByteArray() : new Uint8Array();
+    } catch (err: unknown) {
+      const error = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) return null;
+      throw err;
+    }
+  }
+
+  public async putObject(key: string, body: Uint8Array, mimeType: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: mimeType,
+      }),
+    );
+  }
+
   public async removeObject(key: string): Promise<void> {
     await this.client.send(
       new DeleteObjectCommand({

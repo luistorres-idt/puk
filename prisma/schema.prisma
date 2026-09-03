@@ -69,6 +69,13 @@ enum SyncStatus {
   FAILED
 }
 
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
 model User {
   id                    String           @id @default(uuid()) @db.Uuid
   email                 String           @unique
@@ -136,10 +143,31 @@ model Order {
   signature          Signature?
   discrepancies      Discrepancy[]
   syncOperations     SheetSyncOperation[]
+  reports            ServiceOrderReport[]
 
   @@index([technicianId, status, scheduledAt])
   @@index([clientSheetId, createdAt])
   @@index([status, scheduledAt])
+}
+
+model ServiceOrderReport {
+  id            String       @id @default(uuid()) @db.Uuid
+  orderId       String       @db.Uuid
+  version       Int
+  status        ReportStatus @default(PENDING)
+  objectKey     String?      @unique
+  mimeType      String       @default("application/pdf")
+  sizeBytes     Int?
+  checksum      String?
+  failureReason String?
+  generatedAt   DateTime?    @db.Timestamptz(3)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, version])
+  @@index([orderId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderUnit {
