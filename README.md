@@ -4,6 +4,8 @@ Sistema web responsivo para preparar, asignar, ejecutar y auditar órdenes de in
 
 > Este README describe el estado objetivo del producto una vez concluido el MVP. La implementación se encuentra organizada en [ROADMAP.md](./ROADMAP.md) y su definición técnica completa está en [SPECS.md](./SPECS.md).
 
+La documentación del estado técnico implementado, incluidos los diagramas de arquitectura y entidad-relación, está disponible en [docs/technical/README.md](./docs/technical/README.md).
+
 ## Descripción
 
 La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un solo lugar el trabajo administrativo y de campo:
