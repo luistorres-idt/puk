@@ -17,6 +17,7 @@ import {
 } from 'naive-ui';
 import type { ChecklistCategory, ChecklistCondition, SaveChecklistItem } from '@puk/contracts';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
+import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { useSessionStore } from '../../../stores/session.js';
 import {
   fetchOrderById,
@@ -205,7 +206,7 @@ async function handleStartOrder() {
     message.success('Orden de servicio iniciada.');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al iniciar la orden');
+    message.error(extractApiErrorMessage(err, 'Error al iniciar la orden'));
   }
 }
 
@@ -215,7 +216,7 @@ async function handleVerifyEquipment(unitId: string, equipmentId: string) {
     message.success('Equipo verificado como coincidente.');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al verificar equipo');
+    message.error(extractApiErrorMessage(err, 'Error al verificar equipo'));
   }
 }
 
@@ -242,7 +243,7 @@ async function handleSaveDiscrepancy() {
     message.warning('Discrepancia reportada correctamente.');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al reportar discrepancia');
+    message.error(extractApiErrorMessage(err, 'Error al reportar discrepancia'));
   }
 }
 
@@ -271,7 +272,7 @@ async function handleSaveUnitChecklist(unitId: string) {
     message.success('Checklist guardado exitosamente');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al guardar checklist');
+    message.error(extractApiErrorMessage(err, 'Error al guardar checklist'));
   }
 }
 
@@ -294,7 +295,7 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
     message.success('Firma guardada exitosamente');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al guardar firma');
+    message.error(extractApiErrorMessage(err, 'Error al guardar firma'));
   } finally {
     savingSignature.value = false;
   }
@@ -306,7 +307,7 @@ async function handleCompleteOrder() {
     message.success('¡Orden de servicio finalizada y cerrada con éxito!');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al completar orden');
+    message.error(extractApiErrorMessage(err, 'Error al completar orden'));
   }
 }
 
@@ -318,7 +319,7 @@ async function handleFailAppointment() {
     message.warning('Orden marcada como cita fallida.');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al marcar cita fallida');
+    message.error(extractApiErrorMessage(err, 'Error al marcar cita fallida'));
   }
 }
 
@@ -330,7 +331,7 @@ async function handleRequireCorrection() {
     message.info('Orden devuelta a corrección técnica.');
     await loadData();
   } catch (err: unknown) {
-    message.error(err instanceof Error ? err.message : 'Error al solicitar corrección');
+    message.error(extractApiErrorMessage(err, 'Error al solicitar corrección'));
   }
 }
 
@@ -517,7 +518,6 @@ onMounted(() => {
                           placeholder="Describa el detalle observado..."
                         />
                       </div>
-
                     </div>
 
                     <div v-if="order.status === 'IN_PROGRESS'" class="flex justify-end pt-2">
@@ -539,7 +539,9 @@ onMounted(() => {
                         category="BODYWORK"
                         :evidences="getUnitAllEvidences(unit.id)"
                         :min-required="3"
-                        :disabled="order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'"
+                        :disabled="
+                          order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'
+                        "
                         @updated="loadData"
                       />
                     </div>
@@ -551,7 +553,12 @@ onMounted(() => {
 
           <!-- Signature Section -->
           <SignaturePad
-            v-if="order && (order.status === 'IN_PROGRESS' || order.status === 'REQUIRES_CORRECTION' || order.signature)"
+            v-if="
+              order &&
+              (order.status === 'IN_PROGRESS' ||
+                order.status === 'REQUIRES_CORRECTION' ||
+                order.signature)
+            "
             :order-id="orderId"
             :existing-signature="order.signature"
             :disabled="order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'"

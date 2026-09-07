@@ -135,7 +135,7 @@ async function main() {
 
   if (!isJson) {
     writeOut('\n===============================================================');
-    writeOut('🚀 PUK E2E TEST SUITE RUNNER (4-TIER ARCHITECTURE)');
+    writeOut('🚀 BULL DOG SOLUTION E2E TEST SUITE RUNNER (4-TIER ARCHITECTURE)');
     writeOut('===============================================================');
     writeOut(`CloudFront HTTPS Target : ${testEnv['CLOUDFRONT_URL']}`);
     writeOut(`ALB Origin Target        : ${testEnv['ALB_URL']}`);

@@ -1,5 +1,5 @@
 import type { ExternalClient, ExternalEquipment } from '@puk/contracts';
-import type { SheetsPort } from '../ports.js';
+import type { CatalogServicePort, SheetsPort } from '../ports.js';
 import { parseEquipmentRow } from './equipment-identity.js';
 
 export interface CatalogCacheEntry<T> {
@@ -8,7 +8,7 @@ export interface CatalogCacheEntry<T> {
   expiresAt: number;
 }
 
-export class GoogleSheetsCatalogService {
+export class GoogleSheetsCatalogService implements CatalogServicePort {
   private readonly sheetsPort: SheetsPort;
   private readonly ttlMs: number;
   private clientsCache: CatalogCacheEntry<ExternalClient> | null = null;

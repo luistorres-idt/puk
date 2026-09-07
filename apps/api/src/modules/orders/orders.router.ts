@@ -14,7 +14,6 @@ import {
 } from '@puk/contracts';
 import { authenticate, authorize } from '../../auth/authenticate.js';
 import type { TokenService } from '../../auth/tokens.js';
-import type { PrismaClient } from '../../generated/prisma/client.js';
 import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import type { OrdersService } from './orders.service.js';
@@ -23,7 +22,6 @@ import type { SyncService } from './sync.service.js';
 export function createOrdersRouter(options: {
   ordersService: OrdersService;
   syncService?: SyncService;
-  prisma: PrismaClient;
   tokens: TokenService;
 }): Router {
   const router = Router();
@@ -112,11 +110,7 @@ export function createOrdersRouter(options: {
     authorize('orders:manage'),
     validate({ params: IdParamsSchema }),
     async (request, response) => {
-      const logs = await options.prisma.auditLog.findMany({
-        where: { entityId: String(request.params.id) },
-        orderBy: { createdAt: 'desc' },
-        include: { actor: { select: { id: true, name: true, email: true } } },
-      });
+      const logs = await options.ordersService.getOrderAuditLogs(String(request.params.id));
       sendSuccess(response, logs);
     },
   );

@@ -37,6 +37,8 @@ flowchart LR
 - TanStack Query mantiene datos remotos, caché, polling e invalidación.
 - Pinia conserva usuario, access token en memoria e inicialización de sesión.
 - Axios adjunta el access token y coordina un único refresh ante respuestas `401`.
+- Los módulos de frontend (`orders`, `service-execution`, `technicians`) encapsulan sus peticiones en archivos `api.ts` dedicados que comparten la interfaz `ApiResponse<T>`.
+- El manejo de errores de interfaz utiliza la utilidad `extractApiErrorMessage` (`@/shared/http/client.ts`) para presentar transparentemente al usuario los mensajes de error originados en el backend en lugar de códigos genéricos de Axios.
 - Formularios y modales usan estado local del componente.
 - Tras mutaciones se invalidan órdenes, auditoría, sincronización o reporte según corresponda.
 
@@ -54,9 +56,22 @@ flowchart LR
 
 La guarda de navegación inicializa la sesión, redirige al login y aplica `requiresRole`. La autorización real siempre se repite en backend.
 
+## Asistente de creación de órdenes y catálogo de equipos
+
+El asistente (`/orders/new`) guía al administrador en un flujo estructurado de 5 pasos:
+
+1. **Cliente y Tipo de Servicio**: Selección del cliente desde Sheets y definición del servicio (`INSTALLATION`, `REVIEW`, `UNINSTALLATION`, `FAILED_APPOINTMENT`).
+2. **Unidades y Equipos**:
+   - **Revisiones y Desinstalaciones**: El componente `EquipmentSelect` filtra automáticamente los equipos con estatus `INSTALADO` del cliente. Al seleccionar un hardware, la función `extractUnitFromEquipment` autocompleta la unidad (`unit`, `unitMakeModel`, `unitYear`, `unitSerialNumber`) reduciendo la captura manual.
+   - **Instalaciones**: `EquipmentSelect` filtra exclusivamente hardware en stock/almacén (`STOCK TECNICO`, `DISPONIBLE`, etc.) y solicita los datos de la nueva unidad física.
+   - **Normalización**: Las comparaciones de clientes aplican `normalizeString` (case-insensitive, diacríticos removidos vía NFD y eliminación de sufijos legales tipo `S.A. de C.V.`).
+3. **Programación**: Fecha, hora, tipo de servicio (en sitio o taller) y notas operativas.
+4. **Técnico**: Asignación inicial (opcional en borrador).
+5. **Resumen y Creación**: Validación integral y envío atómico de la orden con sus unidades y equipos a la API.
+
 ## Evidencias y reportes
 
-El navegador comprime fotografías a JPEG antes de solicitar/subir una URL prefirmada. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.
+El navegador comprime fotografías a JPEG antes de solicitar/subir una URL prefirmada, con rechazo explícito de promesas ante imágenes no decodificables para evitar bloqueos en la interfaz. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.
 
 ## PWA
 

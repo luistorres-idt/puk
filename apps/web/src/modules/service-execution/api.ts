@@ -9,14 +9,9 @@ import type {
   RequireCorrection,
   SaveChecklistItem,
 } from '@puk/contracts';
-import { api } from '../../shared/http/client.js';
+import { api, type ApiResponse } from '../../shared/http/client.js';
 
-export interface ApiResponse<T> {
-  data: T;
-  meta: {
-    requestId: string;
-  };
-}
+export type { ApiResponse };
 
 export async function startOrder(orderId: string) {
   const response = await api.post<ApiResponse<Record<string, unknown>>>(`/orders/${orderId}/start`);
@@ -64,13 +59,16 @@ export async function presignEvidence(
 }
 
 export async function uploadToStorage(uploadUrl: string, blob: Blob, mimeType: string) {
-  await fetch(uploadUrl, {
+  const response = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
       'Content-Type': mimeType,
     },
     body: blob,
   });
+  if (!response.ok) {
+    throw new Error(`La carga del archivo falló (${response.status})`);
+  }
 }
 
 export async function completeEvidence(evidenceId: string, data: CompleteEvidence) {

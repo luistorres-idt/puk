@@ -2,18 +2,20 @@
 
 ## Módulos de la API
 
-| Módulo                  | Responsabilidad                                                            |
-| ----------------------- | -------------------------------------------------------------------------- |
-| `auth`                  | login, refresh, revocación y consulta de sesión                            |
-| `users` / `technicians` | administración local y auditoría                                           |
-| `catalogs`              | consulta y caché de clientes/equipos de Sheets                             |
-| `orders`                | borradores, unidades, equipos, asignación, cancelación y outbox            |
-| `execution`             | inicio, verificación, discrepancias, checklist, evidencias, firma y cierre |
-| `reports`               | generación, versionado y descarga privada del PDF                          |
-| `health`                | liveness y readiness                                                       |
-| `observability`         | logs estructurados y métricas                                              |
+| Módulo           | Responsabilidad                                                            |
+| ---------------- | -------------------------------------------------------------------------- |
+| `auth`           | login, refresh, revocación y consulta de sesión                            |
+| `administration` | gestión administrativa unificada de usuarios y técnicos (con DI)           |
+| `catalogs`       | consulta y caché de clientes/equipos de Sheets                             |
+| `orders`         | borradores, unidades, equipos, asignación, cancelación y outbox            |
+| `execution`      | inicio, verificación, discrepancias, checklist, evidencias, firma y cierre |
+| `reports`        | generación, versionado y descarga privada del PDF                          |
+| `health`         | liveness y readiness                                                       |
+| `observability`  | logs estructurados y métricas                                              |
 
 ## Ciclo de una orden
+
+El ciclo de vida está formalizado en una máquina de estados determinista (`order-state-machine.ts`), que define el grafo de transiciones permitidas y valida invariantes de dominio (`assertValidOrderTransition`, `assertCanEditOrder`, `assertCanModifyUnits`, `assertCanExecuteWork`).
 
 ```mermaid
 stateDiagram-v2
@@ -31,7 +33,17 @@ stateDiagram-v2
     IN_PROGRESS --> CANCELLED: cancelar
 ```
 
-Para completar normalmente se validan equipos, cinco categorías de checklist, un mínimo de tres fotografías por unidad y firma con nombre. Una discrepancia documentada no bloquea el cierre. La cita fallida omite checklist, fotos y firma.
+### Validación de completitud (Specification Pattern)
+
+Para completar normalmente una orden se evalúa la regla de dominio pura mediante `evaluateOrderCompleteness`:
+
+1. Al menos una unidad registrada.
+2. Todos los equipos verificados (`MATCHED` o `DISCREPANCY_REPORTED`). Una discrepancia documentada no bloquea el cierre.
+3. Checklist completo con las 5 categorías obligatorias (`DASHBOARD`, `WINDOWS`, `ACCESSORIES`, `TRIMS`, `BODYWORK`).
+4. Mínimo 3 fotografías de evidencia completadas por unidad.
+5. Firma digital y nombre de conformidad del cliente.
+
+La cita fallida omite checklist, fotos y firma.
 
 ## Asignación y sincronización con Sheets
 
@@ -55,6 +67,12 @@ sequenceDiagram
 ```
 
 Las operaciones fallidas almacenan intentos, código/mensaje y siguiente fecha. El administrador puede devolverlas a `PENDING`. Google Sheets no se consulta para reconstruir órdenes cerradas: los equipos conservan snapshots.
+
+### Creación atómica y validación de conflictos
+
+- `POST /orders` permite la creación atómica de la cabecera de la orden junto con sus unidades iniciales y equipos vinculados dentro de una misma transacción de dominio (`domainTransaction`).
+- Antes de confirmar la asignación (`POST /orders/:id/assign`), el backend ejecuta una revalidación fresca contra Google Sheets.
+- Para evitar falsos positivos de conflicto (`409 SHEET_ROW_CONFLICT`), la coincidencia de cliente entre la hoja y la orden aplica `isMatchingClient` y `normalizeString`. Esto asegura que diferencias de mayúsculas/minúsculas, acentos, espacios múltiples o sufijos corporativos (como `S.A. de C.V.`) no bloqueen la asignación de hardware que legítimamente pertenece al cliente. Solo se emite conflicto si el equipo en Sheets está asignado a una empresa completamente ajena.
 
 ## Carga de fotografías y firma
 
@@ -102,3 +120,11 @@ PDFKit compone páginas Carta; Sharp corrige orientación y normaliza imágenes.
 ## Transacciones y auditoría
 
 `domainTransaction` reúne mutaciones del dominio, auditorías y registros de outbox en una transacción Prisma. Acciones como creación, asignación, cierre, captura de evidencia, generación y descarga de reporte dejan eventos identificables. Los controladores no escriben directamente salvo consultas administrativas puntuales.
+
+## Resiliencia y Circuit Breaker
+
+Para proteger la aplicación ante degradaciones o caídas en servicios de terceros (Google Sheets y AWS S3), los adaptadores se envuelven mediante el patrón Decorator (`CircuitBreakerSheetsPort` y `CircuitBreakerStoragePort`):
+
+- **Estados de circuito**: `CLOSED` (operación normal), `OPEN` (fallo rápido inmediato sin saturar la red externa) y `HALF_OPEN` (prueba controlada de recuperación).
+- **Parámetros configurables**: Umbral de fallos consecutivos (`CIRCUIT_BREAKER_ERROR_THRESHOLD`, por defecto 5) y tiempo de espera antes de reintento (`CIRCUIT_BREAKER_RESET_TIMEOUT_MS`, por defecto 30,000 ms).
+- **Telemetría**: Cada transición de estado actualiza la métrica Prometheus `puk_circuit_breaker_state{circuit="..."}` para observabilidad y alertas operativas.

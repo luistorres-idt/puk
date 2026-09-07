@@ -8,3 +8,5 @@ export const technicianRoutes: RouteRecordRaw[] = [
     path: '/technicians',
   },
 ];
+
+export * from './api.js';

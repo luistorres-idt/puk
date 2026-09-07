@@ -11,7 +11,7 @@ Estas reglas desbloquean el desarrollo sin conceder acceso a datos productivos. 
 - Cancelar una orden sincronizada no revierte Sheets automáticamente. Se crea una operación visible para revisión administrativa; nunca se limpian celdas sin revalidar la fila.
 - Cambiar una unidad después de asignar requiere volver la orden a borrador mediante corrección administrativa, incrementar su versión y resincronizar todos los equipos afectados.
 - Mientras la columna `K` no cambie, un equipo deja de estar disponible si existe una asignación local activa (`ASSIGNED`, `IN_PROGRESS` o `REQUIRES_CORRECTION`). La base local evita asignaciones concurrentes.
-- Antes de asignar se fuerza una lectura fresca y se compara la fila actual con el snapshot. Una diferencia produce `409 SHEET_ROW_CONFLICT`.
+- Antes de asignar se fuerza una lectura fresca y se compara la fila actual con el snapshot. Para la columna J (`Cliente`), la comparación aplica `isMatchingClient` y `normalizeString` (insensible a mayúsculas, acentos, espacios y sufijos legales como `S.A. de C.V.`) contra el nombre y el ID del cliente de la orden. Una diferencia de cliente con una empresa ajena produce `409 SHEET_ROW_CONFLICT`.
 
 ## Evidencias
 

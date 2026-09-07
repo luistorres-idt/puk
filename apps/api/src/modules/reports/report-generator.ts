@@ -33,7 +33,7 @@ const VERIFICATION_LABELS: Record<string, string> = {
   PENDING: 'Pendiente',
 };
 
-interface ReportOrder {
+export interface ReportOrder {
   folio: string;
   serviceType: string;
   clientNameSnapshot: string;
@@ -78,7 +78,11 @@ export interface GeneratedReport {
   checksum: string;
 }
 
-export class ServiceOrderReportGenerator {
+export interface ReportGeneratorPort {
+  generate(order: ReportOrder, version: number): Promise<GeneratedReport>;
+}
+
+export class ServiceOrderReportGenerator implements ReportGeneratorPort {
   public constructor(
     private readonly storage: ObjectStoragePort,
     private readonly timeZone = 'America/Hermosillo',

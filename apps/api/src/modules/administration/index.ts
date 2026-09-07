@@ -1,1 +1,4 @@
-export { createAdministrationRouter } from '../administration.router.js';
+export {
+  createAdministrationRouter,
+  type AdministrationRouterOptions,
+} from './administration.router.js';

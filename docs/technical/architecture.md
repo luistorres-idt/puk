@@ -2,7 +2,7 @@
 
 ## Resumen
 
-PUK es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
+Bull Dog Solution es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
 
 PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuente externa de clientes y equipos. Las fotografías, firmas y PDFs viven en almacenamiento compatible con S3; PostgreSQL guarda únicamente metadatos y claves de objeto.
 
@@ -10,9 +10,9 @@ PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuent
 
 ```mermaid
 flowchart LR
-    Admin[Administrador] --> Web[PUK Web]
+    Admin[Administrador] --> Web[Bull Dog Solution Web]
     Tech[Técnico] --> Web
-    Web -->|HTTPS / JSON| API[PUK API]
+    Web -->|HTTPS / JSON| API[Bull Dog Solution API]
     API --> DB[(PostgreSQL)]
     API --> S3[(S3 / MinIO privado)]
     API --> Sheets[Google Sheets API]
@@ -75,7 +75,8 @@ flowchart TD
 - Los routers autentican, autorizan, validan y traducen HTTP; no deben contener reglas de negocio.
 - Los servicios validan estados, propiedad, concurrencia y efectos del dominio.
 - Prisma implementa persistencia y transacciones.
-- Los puertos `SheetsPort` y `ObjectStoragePort` aíslan SDKs y permiten adaptadores simulados.
+- Los puertos aíslan SDKs y siguen segregación de interfaces (ISP): `SheetsPort`, `ObjectStoragePort`, `EquipmentCatalogPort`, `ClientCatalogPort`, `CatalogServicePort` y `ReportGeneratorPort`.
+- La resiliencia de integración aplica el patrón Decorator con `CircuitBreaker` configurable y telemetría hacia Prometheus.
 - `packages/contracts` comparte esquemas Valibot y tipos de entrada entre API y web.
 
 ## Estructura del monorepo
@@ -102,7 +103,10 @@ docs/                    requisitos, decisiones y documentación técnica
 - Catálogos externos con snapshots locales dentro de la orden.
 - Escrituras a Sheets mediante outbox persistente y reintentos.
 - Carga directa de evidencias a S3 usando URLs prefirmadas.
-- Reportes PDF generados en segundo plano y versionados.
+- Reportes PDF generados en segundo plano y versionados mediante abstracción `ReportGeneratorPort`.
+- Ciclo de vida y transiciones de orden gobernados por una máquina de estados de dominio explícita (`order-state-machine`).
+- Validación de cierre y completitud técnica desacoplada mediante patrón de especificación pura (`order-completeness`).
+- Tolerancia a fallos en adaptadores externos (Sheets y S3) protegida por Circuit Breaker con estados CLOSED, OPEN y HALF-OPEN.
 - JWT de acceso en memoria del navegador; refresh token en cookie HTTP-only.
 - TanStack Query para estado remoto; Pinia se limita a sesión y estado global de UI.
 - Mocks de Sheets, almacenamiento y claves JWT únicamente en desarrollo con valores `development-only`.

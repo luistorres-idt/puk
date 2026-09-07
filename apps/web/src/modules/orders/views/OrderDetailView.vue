@@ -29,6 +29,7 @@ import {
   unitStatusTagType,
 } from '../formatters.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
+import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { EquipmentSelect } from '@/modules/external-catalogs';
 import { useSessionStore } from '@/stores/session';
 import {
@@ -87,12 +88,7 @@ const selectedEquipmentKey = ref<string | null>(null);
 const selectedEquipment = ref<ExternalEquipment | null>(null);
 
 function getErrorMessage(err: unknown, defaultMsg: string): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const res = (err as { response?: { data?: { error?: { message?: string } } } }).response;
-    return res?.data?.error?.message || defaultMsg;
-  }
-  if (err instanceof Error) return err.message;
-  return defaultMsg;
+  return extractApiErrorMessage(err, defaultMsg);
 }
 
 // Actions
@@ -1079,7 +1075,12 @@ const statusColor = orderStatusTagType;
         class="max-w-lg"
       >
         <div class="space-y-4">
-          <equipment-select v-model="selectedEquipmentKey" @select="handleEquipmentSelect" />
+          <equipment-select
+            v-model="selectedEquipmentKey"
+            :service-type="order?.serviceType"
+            :client-name="order?.clientNameSnapshot"
+            @select="handleEquipmentSelect"
+          />
 
           <div v-if="selectedEquipment" class="p-3 bg-slate-50 rounded text-xs space-y-1">
             <p>
@@ -1093,6 +1094,10 @@ const statusColor = orderStatusTagType;
             <p>
               <strong>Estado:</strong> {{ selectedEquipment.condition || 'N/A' }} |
               <strong>Servicio:</strong> {{ selectedEquipment.serviceStatus || 'N/A' }}
+            </p>
+            <p v-if="selectedEquipment.currentClient || selectedEquipment.unit">
+              <strong>Cliente actual:</strong> {{ selectedEquipment.currentClient || 'N/A' }} |
+              <strong>Unidad:</strong> {{ selectedEquipment.unit || 'N/A' }}
             </p>
           </div>
 

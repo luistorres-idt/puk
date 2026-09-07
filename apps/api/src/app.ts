@@ -10,7 +10,10 @@ import { generalRateLimit } from './middleware/rate-limits.js';
 import { requestId } from './middleware/request-id.js';
 import { createAuthRouter, type AuthRouterOptions } from './modules/auth/index.js';
 import { createHealthRouter } from './modules/health/index.js';
-import { createAdministrationRouter } from './modules/administration/index.js';
+import {
+  createAdministrationRouter,
+  type AdministrationRouterOptions,
+} from './modules/administration/index.js';
 import { createCatalogsRouter } from './modules/catalogs/index.js';
 import {
   createOrdersRouter,
@@ -19,14 +22,15 @@ import {
 } from './modules/orders/index.js';
 import { createExecutionRouter, type ExecutionService } from './modules/execution/index.js';
 import { createReportsRouter, type ReportsService } from './modules/reports/index.js';
-import type { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
+import type { CatalogServicePort } from './integrations/ports.js';
 import { httpLogger } from './observability/logger.js';
 import { metrics, metricsMiddleware } from './observability/metrics.js';
 
 export interface AppOptions {
+  administration?: AdministrationRouterOptions;
   allowedOrigins?: readonly string[];
   auth?: AuthRouterOptions & { minimumPasswordLength: number };
-  catalogsService?: GoogleSheetsCatalogService;
+  catalogsService?: CatalogServicePort;
   ordersService?: OrdersService;
   syncService?: SyncService;
   executionService?: ExecutionService;
@@ -71,7 +75,7 @@ export function createApp(options: AppOptions = {}): Express {
   app.use('/health', createHealthRouter(options.dependencyCheck ?? (async () => true)));
   if (options.auth !== undefined) {
     app.use('/api/v1/auth', createAuthRouter(options.auth));
-    app.use('/api/v1', createAdministrationRouter(options.auth));
+    app.use('/api/v1', createAdministrationRouter(options.administration ?? options.auth));
     if (options.catalogsService !== undefined) {
       app.use(
         '/api/v1/external',
@@ -87,7 +91,6 @@ export function createApp(options: AppOptions = {}): Express {
         createOrdersRouter({
           ordersService: options.ordersService,
           ...(options.syncService !== undefined ? { syncService: options.syncService } : {}),
-          prisma: options.auth.prisma,
           tokens: options.auth.tokens,
         }),
       );

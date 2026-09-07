@@ -2,17 +2,29 @@ import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, ReportStatus } from '../../generated/prisma/enums.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
-import { ServiceOrderReportGenerator } from './report-generator.js';
+import { type ReportGeneratorPort, ServiceOrderReportGenerator } from './report-generator.js';
+
+export interface ReportsServiceOptions {
+  downloadUrlTtlSeconds?: number;
+  generator?: ReportGeneratorPort;
+}
 
 export class ReportsService {
-  private readonly generator: ServiceOrderReportGenerator;
+  private readonly generator: ReportGeneratorPort;
+  private readonly downloadUrlTtlSeconds: number;
 
   public constructor(
     private readonly prisma: PrismaClient,
     private readonly storage: ObjectStoragePort,
-    private readonly downloadUrlTtlSeconds = 300,
+    options?: number | ReportsServiceOptions,
   ) {
-    this.generator = new ServiceOrderReportGenerator(storage);
+    if (typeof options === 'number') {
+      this.downloadUrlTtlSeconds = options;
+      this.generator = new ServiceOrderReportGenerator(storage);
+    } else {
+      this.downloadUrlTtlSeconds = options?.downloadUrlTtlSeconds ?? 300;
+      this.generator = options?.generator ?? new ServiceOrderReportGenerator(storage);
+    }
   }
 
   public async requestGeneration(orderId: string, actorUserId?: string) {

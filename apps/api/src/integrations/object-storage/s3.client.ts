@@ -92,7 +92,7 @@ export class S3StorageClient implements ObjectStoragePort {
           Key: key,
         }),
       );
-      return response.Body ? response.Body.transformToByteArray() : new Uint8Array();
+      return response.Body ? await response.Body.transformToByteArray() : null;
     } catch (err: unknown) {
       const error = err as { name?: string; $metadata?: { httpStatusCode?: number } };
       if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) return null;

@@ -1,6 +1,6 @@
 # Documentación técnica
 
-**Proyecto:** PUK — Sistema de órdenes de servicio de Bull Dog Solution
+**Proyecto:** Bull Dog Solution — Sistema de órdenes de servicio
 
 **Última actualización:** 2026-09-07
 

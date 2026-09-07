@@ -32,6 +32,32 @@ export type EquipmentVerificationStatus = v.InferOutput<typeof EquipmentVerifica
 export const SyncStatusSchema = v.picklist(['PENDING', 'PROCESSING', 'SYNCED', 'FAILED']);
 export type SyncStatus = v.InferOutput<typeof SyncStatusSchema>;
 
+export const AssignEquipmentSchema = v.object({
+  brandSnapshot: v.optional(v.nullable(v.string())),
+  carrierSnapshot: v.optional(v.nullable(v.string())),
+  equipmentConditionSnapshot: v.optional(v.nullable(v.string())),
+  externalId: v.optional(v.nullable(v.string())),
+  externalKey: v.pipe(v.string(), v.nonEmpty()),
+  iccidSnapshot: v.optional(v.nullable(v.string())),
+  imei: v.optional(v.nullable(v.string())),
+  lineSnapshot: v.optional(v.nullable(v.string())),
+  modelSnapshot: v.optional(v.nullable(v.string())),
+  rawSnapshot: v.optional(v.record(v.string(), v.string())),
+  serviceStatusSnapshot: v.optional(v.nullable(v.string())),
+  sheetName: v.optional(v.string()),
+  sheetRowHint: v.optional(v.nullable(v.number())),
+});
+export type AssignEquipment = v.InferOutput<typeof AssignEquipmentSchema>;
+
+export const CreateOrderUnitSchema = v.object({
+  label: v.pipe(v.string(), v.nonEmpty()),
+  makeModel: v.pipe(v.string(), v.nonEmpty()),
+  serialNumber: v.pipe(v.string(), v.nonEmpty()),
+  year: v.optional(v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1900), v.maxValue(2100)))),
+  equipment: v.optional(v.array(AssignEquipmentSchema)),
+});
+export type CreateOrderUnit = v.InferOutput<typeof CreateOrderUnitSchema>;
+
 export const CreateOrderSchema = v.object({
   clientNameSnapshot: v.pipe(v.string(), v.nonEmpty()),
   clientSheetId: v.pipe(v.string(), v.nonEmpty()),
@@ -41,6 +67,7 @@ export const CreateOrderSchema = v.object({
   serviceAddress: v.optional(v.nullable(v.string())),
   serviceType: OrderServiceTypeSchema,
   technicianId: v.optional(v.nullable(v.pipe(v.string(), v.uuid()))),
+  units: v.optional(v.array(CreateOrderUnitSchema)),
 });
 export type CreateOrder = v.InferOutput<typeof CreateOrderSchema>;
 
@@ -72,23 +99,6 @@ export const UpdateUnitSchema = v.object({
   year: v.optional(v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1900), v.maxValue(2100)))),
 });
 export type UpdateUnit = v.InferOutput<typeof UpdateUnitSchema>;
-
-export const AssignEquipmentSchema = v.object({
-  brandSnapshot: v.optional(v.nullable(v.string())),
-  carrierSnapshot: v.optional(v.nullable(v.string())),
-  equipmentConditionSnapshot: v.optional(v.nullable(v.string())),
-  externalId: v.optional(v.nullable(v.string())),
-  externalKey: v.pipe(v.string(), v.nonEmpty()),
-  iccidSnapshot: v.optional(v.nullable(v.string())),
-  imei: v.optional(v.nullable(v.string())),
-  lineSnapshot: v.optional(v.nullable(v.string())),
-  modelSnapshot: v.optional(v.nullable(v.string())),
-  rawSnapshot: v.optional(v.record(v.string(), v.string())),
-  serviceStatusSnapshot: v.optional(v.nullable(v.string())),
-  sheetName: v.optional(v.string()),
-  sheetRowHint: v.optional(v.nullable(v.number())),
-});
-export type AssignEquipment = v.InferOutput<typeof AssignEquipmentSchema>;
 
 export const OrderListQuerySchema = v.object({
   from: v.optional(v.string()),

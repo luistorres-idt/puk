@@ -1,0 +1,108 @@
+import type { ChecklistCategory } from '@puk/contracts';
+
+export const ALL_CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
+  'DASHBOARD',
+  'WINDOWS',
+  'ACCESSORIES',
+  'TRIMS',
+  'BODYWORK',
+];
+
+export interface UnitEquipmentForCompleteness {
+  externalKey: string;
+  verificationStatus: string;
+}
+
+export interface ChecklistEvidenceForCompleteness {
+  status?: string;
+}
+
+export interface ChecklistItemForCompleteness {
+  category: string;
+  evidence?: ChecklistEvidenceForCompleteness[];
+}
+
+export interface UnitChecklistForCompleteness {
+  items: ChecklistItemForCompleteness[];
+}
+
+export interface OrderUnitForCompleteness {
+  label: string;
+  equipment: UnitEquipmentForCompleteness[];
+  checklist?: UnitChecklistForCompleteness | null;
+}
+
+export interface OrderSignatureForCompleteness {
+  signerName?: string | null;
+}
+
+export interface OrderForCompletenessEvaluation {
+  units: OrderUnitForCompleteness[];
+  signature?: OrderSignatureForCompleteness | null;
+}
+
+export interface CompletenessResult {
+  isComplete: boolean;
+  missingRequirements: string[];
+}
+
+/**
+ * Pure domain function implementing the specification for whether a service order
+ * satisfies all closing and execution requirements (equipment verified, checklist completed,
+ * minimum evidence photos uploaded, client signature registered).
+ */
+export function evaluateOrderCompleteness(
+  order: OrderForCompletenessEvaluation,
+): CompletenessResult {
+  const missing: string[] = [];
+
+  if (order.units.length === 0) {
+    missing.push('No hay unidades registradas en la orden');
+  }
+
+  for (const unit of order.units) {
+    // 1. All equipments must be verified (MATCHED or DISCREPANCY_REPORTED)
+    for (const eq of unit.equipment) {
+      if (eq.verificationStatus === 'PENDING') {
+        missing.push(`Equipo ${eq.externalKey} en unidad ${unit.label} pendiente de verificación`);
+      }
+    }
+
+    // 2. Checklist items for all categories
+    const checklist = unit.checklist;
+    if (!checklist) {
+      missing.push(`Checklist pendiente en unidad ${unit.label}`);
+    } else {
+      const itemMap = new Map(checklist.items.map((i) => [i.category, i]));
+      for (const cat of ALL_CHECKLIST_CATEGORIES) {
+        const item = itemMap.get(cat);
+        if (!item) {
+          missing.push(`Falta categoría ${cat} en checklist de unidad ${unit.label}`);
+        }
+      }
+
+      // Check minimum 3 completed photos per unit
+      const totalEvidence = checklist.items.reduce((sum, item) => {
+        const completedEvidence =
+          item.evidence?.filter((e) => e.status === undefined || e.status === 'COMPLETED') ?? [];
+        return sum + completedEvidence.length;
+      }, 0);
+
+      if (totalEvidence < 3) {
+        missing.push(
+          `Se requieren al menos 3 fotografías de evidencia en unidad ${unit.label} (actualmente ${totalEvidence}/3)`,
+        );
+      }
+    }
+  }
+
+  // 3. Signature presence
+  if (!order.signature || !order.signature.signerName) {
+    missing.push('Falta firma y nombre del cliente');
+  }
+
+  return {
+    isComplete: missing.length === 0,
+    missingRequirements: missing,
+  };
+}

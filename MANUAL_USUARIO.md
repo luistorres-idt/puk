@@ -2,8 +2,8 @@
 marp: true
 theme: default
 paginate: true
-header: "Bull Dog Solution — Manual de Usuario y Presentación Operativa"
-footer: "Versión 1.0 | Sistema de Órdenes de Servicio"
+header: 'Bull Dog Solution — Manual de Usuario y Presentación Operativa'
+footer: 'Versión 1.0 | Sistema de Órdenes de Servicio'
 style: |
   section {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -85,10 +85,12 @@ style: |
 ---
 
 # Bull Dog Solution
+
 ## Sistema de Gestión de Órdenes de Servicio
+
 ### Manual de Usuario y Guía Operativa Paso a Paso
 
-> Este documento sirve como **presentación interactiva** (compatible con Marp / Slides) y **manual de usuario vivo** para el equipo administrativo y técnico. Actualízalo conforme se integren nuevas características (*features*).
+> Este documento sirve como **presentación interactiva** (compatible con Marp / Slides) y **manual de usuario vivo** para el equipo administrativo y técnico. Actualízalo conforme se integren nuevas características (_features_).
 
 ---
 
@@ -129,10 +131,10 @@ El sistema sustituye la operativa manual y las limitaciones de AppSheet por una 
 
 El sistema maneja dos perfiles de usuario claramente delimitados:
 
-| Rol | Entorno Principal | Responsabilidades Clave |
-| :--- | :--- | :--- |
-| <span class="badge badge-admin">ADMINISTRADOR</span> | Web Desktop (Computadora) | • Crea órdenes en borrador.<br>• Consulta clientes y equipos de Sheets.<br>• Asigna y reasigna técnicos.<br>• Consulta auditoría, reportes y supervisa sincronizaciones. |
-| <span class="badge badge-tech">TÉCNICO</span> | Web Mobile / PWA (Smartphone) | • Consulta órdenes asignadas a su nombre.<br>• Inicia el servicio en la unidad vehicular.<br>• Valida IMEI/series y levanta discrepancias.<br>• Llena checklist con fotos obligatorias.<br>• Recoge firma digital del cliente y finaliza orden. |
+| Rol                                                  | Entorno Principal             | Responsabilidades Clave                                                                                                                                                                                                                         |
+| :--------------------------------------------------- | :---------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <span class="badge badge-admin">ADMINISTRADOR</span> | Web Desktop (Computadora)     | • Crea órdenes en borrador.<br>• Consulta clientes y equipos de Sheets.<br>• Asigna y reasigna técnicos.<br>• Consulta auditoría, reportes y supervisa sincronizaciones.                                                                        |
+| <span class="badge badge-tech">TÉCNICO</span>        | Web Mobile / PWA (Smartphone) | • Consulta órdenes asignadas a su nombre.<br>• Inicia el servicio en la unidad vehicular.<br>• Valida IMEI/series y levanta discrepancias.<br>• Llena checklist con fotos obligatorias.<br>• Recoge firma digital del cliente y finaliza orden. |
 
 ---
 
@@ -158,39 +160,56 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
 
 ---
 
-## 4. Guía Administrador: 1. Crear Orden
+## 4. Guía Administrador: 1. Crear Orden (Asistente de 5 Pasos)
 
 1. Inicia sesión con tus credenciales de Administrador en el portal web.
 2. Dirígete a la sección **Órdenes de Servicio** y haz clic en **`+ Nueva Orden`**.
-3. Selecciona el **Cliente** (la lista se alimenta del catálogo oficial de Google Sheets).
-4. Elige el **Tipo de Servicio**:
-   - `Instalación`: Colocación inicial de nuevos equipos.
-   - `Revisión`: Diagnóstico, mantenimiento o corrección técnica.
-   - `Desinstalación`: Retiro de hardware de la unidad.
-5. El sistema generará un **Folio único** y la orden quedará inicialmente en estado **`DRAFT` (Borrador)**.
+3. **Paso 1: Cliente y Servicio**:
+   - Selecciona el **Cliente** (catálogo oficial de Google Sheets).
+   - Elige el **Tipo de Servicio**:
+     - `Instalación`: Colocación de nuevos equipos en vehículos.
+     - `Revisión`: Diagnóstico, mantenimiento o inspección técnica de equipos ya instalados.
+     - `Desinstalación`: Retiro de hardware instalado en la unidad.
+     - `Cita Fallida`: Registro de cita no completada.
+4. **Paso 2: Unidades y Equipos (Asignación Inteligente)**:
+   - **En Revisiones y Desinstalaciones**:
+     - El selector de equipos solo muestra los GPS con estatus **`INSTALADO`** que pertenecen al cliente seleccionado.
+     - Al elegir un equipo, el sistema **autocompleta automáticamente** los datos de la unidad desde Google Sheets (`Económico`, `Marca/Modelo`, `Año` y `Número de Serie`), evitando capturas manuales innecesarias. El administrador puede revisar o afinar estos datos en pantalla.
+   - **En Instalaciones**:
+     - El selector filtra **únicamente equipos en almacén/stock disponible**.
+     - Se capturan los datos del vehículo donde se montará el nuevo equipo (Económico, Marca/Modelo, Año y Número de Serie/VIN).
+   - Permite agregar una o varias unidades/equipos según la flotilla a atender en la cita.
+5. **Paso 3: Programación**:
+   - Fecha y hora programada para la cita.
+   - Indicador de servicio a domicilio / en sitio con captura de dirección física.
+   - Notas generales e instrucciones para el técnico.
+6. **Paso 4: Técnico Asignado**:
+   - Selección opcional del técnico responsable durante la creación en borrador.
+7. **Paso 5: Resumen y Confirmación**:
+   - Revisa el resumen integral con cliente, servicio, vehículos y hardware asignado.
+   - Al pulsar **`Crear Orden de Servicio`**, el sistema genera un **Folio único**, crea las unidades y vincula los equipos atómicamente en estado **`DRAFT` (Borrador)**.
 
 ---
 
-## 4. Guía Administrador: 2. Unidades y Equipos
+## 4. Guía Administrador: 2. Gestión de Unidades y Equipos en Detalle
 
-Una orden puede contener **múltiples unidades vehiculares** y cada unidad puede tener **varios equipos** asignados:
+Si requieres agregar o ajustar unidades y equipos posteriormente, puedes hacerlo desde el detalle de la orden:
 
-1. Dentro del detalle de la orden en borrador, haz clic en **`Agregar Unidad`**.
-   - Ingresa el identificador económico, placas y/o VIN.
-2. En cada unidad, presiona **`Asignar Equipo`**:
-   - Selecciona el hardware disponible en la pestaña `SALIDAS` de Google Sheets (identificado por ID, IMEI y Número de Serie).
-3. **Control de Conflictos:**
-   - Si otra persona modificó la fila en Google Sheets mientras preparabas la orden, el sistema te mostrará una alerta de versión para evitar sobreescrituras accidentales.
+1. Dentro de la orden en borrador, puedes agregar unidades adicionales o asociarles equipo mediante el selector [`EquipmentSelect`].
+2. El selector mantiene las mismas reglas de negocio: solo muestra equipos disponibles para instalaciones, o equipos instalados del cliente para revisiones y desinstalaciones.
+3. Las comparaciones de cliente aplican **normalización inteligente**: ignoran mayúsculas/minúsculas, acentos, espacios múltiples y variaciones de sufijos legales (ej. `"Transportes Bull Dog"` vs `"TRANSPORTES BULL DOG S.A. DE C.V."`), previniendo falsos conflictos.
 
 ---
 
-## 4. Guía Administrador: 3. Asignación del Técnico
+## 4. Guía Administrador: 3. Asignación del Técnico y Sincronización
 
-1. Una vez cargadas todas las unidades y equipos correspondientes, selecciona el **Técnico Responsable** del menú desplegable de técnicos activos.
+1. Con las unidades y equipos listos, selecciona el **Técnico Responsable** (obligatorio antes de confirmar).
 2. Haz clic en el botón **`Asignar y Notificar`**:
+   - El sistema realiza una revalidación fresca contra Google Sheets.
+   - Si el equipo ya pertenece al cliente (incluso con diferencias de mayúsculas o sufijos), la verificación es exitosa.
    - La orden cambia a estado **`ASSIGNED`**.
-   - El worker en segundo plano encola la reserva de equipos en la tabla Outbox para actualizar Google Sheets.
-   - La orden aparece de inmediato en la bandeja de trabajo del técnico seleccionado en su dispositivo móvil.
+   - El worker en segundo plano encola la actualización de las columnas de asignación (`J`, `L`, `M`, `N`, `O`) en Google Sheets vía Outbox.
+   - La orden aparece de inmediato en la bandeja de trabajo del técnico en su dispositivo móvil.
 
 ---
 
@@ -244,6 +263,7 @@ Al terminar los trabajos mecánicos/eléctricos, debes realizar la inspección d
 5. **Carrocería (`BODYWORK`)**
 
 ### Estados permitidos por categoría:
+
 - **`Bien` (`GOOD`)**: Todo en orden sin daños causados ni preexistentes.
 - **`Mal` (`BAD`)**: **Requiere escribir obligatoriamente una observación detallada** del daño o anomalía.
 - **`No aplica` (`NOT_APPLICABLE`)**: La unidad no cuenta con dicho componente.
@@ -345,19 +365,21 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 
 ## 11. Registro de Nuevas Funcionalidades (Changelog)
 
-> *Utiliza esta sección para registrar los cambios que se agreguen a la aplicación en fases posteriores.*
+> _Utiliza esta sección para registrar los cambios que se agreguen a la aplicación en fases posteriores._
 
-| Fecha | Versión | Tipo | Descripción del Cambio / Nueva Feature | Responsable |
-| :--- | :--- | :--- | :--- | :--- |
+| Fecha          | Versión  | Tipo        | Descripción del Cambio / Nueva Feature                                                                                | Responsable |
+| :------------- | :------- | :---------- | :-------------------------------------------------------------------------------------------------------------------- | :---------- |
 | **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets. | Equipo Core |
-| *Próximamente* | `v1.1.0` | Feature | Modo offline progresivo con persistencia local en dispositivo móvil. | Por definir |
-| *Próximamente* | `v1.2.0` | Feature | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar. | Por definir |
-| *Próximamente* | `v1.3.0` | Feature | Módulo de tarifas y cálculo de liquidación a técnicos. | Por definir |
+| _Próximamente_ | `v1.1.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                  | Por definir |
+| _Próximamente_ | `v1.2.0` | Feature     | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar.                                  | Por definir |
+| _Próximamente_ | `v1.3.0` | Feature     | Módulo de tarifas y cálculo de liquidación a técnicos.                                                                | Por definir |
 
 ---
 
 # ¿Preguntas o Soporte Técnico?
+
 Para reportar fallas en el sistema o sugerir mejoras:
+
 - **Área de Operaciones:** operaciones@bulldogsolution.com
 - **Soporte de Plataforma:** soporte-ti@bulldogsolution.com
 - **Repositorio y Documentación Técnica:** [SPECS.md](./SPECS.md) | [ERS.md](./docs/ERS.md)

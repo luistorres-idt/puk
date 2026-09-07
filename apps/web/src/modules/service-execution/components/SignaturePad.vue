@@ -6,10 +6,13 @@ import { getSignatureUrl } from '../api.js';
 const props = withDefaults(
   defineProps<{
     orderId?: string;
-    existingSignature?: {
-      signerName: string;
-      signedAt?: string;
-    } | null | undefined;
+    existingSignature?:
+      | {
+          signerName: string;
+          signedAt?: string;
+        }
+      | null
+      | undefined;
     disabled?: boolean;
     saving?: boolean;
   }>(),

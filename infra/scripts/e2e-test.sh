@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# PUK Staging E2E Test Suite Runner
+# Bull Dog Solution Staging E2E Test Suite Runner
 #
 # Independent, requirement-driven opaque-box verification across 4 Tiers:
 # - Tier 1: Feature Coverage (Web, API, health endpoints, metrics, docs)
