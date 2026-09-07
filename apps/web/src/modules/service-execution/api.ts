@@ -59,13 +59,16 @@ export async function presignEvidence(
 }
 
 export async function uploadToStorage(uploadUrl: string, blob: Blob, mimeType: string) {
-  await fetch(uploadUrl, {
+  const response = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
       'Content-Type': mimeType,
     },
     body: blob,
   });
+  if (!response.ok) {
+    throw new Error(`La carga del archivo falló (${response.status})`);
+  }
 }
 
 export async function completeEvidence(evidenceId: string, data: CompleteEvidence) {

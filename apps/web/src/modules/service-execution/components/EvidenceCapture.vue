@@ -114,19 +114,53 @@ async function resizeImageIfNeeded(
   });
 }
 
+function isHeicFile(file: File): boolean {
+  const normalizedType = file.type.toLowerCase();
+  const normalizedName = file.name.toLowerCase();
+  return (
+    normalizedType === 'image/heic' ||
+    normalizedType === 'image/heif' ||
+    normalizedName.endsWith('.heic') ||
+    normalizedName.endsWith('.heif')
+  );
+}
+
+async function convertHeicIfNeeded(file: File): Promise<File> {
+  if (!isHeicFile(file)) return file;
+
+  uploadingStatusText.value = 'Convirtiendo foto HEIC a JPEG...';
+  const { default: heic2any } = await import('heic2any');
+  const converted = await heic2any({
+    blob: file,
+    quality: 0.85,
+    toType: 'image/jpeg',
+  });
+  const jpeg = Array.isArray(converted) ? converted[0] : converted;
+  if (!(jpeg instanceof Blob)) {
+    throw new Error('No fue posible convertir la foto HEIC a JPEG');
+  }
+
+  return new File([jpeg], `${file.name.replace(/\.(heic|heif)$/i, '')}.jpg`, {
+    lastModified: file.lastModified,
+    type: 'image/jpeg',
+  });
+}
+
 async function handleFilesSelected(files: File[]) {
   if (!files || files.length === 0) return;
 
   uploading.value = true;
   let successCount = 0;
   let failCount = 0;
+  let lastErrorMessage: string | undefined;
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     if (!file) continue;
     uploadingStatusText.value = `Subiendo foto ${i + 1} de ${files.length}...`;
     try {
-      const { blob, width, height } = await resizeImageIfNeeded(file);
+      const normalizedFile = await convertHeicIfNeeded(file);
+      const { blob, width, height } = await resizeImageIfNeeded(normalizedFile);
 
       // 1. Presign
       const presign = await presignEvidence(props.orderId, props.unitId, props.category, {
@@ -144,8 +178,11 @@ async function handleFilesSelected(files: File[]) {
       });
 
       successCount++;
-    } catch {
+    } catch (error) {
       failCount++;
+      if (error instanceof Error && error.message.trim().length > 0) {
+        lastErrorMessage = error.message;
+      }
     }
   }
 
@@ -165,7 +202,11 @@ async function handleFilesSelected(files: File[]) {
   }
 
   if (failCount > 0) {
-    message?.error(`No fue posible subir ${failCount} fotografía(s)`);
+    message?.error(
+      lastErrorMessage === undefined
+        ? `No fue posible subir ${failCount} fotografía(s)`
+        : `No fue posible subir ${failCount} fotografía(s): ${lastErrorMessage}`,
+    );
   }
 }
 
@@ -227,7 +268,7 @@ async function handleDelete(evidenceId: string) {
         <input
           ref="fileInputRef"
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           multiple
           class="hidden"
           :disabled="disabled || uploading"
@@ -236,7 +277,7 @@ async function handleDelete(evidenceId: string) {
         <input
           ref="cameraInputRef"
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           capture="environment"
           class="hidden"
           :disabled="disabled || uploading"
