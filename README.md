@@ -93,7 +93,7 @@ flowchart TD
 | Integraciones   | Google Sheets API, API compatible con Amazon S3 |
 | Documentación   | OpenAPI 3.1, Swagger UI                         |
 | Pruebas         | Vitest, Supertest, Playwright                   |
-| Infraestructura | Docker, Docker Compose, pnpm                    |
+| Infraestructura | Docker Compose local; AWS CDK para staging      |
 
 ## Estructura del repositorio
 
@@ -111,7 +111,9 @@ flowchart TD
 │   ├── schema.prisma        # Modelo de datos
 │   └── seed.ts              # Datos iniciales de desarrollo
 ├── infra/
-│   └── docker/              # Archivos de infraestructura local
+│   ├── cdk/                 # Stacks AWS de staging
+│   ├── docker/              # Imágenes y configuración local/ECS
+│   └── scripts/             # Operación, smoke tests y E2E
 ├── docker-compose.yml
 ├── pnpm-workspace.yaml
 ├── ROADMAP.md
@@ -283,6 +285,8 @@ El producto se despliega con entornos separados de desarrollo, staging y producc
 - Google Sheets distinto para staging y producción.
 
 El pipeline ejecuta instalación reproducible, lint, typecheck, pruebas, generación de OpenAPI, builds, escaneos, migraciones controladas, despliegue y smoke tests.
+
+Staging está implementado en AWS `us-east-2` con CloudFront, ALB, ECS Fargate, RDS PostgreSQL, S3, Secrets Manager y CloudWatch. Producción aún no tiene stacks IaC en la rama actual. Consulte [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) para los diagramas, límites de red, persistencia, CI/CD y brechas antes de producción, y [Staging y despliegue](./docs/staging-and-deployment.md) para el procedimiento operativo.
 
 ## Alcance del MVP
 
