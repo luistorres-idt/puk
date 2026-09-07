@@ -8,4 +8,3 @@ export {
   assertValidOrderTransition,
   canTransitionOrder,
 } from './order-state-machine.js';
-

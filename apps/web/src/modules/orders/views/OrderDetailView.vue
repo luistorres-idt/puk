@@ -29,6 +29,7 @@ import {
   unitStatusTagType,
 } from '../formatters.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
+import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { EquipmentSelect } from '@/modules/external-catalogs';
 import { useSessionStore } from '@/stores/session';
 import {
@@ -87,12 +88,7 @@ const selectedEquipmentKey = ref<string | null>(null);
 const selectedEquipment = ref<ExternalEquipment | null>(null);
 
 function getErrorMessage(err: unknown, defaultMsg: string): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const res = (err as { response?: { data?: { error?: { message?: string } } } }).response;
-    return res?.data?.error?.message || defaultMsg;
-  }
-  if (err instanceof Error) return err.message;
-  return defaultMsg;
+  return extractApiErrorMessage(err, defaultMsg);
 }
 
 // Actions

@@ -73,10 +73,12 @@ watch(
 async function resizeImageIfNeeded(
   file: File,
 ): Promise<{ blob: Blob; width: number; height: number }> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo de imagen seleccionado'));
     reader.onload = (e) => {
       const img = new Image();
+      img.onerror = () => reject(new Error('No se pudo decodificar la imagen seleccionada'));
       img.onload = () => {
         const maxDimension = 1920;
         let width = img.width;

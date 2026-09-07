@@ -9,14 +9,9 @@ import type {
   RequireCorrection,
   SaveChecklistItem,
 } from '@puk/contracts';
-import { api } from '../../shared/http/client.js';
+import { api, type ApiResponse } from '../../shared/http/client.js';
 
-export interface ApiResponse<T> {
-  data: T;
-  meta: {
-    requestId: string;
-  };
-}
+export type { ApiResponse };
 
 export async function startOrder(orderId: string) {
   const response = await api.post<ApiResponse<Record<string, unknown>>>(`/orders/${orderId}/start`);

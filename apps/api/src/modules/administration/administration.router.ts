@@ -7,22 +7,28 @@ import {
 } from '@puk/contracts';
 import { Router } from 'express';
 
-import { authenticate, authorize } from '../auth/authenticate.js';
-import type { TokenService } from '../auth/tokens.js';
-import type { PrismaClient } from '../generated/prisma/client.js';
-import { validate } from '../middleware/validate.js';
-import { sendSuccess } from '../shared/http.js';
-import { TechniciansService } from './technicians/index.js';
-import { UsersService } from './users/index.js';
+import { authenticate, authorize } from '../../auth/authenticate.js';
+import type { TokenService } from '../../auth/tokens.js';
+import type { PrismaClient } from '../../generated/prisma/client.js';
+import { validate } from '../../middleware/validate.js';
+import { sendSuccess } from '../../shared/http.js';
+import { TechniciansService } from '../technicians/index.js';
+import { UsersService } from '../users/index.js';
 
-export function createAdministrationRouter(options: {
-  minimumPasswordLength: number;
-  prisma: PrismaClient;
+export interface AdministrationRouterOptions {
+  minimumPasswordLength?: number;
+  prisma?: PrismaClient;
   tokens: TokenService;
-}): Router {
+  usersService?: UsersService;
+  techniciansService?: TechniciansService;
+}
+
+export function createAdministrationRouter(options: AdministrationRouterOptions): Router {
   const router = Router();
-  const users = new UsersService(options.prisma, options.minimumPasswordLength);
-  const technicians = new TechniciansService(options.prisma);
+  const users =
+    options.usersService ?? new UsersService(options.prisma!, options.minimumPasswordLength ?? 12);
+  const technicians = options.techniciansService ?? new TechniciansService(options.prisma!);
+
   router.use(authenticate(options.tokens));
 
   router.get('/users', authorize('users:manage'), async (_request, response) =>

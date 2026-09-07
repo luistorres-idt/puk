@@ -59,4 +59,30 @@ export async function refreshSession(): Promise<void> {
   return refreshPromise;
 }
 
+export interface ApiResponse<T> {
+  data: T;
+  meta: {
+    requestId: string;
+    pagination?: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+  };
+}
+
+export function extractApiErrorMessage(error: unknown, fallbackMessage: string): string {
+  if (axios.isAxiosError(error)) {
+    const apiError = (error.response?.data as { error?: { message?: string } } | undefined)?.error;
+    if (typeof apiError?.message === 'string' && apiError.message.trim().length > 0) {
+      return apiError.message;
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallbackMessage;
+}
+
 export { api };

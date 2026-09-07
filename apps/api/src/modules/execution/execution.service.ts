@@ -22,14 +22,9 @@ import {
 import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
 import { assertCanExecuteWork, assertValidOrderTransition } from '../orders/index.js';
+import { ALL_CHECKLIST_CATEGORIES, evaluateOrderCompleteness } from './order-completeness.js';
 
-export const ALL_CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
-  'DASHBOARD',
-  'WINDOWS',
-  'ACCESSORIES',
-  'TRIMS',
-  'BODYWORK',
-];
+export { ALL_CHECKLIST_CATEGORIES, evaluateOrderCompleteness };
 
 export interface ExecutionServiceOptions {
   maxEvidenceBytes?: number;
@@ -569,57 +564,7 @@ export class ExecutionService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
-    const missing: string[] = [];
-
-    if (order.units.length === 0) {
-      missing.push('No hay unidades registradas en la orden');
-    }
-
-    for (const unit of order.units) {
-      // 1. All equipments verified
-      for (const eq of unit.equipment) {
-        if (eq.verificationStatus === EquipmentVerificationStatus.PENDING) {
-          missing.push(
-            `Equipo ${eq.externalKey} en unidad ${unit.label} pendiente de verificación`,
-          );
-        }
-      }
-
-      // 2. Checklist items for all 5 categories
-      const checklist = unit.checklist;
-      if (!checklist) {
-        missing.push(`Checklist pendiente en unidad ${unit.label}`);
-      } else {
-        const itemMap = new Map(checklist.items.map((i) => [i.category, i]));
-        for (const cat of ALL_CHECKLIST_CATEGORIES) {
-          const item = itemMap.get(cat);
-          if (!item) {
-            missing.push(`Falta categoría ${cat} en checklist de unidad ${unit.label}`);
-          }
-        }
-
-        // Check minimum 3 photos per unit
-        const totalEvidence = checklist.items.reduce(
-          (sum, item) => sum + (item.evidence?.length ?? 0),
-          0,
-        );
-        if (totalEvidence < 3) {
-          missing.push(
-            `Se requieren al menos 3 fotografías de evidencia en unidad ${unit.label} (actualmente ${totalEvidence}/3)`,
-          );
-        }
-      }
-    }
-
-    // 3. Signature
-    if (!order.signature || !order.signature.signerName) {
-      missing.push('Falta firma y nombre del cliente');
-    }
-
-    return {
-      isComplete: missing.length === 0,
-      missingRequirements: missing,
-    };
+    return evaluateOrderCompleteness(order);
   }
 
   public async completeOrder(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {

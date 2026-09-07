@@ -60,4 +60,21 @@ describe('ReportsService', () => {
     });
     expect(prisma.serviceOrderReport.findFirst).not.toHaveBeenCalled();
   });
+
+  it('accepts a custom ReportGeneratorPort via dependency injection', async () => {
+    const mockGenerator = {
+      generate: vi.fn().mockResolvedValue({
+        bytes: new Uint8Array([1, 2, 3]),
+        checksum: 'mock-checksum',
+      }),
+    };
+
+    const customService = new ReportsService(
+      prisma as unknown as PrismaClient,
+      new DevMockStorageClient(),
+      { generator: mockGenerator },
+    );
+
+    expect(customService).toBeDefined();
+  });
 });

@@ -8,20 +8,9 @@ import type {
   UpdateOrder,
   UpdateUnit,
 } from '@puk/contracts';
-import { api } from '../../shared/http/client.js';
+import { api, type ApiResponse } from '../../shared/http/client.js';
 
-export interface ApiResponse<T> {
-  data: T;
-  meta: {
-    requestId: string;
-    pagination?: {
-      page: number;
-      pageSize: number;
-      total: number;
-      totalPages: number;
-    };
-  };
-}
+export type { ApiResponse };
 
 export interface EquipmentItem {
   id: string;
