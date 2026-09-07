@@ -188,6 +188,93 @@ describe('OrdersService & SyncService', () => {
     expect(result.version).toBe(1);
   });
 
+  it('creates an order with units and equipment atomically', async () => {
+    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1' });
+    mockPrisma.orderEquipment.findFirst.mockResolvedValue(null);
+
+    const result = await ordersService.createOrder('user-admin-1', {
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      serviceType: 'INSTALLATION',
+      scheduledAt: new Date().toISOString(),
+      technicianId: 'tech-1',
+      units: [
+        {
+          label: 'Eco-101',
+          makeModel: 'Kenworth T680',
+          serialNumber: 'SERIAL-101',
+          year: 2023,
+          equipment: [
+            {
+              externalKey: 'EQ-001',
+              externalId: 'EQ-001',
+              imei: '861234567890123',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.id).toBe('order-1');
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
+  });
+
+  it('rejects order creation if units have duplicate serial numbers', async () => {
+    await expect(
+      ordersService.createOrder('user-admin-1', {
+        clientSheetId: 'CLI-1',
+        clientNameSnapshot: 'Transportes Bull Dog',
+        serviceType: 'INSTALLATION',
+        scheduledAt: new Date().toISOString(),
+        units: [
+          {
+            label: 'Eco-101',
+            makeModel: 'Kenworth T680',
+            serialNumber: 'DUPLICATE-SN',
+          },
+          {
+            label: 'Eco-102',
+            makeModel: 'Kenworth T680',
+            serialNumber: 'DUPLICATE-SN',
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'DUPLICATE_SERIAL_NUMBER',
+    });
+  });
+
+  it('rejects order creation if equipment is already active elsewhere', async () => {
+    mockPrisma.orderEquipment.findFirst.mockResolvedValue({
+      id: 'active-eq',
+      externalKey: 'EQ-ALREADY-ACTIVE',
+      activeAssignment: true,
+    });
+
+    await expect(
+      ordersService.createOrder('user-admin-1', {
+        clientSheetId: 'CLI-1',
+        clientNameSnapshot: 'Transportes Bull Dog',
+        serviceType: 'INSTALLATION',
+        scheduledAt: new Date().toISOString(),
+        units: [
+          {
+            label: 'Eco-101',
+            makeModel: 'Kenworth T680',
+            serialNumber: 'SERIAL-101',
+            equipment: [
+              {
+                externalKey: 'EQ-ALREADY-ACTIVE',
+              },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'EQUIPMENT_ALREADY_ASSIGNED',
+    });
+  });
+
   it('prevents adding a unit with duplicate serial number in the same order', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
@@ -265,6 +352,132 @@ describe('OrdersService & SyncService', () => {
 
     const result = await ordersService.assignAndSyncOrder('user-admin-1', 'order-1');
     expect(result.status).toBe(OrderStatus.ASSIGNED);
+  });
+
+  it('allows assignment when equipment already belongs to the same client with casing/suffix variation', async () => {
+    // Mock Sheets to return equipment with client variation
+    vi.spyOn(sheetsPort, 'listEquipment').mockResolvedValueOnce([
+      {
+        externalId: 'EQ-001',
+        imei: '861234567890123',
+        row: 2,
+        values: {
+          A: '2026-01-01',
+          B: 'Teltonika',
+          C: 'FMB920',
+          D: 'EQ-001',
+          E: '861234567890123',
+          F: '',
+          G: '',
+          H: 'Telcel',
+          I: 'USADO',
+          J: 'TRANSPORTES BULL DOG S.A. DE C.V.',
+          K: 'INSTALADO',
+          L: 'Eco-01',
+          M: 'Kenworth',
+          N: '2022',
+          O: 'SN-001',
+          P: '',
+        },
+      },
+    ]);
+
+    const orderData = {
+      id: 'order-1',
+      status: OrderStatus.DRAFT,
+      technicianId: 'tech-1',
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      version: 1,
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Unidad 01',
+          makeModel: 'Freightliner',
+          year: 2023,
+          serialNumber: 'SN-001',
+          equipment: [
+            {
+              id: 'eq-1',
+              externalKey: 'EQ-001',
+              sheetRowHint: 2,
+              activeAssignment: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    mockPrisma.order.findUnique.mockResolvedValue(orderData);
+    mockPrisma.orderEquipment.findFirst.mockResolvedValue(null);
+
+    const result = await ordersService.assignAndSyncOrder('user-admin-1', 'order-1', {
+      forceFresh: true,
+    });
+    expect(result.status).toBe(OrderStatus.ASSIGNED);
+  });
+
+  it('rejects assignment with SHEET_ROW_CONFLICT when equipment in Sheets belongs to a different client', async () => {
+    vi.spyOn(sheetsPort, 'listEquipment').mockResolvedValueOnce([
+      {
+        externalId: 'EQ-001',
+        imei: '861234567890123',
+        row: 2,
+        values: {
+          A: '2026-01-01',
+          B: 'Teltonika',
+          C: 'FMB920',
+          D: 'EQ-001',
+          E: '861234567890123',
+          F: '',
+          G: '',
+          H: 'Telcel',
+          I: 'USADO',
+          J: 'Flotillas Azteca',
+          K: 'INSTALADO',
+          L: 'Eco-99',
+          M: 'Kenworth',
+          N: '2022',
+          O: 'SN-999',
+          P: '',
+        },
+      },
+    ]);
+
+    const orderData = {
+      id: 'order-1',
+      status: OrderStatus.DRAFT,
+      technicianId: 'tech-1',
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      version: 1,
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Unidad 01',
+          makeModel: 'Freightliner',
+          year: 2023,
+          serialNumber: 'SN-001',
+          equipment: [
+            {
+              id: 'eq-1',
+              externalKey: 'EQ-001',
+              sheetRowHint: 2,
+              activeAssignment: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    mockPrisma.order.findUnique.mockResolvedValue(orderData);
+    mockPrisma.orderEquipment.findFirst.mockResolvedValue(null);
+
+    await expect(
+      ordersService.assignAndSyncOrder('user-admin-1', 'order-1', { forceFresh: true }),
+    ).rejects.toMatchObject({
+      code: 'SHEET_ROW_CONFLICT',
+    });
   });
 
   it('processes pending sync operations and updates Sheets via SyncService', async () => {

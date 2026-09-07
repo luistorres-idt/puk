@@ -54,6 +54,19 @@ flowchart LR
 
 La guarda de navegación inicializa la sesión, redirige al login y aplica `requiresRole`. La autorización real siempre se repite en backend.
 
+## Asistente de creación de órdenes y catálogo de equipos
+
+El asistente (`/orders/new`) guía al administrador en un flujo estructurado de 5 pasos:
+
+1. **Cliente y Tipo de Servicio**: Selección del cliente desde Sheets y definición del servicio (`INSTALLATION`, `REVIEW`, `UNINSTALLATION`, `FAILED_APPOINTMENT`).
+2. **Unidades y Equipos**:
+   - **Revisiones y Desinstalaciones**: El componente `EquipmentSelect` filtra automáticamente los equipos con estatus `INSTALADO` del cliente. Al seleccionar un hardware, la función `extractUnitFromEquipment` autocompleta la unidad (`unit`, `unitMakeModel`, `unitYear`, `unitSerialNumber`) reduciendo la captura manual.
+   - **Instalaciones**: `EquipmentSelect` filtra exclusivamente hardware en stock/almacén (`STOCK TECNICO`, `DISPONIBLE`, etc.) y solicita los datos de la nueva unidad física.
+   - **Normalización**: Las comparaciones de clientes aplican `normalizeString` (case-insensitive, diacríticos removidos vía NFD y eliminación de sufijos legales tipo `S.A. de C.V.`).
+3. **Programación**: Fecha, hora, tipo de servicio (en sitio o taller) y notas operativas.
+4. **Técnico**: Asignación inicial (opcional en borrador).
+5. **Resumen y Creación**: Validación integral y envío atómico de la orden con sus unidades y equipos a la API.
+
 ## Evidencias y reportes
 
 El navegador comprime fotografías a JPEG antes de solicitar/subir una URL prefirmada. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.

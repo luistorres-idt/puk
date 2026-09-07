@@ -43,3 +43,51 @@ export const CatalogMetadataSchema = v.object({
 });
 
 export type CatalogMetadata = v.InferOutput<typeof CatalogMetadataSchema>;
+
+/**
+ * Normalizes a string by:
+ * 1. Removing diacritics / accents (NFD).
+ * 2. Trimming leading and trailing whitespace.
+ * 3. Converting to lowercase.
+ * 4. Collapsing multiple consecutive spaces into a single space.
+ */
+export function normalizeString(value: string | null | undefined): string {
+  if (!value) {
+    return '';
+  }
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Compares two client names with normalization (case-insensitive, accent-insensitive).
+ * Also matches if one contains the other as a significant prefix/substring (e.g. legal suffix omission).
+ */
+export function isMatchingClient(
+  clientA: string | null | undefined,
+  clientB: string | null | undefined,
+): boolean {
+  const normA = normalizeString(clientA);
+  const normB = normalizeString(clientB);
+
+  if (!normA || !normB) {
+    return false;
+  }
+  if (normA === normB) {
+    return true;
+  }
+
+  // Check substring containment for company name variations (e.g. omitting "S.A. de C.V.")
+  if (normA.length >= 4 && normB.includes(normA)) {
+    return true;
+  }
+  if (normB.length >= 4 && normA.includes(normB)) {
+    return true;
+  }
+
+  return false;
+}

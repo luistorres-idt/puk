@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  AssignEquipment,
-  CreateOrder,
-  CreateUnit,
-  OrderListQuery,
-  UpdateOrder,
-  UpdateUnit,
+import {
+  isMatchingClient,
+  normalizeString,
+  type AssignEquipment,
+  type CreateOrder,
+  type CreateUnit,
+  type OrderListQuery,
+  type UpdateOrder,
+  type UpdateUnit,
 } from '@puk/contracts';
 import { domainTransaction } from '../../database/transaction.js';
 import { updateOrderVersion } from '../../database/optimistic-lock.js';
@@ -148,6 +150,51 @@ export class OrdersService {
       }
     }
 
+    if (input.units && input.units.length > 0) {
+      const serials = new Set<string>();
+      const equipmentKeys = new Set<string>();
+
+      for (const unit of input.units) {
+        if (serials.has(unit.serialNumber)) {
+          throw new AppError(
+            409,
+            'DUPLICATE_SERIAL_NUMBER',
+            'No se pueden registrar dos unidades con el mismo número de serie en la misma orden',
+          );
+        }
+        serials.add(unit.serialNumber);
+
+        if (unit.equipment) {
+          for (const eq of unit.equipment) {
+            if (equipmentKeys.has(eq.externalKey)) {
+              throw new AppError(
+                409,
+                'DUPLICATE_EQUIPMENT',
+                `El equipo ${eq.externalKey} está duplicado en la orden`,
+              );
+            }
+            equipmentKeys.add(eq.externalKey);
+          }
+        }
+      }
+
+      for (const key of equipmentKeys) {
+        const conflict = await this.prisma.orderEquipment.findFirst({
+          where: {
+            externalKey: key,
+            activeAssignment: true,
+          },
+        });
+        if (conflict) {
+          throw new AppError(
+            409,
+            'EQUIPMENT_ALREADY_ASSIGNED',
+            `El equipo ${key} ya se encuentra asignado a otra orden activa`,
+          );
+        }
+      }
+    }
+
     const folio = `OS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
 
     return domainTransaction(this.prisma, async (tx, effects) => {
@@ -175,6 +222,61 @@ export class OrdersService {
         entityId: order.id,
         after: order as unknown as Prisma.InputJsonValue,
       });
+
+      if (input.units && input.units.length > 0) {
+        for (const unitInput of input.units) {
+          const unit = await tx.orderUnit.create({
+            data: {
+              orderId: order.id,
+              label: unitInput.label,
+              makeModel: unitInput.makeModel,
+              serialNumber: unitInput.serialNumber,
+              year: unitInput.year ?? null,
+              status: 'PENDING',
+            },
+          });
+
+          effects.audit({
+            action: 'UNIT_CREATED',
+            actorUserId,
+            entityType: 'OrderUnit',
+            entityId: unit.id,
+            after: unit as unknown as Prisma.InputJsonValue,
+          });
+
+          if (unitInput.equipment && unitInput.equipment.length > 0) {
+            for (const eqInput of unitInput.equipment) {
+              const equipment = await tx.orderEquipment.create({
+                data: {
+                  orderUnitId: unit.id,
+                  externalKey: eqInput.externalKey,
+                  externalId: eqInput.externalId ?? null,
+                  imei: eqInput.imei ?? null,
+                  sheetName: eqInput.sheetName ?? 'SALIDAS',
+                  sheetRowHint: eqInput.sheetRowHint ?? null,
+                  brandSnapshot: eqInput.brandSnapshot ?? null,
+                  modelSnapshot: eqInput.modelSnapshot ?? null,
+                  lineSnapshot: eqInput.lineSnapshot ?? null,
+                  iccidSnapshot: eqInput.iccidSnapshot ?? null,
+                  carrierSnapshot: eqInput.carrierSnapshot ?? null,
+                  equipmentConditionSnapshot: eqInput.equipmentConditionSnapshot ?? null,
+                  serviceStatusSnapshot: eqInput.serviceStatusSnapshot ?? null,
+                  rawSnapshot: (eqInput.rawSnapshot ?? {}) as unknown as Prisma.InputJsonValue,
+                  activeAssignment: false,
+                },
+              });
+
+              effects.audit({
+                action: 'EQUIPMENT_ASSIGNED',
+                actorUserId,
+                entityType: 'OrderEquipment',
+                entityId: equipment.id,
+                after: equipment as unknown as Prisma.InputJsonValue,
+              });
+            }
+          }
+        }
+      }
 
       return order;
     });
@@ -584,7 +686,10 @@ export class OrdersService {
         }
 
         // If client was modified externally in Sheets to another client
-        if (fresh.currentClient && fresh.currentClient !== order.clientNameSnapshot) {
+        const matchesClientName = isMatchingClient(fresh.currentClient, order.clientNameSnapshot);
+        const matchesClientId =
+          normalizeString(fresh.currentClient) === normalizeString(order.clientSheetId);
+        if (fresh.currentClient && !matchesClientName && !matchesClientId) {
           throw new AppError(
             409,
             'SHEET_ROW_CONFLICT',

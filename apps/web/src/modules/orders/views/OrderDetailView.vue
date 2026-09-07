@@ -1079,7 +1079,12 @@ const statusColor = orderStatusTagType;
         class="max-w-lg"
       >
         <div class="space-y-4">
-          <equipment-select v-model="selectedEquipmentKey" @select="handleEquipmentSelect" />
+          <equipment-select
+            v-model="selectedEquipmentKey"
+            :service-type="order?.serviceType"
+            :client-name="order?.clientNameSnapshot"
+            @select="handleEquipmentSelect"
+          />
 
           <div v-if="selectedEquipment" class="p-3 bg-slate-50 rounded text-xs space-y-1">
             <p>
@@ -1093,6 +1098,10 @@ const statusColor = orderStatusTagType;
             <p>
               <strong>Estado:</strong> {{ selectedEquipment.condition || 'N/A' }} |
               <strong>Servicio:</strong> {{ selectedEquipment.serviceStatus || 'N/A' }}
+            </p>
+            <p v-if="selectedEquipment.currentClient || selectedEquipment.unit">
+              <strong>Cliente actual:</strong> {{ selectedEquipment.currentClient || 'N/A' }} |
+              <strong>Unidad:</strong> {{ selectedEquipment.unit || 'N/A' }}
             </p>
           </div>
 
