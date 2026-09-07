@@ -106,7 +106,7 @@ export async function startMockEnvironment(
           'Content-Type': 'text/html; charset=utf-8',
         });
         res.end(
-          '<!DOCTYPE html><html><head><title>Swagger UI - PUK API</title></head><body><div id="swagger-ui">Swagger Spec</div></body></html>',
+          '<!DOCTYPE html><html><head><title>Swagger UI - Bull Dog Solution API</title></head><body><div id="swagger-ui">Swagger Spec</div></body></html>',
         );
         return;
       }
@@ -181,7 +181,7 @@ export async function startMockEnvironment(
         'Content-Type': pathname.endsWith('.css') ? 'text/css' : 'application/javascript',
         'Cache-Control': 'public, immutable, max-age=31536000',
       });
-      res.end(`/* PUK Web Asset ${pathname} */ console.log("bds-asset");`);
+      res.end(`/* Bull Dog Solution Web Asset ${pathname} */ console.log("bds-asset");`);
       return;
     }
 

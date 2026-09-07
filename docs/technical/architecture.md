@@ -2,7 +2,7 @@
 
 ## Resumen
 
-PUK es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
+Bull Dog Solution es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
 
 PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuente externa de clientes y equipos. Las fotografías, firmas y PDFs viven en almacenamiento compatible con S3; PostgreSQL guarda únicamente metadatos y claves de objeto.
 
@@ -10,9 +10,9 @@ PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuent
 
 ```mermaid
 flowchart LR
-    Admin[Administrador] --> Web[PUK Web]
+    Admin[Administrador] --> Web[Bull Dog Solution Web]
     Tech[Técnico] --> Web
-    Web -->|HTTPS / JSON| API[PUK API]
+    Web -->|HTTPS / JSON| API[Bull Dog Solution API]
     API --> DB[(PostgreSQL)]
     API --> S3[(S3 / MinIO privado)]
     API --> Sheets[Google Sheets API]
