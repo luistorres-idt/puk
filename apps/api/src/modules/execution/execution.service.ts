@@ -21,6 +21,7 @@ import {
 } from '../../generated/prisma/client.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
+import { assertCanExecuteWork, assertValidOrderTransition } from '../orders/index.js';
 
 export const ALL_CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
   'DASHBOARD',
@@ -82,13 +83,11 @@ export class ExecutionService {
   public async startOrder(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
     const order = await this.assertOrderAccess(userId, role, orderId);
 
-    if (order.status !== OrderStatus.ASSIGNED && order.status !== OrderStatus.REQUIRES_CORRECTION) {
-      throw new AppError(
-        400,
-        'INVALID_ORDER_STATE',
-        'Solo se pueden iniciar órdenes en estado asignada o en corrección',
-      );
-    }
+    assertValidOrderTransition(
+      order.status,
+      OrderStatus.IN_PROGRESS,
+      'Solo se pueden iniciar órdenes en estado asignada o en corrección',
+    );
 
     return domainTransaction(this.prisma, async (tx, effects) => {
       await tx.orderUnit.updateMany({
@@ -125,9 +124,7 @@ export class ExecutionService {
     equipmentId: string,
   ) {
     const order = await this.assertOrderAccess(userId, role, orderId);
-    if (order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'La orden debe estar en progreso');
-    }
+    assertCanExecuteWork(order.status, 'verificar equipos');
 
     const eq = await this.prisma.orderEquipment.findUnique({ where: { id: equipmentId } });
     if (!eq || eq.orderUnitId !== unitId) {
@@ -165,9 +162,7 @@ export class ExecutionService {
     input: ReportDiscrepancy,
   ) {
     const order = await this.assertOrderAccess(userId, role, orderId);
-    if (order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'La orden debe estar en progreso');
-    }
+    assertCanExecuteWork(order.status, 'reportar discrepancias');
 
     const eq = await this.prisma.orderEquipment.findUnique({ where: { id: equipmentId } });
     if (!eq || eq.orderUnitId !== unitId) {
@@ -223,9 +218,7 @@ export class ExecutionService {
     items: SaveChecklistItem[],
   ) {
     const order = await this.assertOrderAccess(userId, role, orderId);
-    if (order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'La orden debe estar en progreso');
-    }
+    assertCanExecuteWork(order.status, 'guardar el checklist');
 
     const unit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
     if (!unit || unit.orderId !== orderId) {
@@ -289,9 +282,7 @@ export class ExecutionService {
     input: PresignEvidence,
   ) {
     const order = await this.assertOrderAccess(userId, role, orderId);
-    if (order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'La orden debe estar en progreso');
-    }
+    assertCanExecuteWork(order.status, 'subir evidencias');
 
     if (input.sizeBytes > this.maxEvidenceBytes) {
       throw new AppError(
@@ -479,9 +470,7 @@ export class ExecutionService {
     input: PresignSignature,
   ) {
     const order = await this.assertOrderAccess(userId, role, orderId);
-    if (order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(400, 'INVALID_ORDER_STATE', 'La orden debe estar en progreso');
-    }
+    assertCanExecuteWork(order.status, 'subir firmas');
 
     if (input.sizeBytes > this.maxSignatureBytes) {
       throw new AppError(400, 'FILE_TOO_LARGE', 'La firma excede el tamaño máximo permitido');
@@ -636,16 +625,11 @@ export class ExecutionService {
   public async completeOrder(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
     const order = await this.assertOrderAccess(userId, role, orderId);
 
-    if (
-      order.status !== OrderStatus.IN_PROGRESS &&
-      order.status !== OrderStatus.REQUIRES_CORRECTION
-    ) {
-      throw new AppError(
-        400,
-        'INVALID_ORDER_STATE',
-        'Solo se pueden completar órdenes en progreso',
-      );
-    }
+    assertValidOrderTransition(
+      order.status,
+      OrderStatus.COMPLETED,
+      'Solo se pueden completar órdenes en progreso',
+    );
 
     const completeness = await this.validateCompleteness(orderId);
     if (!completeness.isComplete) {
@@ -709,13 +693,11 @@ export class ExecutionService {
   ) {
     const order = await this.assertOrderAccess(userId, role, orderId);
 
-    if (order.status !== OrderStatus.ASSIGNED && order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(
-        400,
-        'INVALID_ORDER_STATE',
-        'Solo se pueden marcar como cita fallida órdenes asignadas o en progreso',
-      );
-    }
+    assertValidOrderTransition(
+      order.status,
+      OrderStatus.FAILED_APPOINTMENT,
+      'Solo se pueden marcar como cita fallida órdenes asignadas o en progreso',
+    );
 
     return domainTransaction(this.prisma, async (tx, effects) => {
       // Release equipment
@@ -757,13 +739,11 @@ export class ExecutionService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
-    if (order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.IN_PROGRESS) {
-      throw new AppError(
-        400,
-        'INVALID_ORDER_STATE',
-        'Solo se puede solicitar corrección a órdenes completadas o en progreso',
-      );
-    }
+    assertValidOrderTransition(
+      order.status,
+      OrderStatus.REQUIRES_CORRECTION,
+      'Solo se puede solicitar corrección a órdenes completadas o en progreso',
+    );
 
     return domainTransaction(this.prisma, async (tx, effects) => {
       const updated = await tx.order.update({

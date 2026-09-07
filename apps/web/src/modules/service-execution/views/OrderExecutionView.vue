@@ -517,7 +517,6 @@ onMounted(() => {
                           placeholder="Describa el detalle observado..."
                         />
                       </div>
-
                     </div>
 
                     <div v-if="order.status === 'IN_PROGRESS'" class="flex justify-end pt-2">
@@ -539,7 +538,9 @@ onMounted(() => {
                         category="BODYWORK"
                         :evidences="getUnitAllEvidences(unit.id)"
                         :min-required="3"
-                        :disabled="order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'"
+                        :disabled="
+                          order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'
+                        "
                         @updated="loadData"
                       />
                     </div>
@@ -551,7 +552,12 @@ onMounted(() => {
 
           <!-- Signature Section -->
           <SignaturePad
-            v-if="order && (order.status === 'IN_PROGRESS' || order.status === 'REQUIRES_CORRECTION' || order.signature)"
+            v-if="
+              order &&
+              (order.status === 'IN_PROGRESS' ||
+                order.status === 'REQUIRES_CORRECTION' ||
+                order.signature)
+            "
             :order-id="orderId"
             :existing-signature="order.signature"
             :disabled="order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'"

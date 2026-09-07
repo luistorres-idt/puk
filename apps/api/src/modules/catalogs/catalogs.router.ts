@@ -5,10 +5,10 @@ import type { TokenService } from '../../auth/tokens.js';
 import { validate } from '../../middleware/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { sendSuccess } from '../../shared/http.js';
-import type { GoogleSheetsCatalogService } from '../../integrations/google-sheets/google-sheets.service.js';
+import type { CatalogServicePort } from '../../integrations/ports.js';
 
 export function createCatalogsRouter(options: {
-  catalogsService: GoogleSheetsCatalogService;
+  catalogsService: CatalogServicePort;
   tokens: TokenService;
 }): Router {
   const router = Router();

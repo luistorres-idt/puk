@@ -21,7 +21,7 @@ import {
   EquipmentSelect,
   extractUnitFromEquipment,
 } from '../../external-catalogs/index.js';
-import { api } from '../../../shared/http/client.js';
+import { listActiveTechnicians, type Technician } from '../../technicians/index.js';
 import { createOrder } from '../api.js';
 import { formatServiceType } from '../formatters.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
@@ -180,14 +180,11 @@ const generalNotes = ref('');
 
 // Step 4: Technician
 const technicianId = ref<string | null>(null);
-const technicians = ref<Array<{ id: string; name: string }>>([]);
+const technicians = ref<Technician[]>([]);
 
 async function loadTechnicians() {
   try {
-    const res = await api.get('/technicians');
-    technicians.value = res.data.data.filter(
-      (t: { active?: boolean; id: string; name: string }) => t.active,
-    );
+    technicians.value = await listActiveTechnicians();
   } catch {
     // ignore technician load failure gracefully
   }

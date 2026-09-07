@@ -228,7 +228,9 @@ function statusTagType(status: string) {
                     <n-tag size="small" :type="statusTagType(order.status)">{{
                       formatOrderStatus(order.status)
                     }}</n-tag>
-                    <span class="text-xs text-slate-500 font-medium">{{ formatServiceType(order.serviceType) }}</span>
+                    <span class="text-xs text-slate-500 font-medium">{{
+                      formatServiceType(order.serviceType)
+                    }}</span>
                   </div>
                   <p class="text-sm font-semibold text-slate-800 mt-1">
                     {{ order.clientNameSnapshot }}

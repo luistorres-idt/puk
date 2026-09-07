@@ -2,8 +2,8 @@
 marp: true
 theme: default
 paginate: true
-header: "Bull Dog Solution — Manual de Usuario y Presentación Operativa"
-footer: "Versión 1.0 | Sistema de Órdenes de Servicio"
+header: 'Bull Dog Solution — Manual de Usuario y Presentación Operativa'
+footer: 'Versión 1.0 | Sistema de Órdenes de Servicio'
 style: |
   section {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -85,10 +85,12 @@ style: |
 ---
 
 # Bull Dog Solution
+
 ## Sistema de Gestión de Órdenes de Servicio
+
 ### Manual de Usuario y Guía Operativa Paso a Paso
 
-> Este documento sirve como **presentación interactiva** (compatible con Marp / Slides) y **manual de usuario vivo** para el equipo administrativo y técnico. Actualízalo conforme se integren nuevas características (*features*).
+> Este documento sirve como **presentación interactiva** (compatible con Marp / Slides) y **manual de usuario vivo** para el equipo administrativo y técnico. Actualízalo conforme se integren nuevas características (_features_).
 
 ---
 
@@ -129,10 +131,10 @@ El sistema sustituye la operativa manual y las limitaciones de AppSheet por una 
 
 El sistema maneja dos perfiles de usuario claramente delimitados:
 
-| Rol | Entorno Principal | Responsabilidades Clave |
-| :--- | :--- | :--- |
-| <span class="badge badge-admin">ADMINISTRADOR</span> | Web Desktop (Computadora) | • Crea órdenes en borrador.<br>• Consulta clientes y equipos de Sheets.<br>• Asigna y reasigna técnicos.<br>• Consulta auditoría, reportes y supervisa sincronizaciones. |
-| <span class="badge badge-tech">TÉCNICO</span> | Web Mobile / PWA (Smartphone) | • Consulta órdenes asignadas a su nombre.<br>• Inicia el servicio en la unidad vehicular.<br>• Valida IMEI/series y levanta discrepancias.<br>• Llena checklist con fotos obligatorias.<br>• Recoge firma digital del cliente y finaliza orden. |
+| Rol                                                  | Entorno Principal             | Responsabilidades Clave                                                                                                                                                                                                                         |
+| :--------------------------------------------------- | :---------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <span class="badge badge-admin">ADMINISTRADOR</span> | Web Desktop (Computadora)     | • Crea órdenes en borrador.<br>• Consulta clientes y equipos de Sheets.<br>• Asigna y reasigna técnicos.<br>• Consulta auditoría, reportes y supervisa sincronizaciones.                                                                        |
+| <span class="badge badge-tech">TÉCNICO</span>        | Web Mobile / PWA (Smartphone) | • Consulta órdenes asignadas a su nombre.<br>• Inicia el servicio en la unidad vehicular.<br>• Valida IMEI/series y levanta discrepancias.<br>• Llena checklist con fotos obligatorias.<br>• Recoge firma digital del cliente y finaliza orden. |
 
 ---
 
@@ -261,6 +263,7 @@ Al terminar los trabajos mecánicos/eléctricos, debes realizar la inspección d
 5. **Carrocería (`BODYWORK`)**
 
 ### Estados permitidos por categoría:
+
 - **`Bien` (`GOOD`)**: Todo en orden sin daños causados ni preexistentes.
 - **`Mal` (`BAD`)**: **Requiere escribir obligatoriamente una observación detallada** del daño o anomalía.
 - **`No aplica` (`NOT_APPLICABLE`)**: La unidad no cuenta con dicho componente.
@@ -362,19 +365,21 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 
 ## 11. Registro de Nuevas Funcionalidades (Changelog)
 
-> *Utiliza esta sección para registrar los cambios que se agreguen a la aplicación en fases posteriores.*
+> _Utiliza esta sección para registrar los cambios que se agreguen a la aplicación en fases posteriores._
 
-| Fecha | Versión | Tipo | Descripción del Cambio / Nueva Feature | Responsable |
-| :--- | :--- | :--- | :--- | :--- |
+| Fecha          | Versión  | Tipo        | Descripción del Cambio / Nueva Feature                                                                                | Responsable |
+| :------------- | :------- | :---------- | :-------------------------------------------------------------------------------------------------------------------- | :---------- |
 | **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets. | Equipo Core |
-| *Próximamente* | `v1.1.0` | Feature | Modo offline progresivo con persistencia local en dispositivo móvil. | Por definir |
-| *Próximamente* | `v1.2.0` | Feature | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar. | Por definir |
-| *Próximamente* | `v1.3.0` | Feature | Módulo de tarifas y cálculo de liquidación a técnicos. | Por definir |
+| _Próximamente_ | `v1.1.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                  | Por definir |
+| _Próximamente_ | `v1.2.0` | Feature     | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar.                                  | Por definir |
+| _Próximamente_ | `v1.3.0` | Feature     | Módulo de tarifas y cálculo de liquidación a técnicos.                                                                | Por definir |
 
 ---
 
 # ¿Preguntas o Soporte Técnico?
+
 Para reportar fallas en el sistema o sugerir mejoras:
+
 - **Área de Operaciones:** operaciones@bulldogsolution.com
 - **Soporte de Plataforma:** soporte-ti@bulldogsolution.com
 - **Repositorio y Documentación Técnica:** [SPECS.md](./SPECS.md) | [ERS.md](./docs/ERS.md)

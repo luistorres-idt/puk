@@ -199,9 +199,7 @@ async function handleDelete(evidenceId: string) {
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <div class="flex items-center gap-2">
-          <h4 class="text-sm font-bold text-slate-800">
-            Evidencias Fotográficas del Vehículo
-          </h4>
+          <h4 class="text-sm font-bold text-slate-800">Evidencias Fotográficas del Vehículo</h4>
           <span
             v-if="evidences.length >= minRequired"
             class="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-flex items-center gap-1"
@@ -216,7 +214,8 @@ async function handleDelete(evidenceId: string) {
           </span>
         </div>
         <p class="text-xs text-slate-500 mt-0.5">
-          Tome o suba al menos {{ minRequired }} fotografías generales de la unidad (exteriores, tablero, kilometraje, etc.)
+          Tome o suba al menos {{ minRequired }} fotografías generales de la unidad (exteriores,
+          tablero, kilometraje, etc.)
         </p>
       </div>
 
@@ -270,7 +269,9 @@ async function handleDelete(evidenceId: string) {
       class="bg-indigo-50 border border-indigo-200 p-2.5 rounded-lg flex items-center gap-2 text-xs text-indigo-700"
     >
       <NSpin size="small" />
-      <span class="font-medium">{{ uploadingStatusText || 'Procesando y subiendo fotografías...' }}</span>
+      <span class="font-medium">{{
+        uploadingStatusText || 'Procesando y subiendo fotografías...'
+      }}</span>
     </div>
 
     <!-- Status warning when photos < minRequired -->

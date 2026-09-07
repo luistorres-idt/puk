@@ -87,7 +87,6 @@ export function createApp(options: AppOptions = {}): Express {
         createOrdersRouter({
           ordersService: options.ordersService,
           ...(options.syncService !== undefined ? { syncService: options.syncService } : {}),
-          prisma: options.auth.prisma,
           tokens: options.auth.tokens,
         }),
       );

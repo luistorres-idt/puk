@@ -10,6 +10,11 @@ import { ExecutionService } from './modules/execution/index.js';
 import { S3StorageClient } from './integrations/object-storage/s3.client.js';
 import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
 import { ReportsService } from './modules/reports/index.js';
+import {
+  CircuitBreaker,
+  CircuitBreakerSheetsPort,
+  CircuitBreakerStoragePort,
+} from './resilience/index.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
@@ -46,7 +51,7 @@ const usesPlaceholderSheets =
   (environment.GOOGLE_PRIVATE_KEY.startsWith('development-only') ||
     environment.GOOGLE_SPREADSHEET_ID.startsWith('development-only'));
 
-const sheetsPort = usesPlaceholderSheets
+const rawSheetsPort = usesPlaceholderSheets
   ? new DevMockSheetsClient()
   : new GoogleSheetsClient({
       spreadsheetId: environment.GOOGLE_SPREADSHEET_ID,
@@ -56,6 +61,13 @@ const sheetsPort = usesPlaceholderSheets
       privateKey: normalizePem(environment.GOOGLE_PRIVATE_KEY),
       timeoutMs: environment.SHEETS_TIMEOUT_MS,
     });
+
+const sheetsBreaker = new CircuitBreaker({
+  name: 'google-sheets',
+  failureThreshold: environment.CIRCUIT_BREAKER_ERROR_THRESHOLD,
+  resetTimeoutMs: environment.CIRCUIT_BREAKER_RESET_TIMEOUT_MS,
+});
+const sheetsPort = new CircuitBreakerSheetsPort(rawSheetsPort, sheetsBreaker);
 
 const catalogsService = new GoogleSheetsCatalogService(
   sheetsPort,
@@ -76,7 +88,7 @@ const usesPlaceholderStorage =
   environment.NODE_ENV !== 'production' &&
   environment.S3_ACCESS_KEY_ID?.startsWith('development-only') === true;
 
-const storagePort = usesPlaceholderStorage
+const rawStoragePort = usesPlaceholderStorage
   ? new DevMockStorageClient()
   : new S3StorageClient({
       endpoint: environment.S3_ENDPOINT,
@@ -90,6 +102,13 @@ const storagePort = usesPlaceholderStorage
         : { secretAccessKey: environment.S3_SECRET_ACCESS_KEY }),
       forcePathStyle: environment.S3_FORCE_PATH_STYLE,
     });
+
+const storageBreaker = new CircuitBreaker({
+  name: 's3-storage',
+  failureThreshold: environment.CIRCUIT_BREAKER_ERROR_THRESHOLD,
+  resetTimeoutMs: environment.CIRCUIT_BREAKER_RESET_TIMEOUT_MS,
+});
+const storagePort = new CircuitBreakerStoragePort(rawStoragePort, storageBreaker);
 
 const reportsService = new ReportsService(
   prisma,

@@ -3,19 +3,10 @@ import { useQuery } from '@tanstack/vue-query';
 import { NAlert, NCard, NEmpty, NSpin, NTag } from 'naive-ui';
 
 import AppLayout from '@/shared/layouts/AppLayout.vue';
-import { api } from '@/shared/http/client';
-
-interface Technician {
-  active: boolean;
-  city: string | null;
-  id: string;
-  name: string;
-  phone: string | null;
-  workshop: string | null;
-}
+import { listTechnicians } from '../api.js';
 
 const technicians = useQuery({
-  queryFn: async () => (await api.get<{ data: Technician[] }>('/technicians')).data.data,
+  queryFn: listTechnicians,
   queryKey: ['technicians'],
 });
 </script>
