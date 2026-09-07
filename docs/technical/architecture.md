@@ -75,7 +75,8 @@ flowchart TD
 - Los routers autentican, autorizan, validan y traducen HTTP; no deben contener reglas de negocio.
 - Los servicios validan estados, propiedad, concurrencia y efectos del dominio.
 - Prisma implementa persistencia y transacciones.
-- Los puertos `SheetsPort` y `ObjectStoragePort` aíslan SDKs y permiten adaptadores simulados.
+- Los puertos aíslan SDKs y siguen segregación de interfaces (ISP): `SheetsPort`, `ObjectStoragePort`, `EquipmentCatalogPort`, `ClientCatalogPort`, `CatalogServicePort` y `ReportGeneratorPort`.
+- La resiliencia de integración aplica el patrón Decorator con `CircuitBreaker` configurable y telemetría hacia Prometheus.
 - `packages/contracts` comparte esquemas Valibot y tipos de entrada entre API y web.
 
 ## Estructura del monorepo
@@ -102,7 +103,10 @@ docs/                    requisitos, decisiones y documentación técnica
 - Catálogos externos con snapshots locales dentro de la orden.
 - Escrituras a Sheets mediante outbox persistente y reintentos.
 - Carga directa de evidencias a S3 usando URLs prefirmadas.
-- Reportes PDF generados en segundo plano y versionados.
+- Reportes PDF generados en segundo plano y versionados mediante abstracción `ReportGeneratorPort`.
+- Ciclo de vida y transiciones de orden gobernados por una máquina de estados de dominio explícita (`order-state-machine`).
+- Validación de cierre y completitud técnica desacoplada mediante patrón de especificación pura (`order-completeness`).
+- Tolerancia a fallos en adaptadores externos (Sheets y S3) protegida por Circuit Breaker con estados CLOSED, OPEN y HALF-OPEN.
 - JWT de acceso en memoria del navegador; refresh token en cookie HTTP-only.
 - TanStack Query para estado remoto; Pinia se limita a sesión y estado global de UI.
 - Mocks de Sheets, almacenamiento y claves JWT únicamente en desarrollo con valores `development-only`.

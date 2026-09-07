@@ -37,6 +37,8 @@ flowchart LR
 - TanStack Query mantiene datos remotos, caché, polling e invalidación.
 - Pinia conserva usuario, access token en memoria e inicialización de sesión.
 - Axios adjunta el access token y coordina un único refresh ante respuestas `401`.
+- Los módulos de frontend (`orders`, `service-execution`, `technicians`) encapsulan sus peticiones en archivos `api.ts` dedicados que comparten la interfaz `ApiResponse<T>`.
+- El manejo de errores de interfaz utiliza la utilidad `extractApiErrorMessage` (`@/shared/http/client.ts`) para presentar transparentemente al usuario los mensajes de error originados en el backend en lugar de códigos genéricos de Axios.
 - Formularios y modales usan estado local del componente.
 - Tras mutaciones se invalidan órdenes, auditoría, sincronización o reporte según corresponda.
 
@@ -69,7 +71,7 @@ El asistente (`/orders/new`) guía al administrador en un flujo estructurado de 
 
 ## Evidencias y reportes
 
-El navegador comprime fotografías a JPEG antes de solicitar/subir una URL prefirmada. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.
+El navegador comprime fotografías a JPEG antes de solicitar/subir una URL prefirmada, con rechazo explícito de promesas ante imágenes no decodificables para evitar bloqueos en la interfaz. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.
 
 ## PWA
 

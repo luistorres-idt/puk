@@ -34,7 +34,7 @@
 
 - Credenciales de Google y S3 solo en servidor.
 - Puertos abstraen integraciones externas.
-- Timeouts, reintentos y circuit breaker para Sheets.
+- Timeouts, reintentos y circuit breaker (CLOSED/OPEN/HALF_OPEN) con métricas Prometheus para adaptadores de Sheets y S3.
 - Outbox e idempotencia para efectos externos.
 - Concurrencia optimista en órdenes y restricción de asignación activa.
 - Auditoría de acciones críticas con snapshots antes/después cuando aplica.
@@ -55,14 +55,14 @@ Las capacidades declaradas son `users:manage`, `technicians:manage`, `orders:man
 
 ## Estrategia de pruebas
 
-| Nivel           | Herramientas                  | Cobertura principal                                                  |
-| --------------- | ----------------------------- | -------------------------------------------------------------------- |
-| Unitario        | Vitest                        | tokens, contraseñas, validación, estados, generador PDF, resiliencia |
-| Integración API | Supertest + Vitest            | autenticación, catálogos, permisos, formato HTTP                     |
-| Integración DB  | Prisma + PostgreSQL de prueba | restricciones, concurrencia, unicidad                                |
-| Contrato        | OpenAPI + pruebas             | health, respuestas y referencias                                     |
-| E2E             | Playwright                    | flujos de administrador y técnico                                    |
-| Build estático  | TypeScript/Vue TSC/Vite       | compatibilidad estricta y bundles                                    |
+| Nivel           | Herramientas                  | Cobertura principal                                                                                               |
+| --------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Unitario        | Vitest                        | tokens, contraseñas, validación, máquina de estados, especificación de completitud, PDF, resiliencia, cliente web |
+| Integración API | Supertest + Vitest            | autenticación, catálogos, administración, permisos, formato HTTP                                                  |
+| Integración DB  | Prisma + PostgreSQL de prueba | restricciones, concurrencia, unicidad                                                                             |
+| Contrato        | OpenAPI + pruebas             | health, respuestas y referencias                                                                                  |
+| E2E             | Playwright                    | flujos de administrador y técnico                                                                                 |
+| Build estático  | TypeScript/Vue TSC/Vite       | compatibilidad estricta y bundles                                                                                 |
 
 ## Pipeline mínimo
 
