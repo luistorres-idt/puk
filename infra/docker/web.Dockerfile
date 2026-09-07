@@ -23,8 +23,9 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 COPY apps/web apps/web
 COPY packages/typescript-config packages/typescript-config
+COPY packages/contracts packages/contracts
 
-RUN pnpm --filter @puk/web build
+RUN pnpm --filter @puk/contracts build && pnpm --filter @puk/web build
 
 FROM nginx:1.28-alpine AS runtime
 

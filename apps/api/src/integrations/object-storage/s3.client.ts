@@ -12,8 +12,8 @@ export interface S3ClientConfig {
   endpoint: string;
   region: string;
   bucket: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   forcePathStyle?: boolean;
 }
 
@@ -22,15 +22,23 @@ export class S3StorageClient implements ObjectStoragePort {
   private readonly bucket: string;
 
   public constructor(config: S3ClientConfig) {
+    if ((config.accessKeyId === undefined) !== (config.secretAccessKey === undefined)) {
+      throw new Error('S3 access key ID and secret access key must be configured together.');
+    }
+
     this.bucket = config.bucket;
     this.client = new S3Client({
       endpoint: config.endpoint,
       region: config.region,
       forcePathStyle: config.forcePathStyle ?? true,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
+      ...(config.accessKeyId === undefined
+        ? {}
+        : {
+            credentials: {
+              accessKeyId: config.accessKeyId,
+              secretAccessKey: config.secretAccessKey!,
+            },
+          }),
     });
   }
 

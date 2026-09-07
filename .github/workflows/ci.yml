@@ -65,6 +65,9 @@ jobs:
       - name: Build applications
         run: pnpm build
 
+      - name: Synthesize AWS infrastructure
+        run: pnpm infra:synth
+
       - name: Security audit
         run: pnpm audit
 

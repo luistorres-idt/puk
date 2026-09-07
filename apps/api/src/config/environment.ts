@@ -20,9 +20,11 @@ const booleanFromString = v.pipe(
   v.transform((value) => value === 'true'),
 );
 
-const optionalString = v.pipe(
-  v.string(),
-  v.transform((value) => (value.length === 0 ? undefined : value)),
+const optionalString = v.optional(
+  v.pipe(
+    v.string(),
+    v.transform((value) => (value.trim().length === 0 ? undefined : value)),
+  ),
 );
 
 export const EnvironmentSchema = v.object({
@@ -57,12 +59,12 @@ export const EnvironmentSchema = v.object({
   OUTBOX_POLL_INTERVAL_MS: integerFromString(100, 300_000),
   PORT: integerFromString(1, 65_535),
   PRESIGNED_URL_TTL_SECONDS: integerFromString(30, 3_600),
-  S3_ACCESS_KEY_ID: v.pipe(v.string(), v.nonEmpty()),
+  S3_ACCESS_KEY_ID: optionalString,
   S3_BUCKET: v.pipe(v.string(), v.nonEmpty()),
   S3_ENDPOINT: v.pipe(v.string(), v.url()),
   S3_FORCE_PATH_STYLE: booleanFromString,
   S3_REGION: v.pipe(v.string(), v.nonEmpty()),
-  S3_SECRET_ACCESS_KEY: v.pipe(v.string(), v.nonEmpty()),
+  S3_SECRET_ACCESS_KEY: optionalString,
   SHEETS_RETRY_LIMIT: integerFromString(0, 10),
   SHEETS_TIMEOUT_MS: integerFromString(100, 120_000),
   TRUST_PROXY: booleanFromString,
@@ -81,7 +83,21 @@ export class EnvironmentValidationError extends Error {
 }
 
 export function parseEnvironment(input: Record<string, string | undefined>): RuntimeEnvironment {
-  const result = v.safeParse(EnvironmentSchema, input);
+  const databaseUrl =
+    input['DATABASE_URL'] ??
+    buildDatabaseUrl({
+      database: input['PUK_DATABASE_NAME'],
+      host: input['PUK_DATABASE_HOST'],
+      password: input['PUK_DATABASE_PASSWORD'],
+      port: input['PUK_DATABASE_PORT'],
+      sslMode: input['PUK_DATABASE_SSL_MODE'],
+      user: input['PUK_DATABASE_USER'],
+    });
+  const result = v.safeParse(EnvironmentSchema, {
+    ...input,
+    DATABASE_URL: databaseUrl,
+    DIRECT_URL: input['DIRECT_URL'] ?? databaseUrl,
+  });
 
   if (result.success) {
     return result.output;
@@ -93,6 +109,32 @@ export function parseEnvironment(input: Record<string, string | undefined>): Run
   });
 
   throw new EnvironmentValidationError([...new Set(invalidFields)].sort());
+}
+
+export function buildDatabaseUrl(input: {
+  database: string | undefined;
+  host: string | undefined;
+  password: string | undefined;
+  port: string | undefined;
+  sslMode?: string | undefined;
+  user: string | undefined;
+}): string | undefined {
+  if (
+    [input.database, input.host, input.password, input.port, input.user].some(
+      (value) => value === undefined || value.length === 0,
+    )
+  ) {
+    return undefined;
+  }
+
+  const sslMode =
+    input.sslMode !== undefined && input.sslMode.trim().length > 0
+      ? input.sslMode
+      : input.host?.includes('rds.amazonaws.com')
+        ? 'no-verify'
+        : undefined;
+  const sslQuery = sslMode ? `&sslmode=${encodeURIComponent(sslMode)}` : '';
+  return `postgresql://${encodeURIComponent(input.user!)}:${encodeURIComponent(input.password!)}@${input.host}:${input.port}/${encodeURIComponent(input.database!)}?schema=public${sslQuery}`;
 }
 
 export function loadEnvironment(): RuntimeEnvironment {

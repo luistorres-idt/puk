@@ -7,5 +7,5 @@
 **/coverage
 **/playwright-report
 **/test-results
+**/cdk.out
 *.log
-

@@ -15,6 +15,12 @@
     "docs:validate": "pnpm --filter @puk/api docs:validate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "infra:bootstrap": "pnpm --filter @puk/infra bootstrap",
+    "infra:configure": "node infra/scripts/configure-staging-secrets.mjs",
+    "infra:deploy": "pnpm --filter @puk/infra run deploy",
+    "infra:diff": "pnpm --filter @puk/infra diff",
+    "infra:foundation": "pnpm --filter @puk/infra run deploy:foundation",
+    "infra:synth": "pnpm --filter @puk/infra synth",
     "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -22,6 +28,8 @@
     "prisma:validate": "prisma validate",
     "test": "pnpm --filter @puk/contracts build && pnpm -r --if-present test",
     "test:e2e": "pnpm --filter @puk/web test:e2e",
+    "test:e2e:mock": "bash infra/scripts/e2e-test.sh --mock",
+    "test:e2e:opaque": "bash infra/scripts/e2e-test.sh",
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "devDependencies": {

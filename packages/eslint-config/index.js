@@ -114,6 +114,7 @@ export default typescriptEslint.config(
   {
     ignores: [
       '**/coverage/**',
+      '**/cdk.out/**',
       '**/dist/**',
       '**/node_modules/**',
       '**/playwright-report/**',
@@ -150,9 +151,20 @@ export default typescriptEslint.config(
     },
   },
   {
-    files: ['*.config.{js,mjs,ts}', 'apps/api/**/*.ts', 'packages/**/*.{js,ts}'],
+    files: [
+      '*.config.{js,mjs,ts}',
+      'apps/api/**/*.ts',
+      'infra/**/*.{js,mjs,ts}',
+      'packages/**/*.{js,ts}',
+    ],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  {
+    files: ['infra/scripts/**/*.{js,mjs}'],
+    rules: {
+      'no-console': 'off',
     },
   },
   {

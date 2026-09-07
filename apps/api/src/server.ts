@@ -13,7 +13,13 @@ import { ReportsService } from './modules/reports/index.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
-const normalizePem = (value: string) => value.replaceAll('\\n', '\n');
+const normalizePem = (value: string) => {
+  let v = value.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1);
+  }
+  return v.replaceAll('\\n', '\n').trim();
+};
 const tokenMetadata = {
   accessTtl: environment.JWT_ACCESS_TTL,
   audience: environment.JWT_AUDIENCE,
@@ -47,7 +53,7 @@ const sheetsPort = usesPlaceholderSheets
       clientsSheetName: environment.GOOGLE_CLIENTS_SHEET,
       equipmentSheetName: environment.GOOGLE_EQUIPMENT_SHEET,
       clientEmail: environment.GOOGLE_CLIENT_EMAIL,
-      privateKey: environment.GOOGLE_PRIVATE_KEY,
+      privateKey: normalizePem(environment.GOOGLE_PRIVATE_KEY),
       timeoutMs: environment.SHEETS_TIMEOUT_MS,
     });
 
@@ -68,7 +74,7 @@ syncInterval.unref();
 
 const usesPlaceholderStorage =
   environment.NODE_ENV !== 'production' &&
-  environment.S3_ACCESS_KEY_ID.startsWith('development-only');
+  environment.S3_ACCESS_KEY_ID?.startsWith('development-only') === true;
 
 const storagePort = usesPlaceholderStorage
   ? new DevMockStorageClient()
@@ -76,8 +82,12 @@ const storagePort = usesPlaceholderStorage
       endpoint: environment.S3_ENDPOINT,
       region: environment.S3_REGION,
       bucket: environment.S3_BUCKET,
-      accessKeyId: environment.S3_ACCESS_KEY_ID,
-      secretAccessKey: environment.S3_SECRET_ACCESS_KEY,
+      ...(environment.S3_ACCESS_KEY_ID === undefined
+        ? {}
+        : { accessKeyId: environment.S3_ACCESS_KEY_ID }),
+      ...(environment.S3_SECRET_ACCESS_KEY === undefined
+        ? {}
+        : { secretAccessKey: environment.S3_SECRET_ACCESS_KEY }),
       forcePathStyle: environment.S3_FORCE_PATH_STYLE,
     });
 

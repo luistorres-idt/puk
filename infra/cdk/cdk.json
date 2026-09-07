@@ -1,0 +1,7 @@
+{
+  "app": "node --import tsx bin/puk.ts",
+  "context": {
+    "@aws-cdk/core:defaultCrossStackReferences": "strong",
+    "availability-zones:account=075566976700:region=us-east-2": ["us-east-2a", "us-east-2b"]
+  }
+}

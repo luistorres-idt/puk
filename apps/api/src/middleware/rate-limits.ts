@@ -6,6 +6,7 @@ function limiter(limit: number, windowMs: number) {
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     windowMs,
+    validate: { trustProxy: false },
   });
 }
 

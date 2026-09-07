@@ -1,0 +1,61 @@
+name: Deploy Staging
+
+on:
+  workflow_run:
+    workflows: ['CI & Quality Pipeline']
+    branches: [main]
+    types: [completed]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && vars.AWS_STAGING_READY == 'true'
+    name: Deploy AWS staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout validated revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Authenticate to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::075566976700:role/puk-staging-github-deploy
+
+      - name: Deploy CDK stacks
+        run: pnpm infra:deploy
+
+      - name: Read staging URL
+        id: staging
+        run: |
+          url=$(aws cloudformation describe-stacks --stack-name PukStagingApplication --query "Stacks[0].Outputs[?OutputKey=='StagingUrl'].OutputValue" --output text)
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Run smoke tests
+        env:
+          TARGET_URL: ${{ steps.staging.outputs.url }}
+        run: ./infra/scripts/smoke-test.sh
