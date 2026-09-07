@@ -131,7 +131,11 @@ export class PukStagingFoundationStack extends Stack {
       assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-          'token.actions.githubusercontent.com:sub': 'repo:luistorres-idt/puk:ref:refs/heads/main',
+          // GitHub uses immutable OIDC subjects for this repository.
+          // Keep the owner and repository IDs in the trust policy so renames
+          // or namespace recycling cannot grant access to another repository.
+          'token.actions.githubusercontent.com:sub':
+            'repo:luistorres-idt@231313402/puk@1357330027:ref:refs/heads/main',
         },
       }),
       description: 'CDK deployments from the puk main branch',
