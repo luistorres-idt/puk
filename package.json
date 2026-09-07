@@ -30,7 +30,7 @@
     "test:e2e": "pnpm --filter @puk/web test:e2e",
     "test:e2e:mock": "bash infra/scripts/e2e-test.sh --mock",
     "test:e2e:opaque": "bash infra/scripts/e2e-test.sh",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm --filter @puk/contracts build && pnpm -r --if-present typecheck"
   },
   "devDependencies": {
     "@puk/eslint-config": "workspace:*",
