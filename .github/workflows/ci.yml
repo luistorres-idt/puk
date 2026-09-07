@@ -46,6 +46,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prisma validation & client generation
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/puk?schema=public
         run: |
           pnpm prisma:validate
           pnpm prisma:generate
