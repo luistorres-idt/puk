@@ -2,7 +2,7 @@
 
 **Proyecto:** PUK — Sistema de órdenes de servicio de Bull Dog Solution
 
-**Última actualización:** 2026-09-02
+**Última actualización:** 2026-09-07
 
 **Alcance:** estado implementado en la rama actual
 
@@ -29,6 +29,7 @@ Este directorio describe la arquitectura y operación técnica del sistema. A di
 | Composición de servicios | `apps/api/src/server.ts` y `apps/api/src/app.ts` |
 | Rutas de interfaz        | `apps/web/src/router/` y módulos web             |
 | Infraestructura local    | `docker-compose.yml` e `infra/docker/`           |
+| Infraestructura AWS      | `infra/cdk/` y `.github/workflows/`              |
 | Reglas funcionales       | `SPECS.md`, `docs/ERS.md` y servicios de dominio |
 
 Cuando la documentación y el comportamiento diverjan, el esquema, las migraciones, los contratos y el código ejecutable tienen precedencia. La documentación debe actualizarse en el mismo cambio que modifique esas superficies.

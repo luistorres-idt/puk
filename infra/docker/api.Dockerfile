@@ -20,15 +20,20 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/eslint-config/package.json packages/eslint-config/package.json
 COPY packages/typescript-config/package.json packages/typescript-config/package.json
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter @puk/api...
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+  pnpm install --frozen-lockfile --filter @puk/root --filter @puk/api...
 
 FROM dependencies AS build
 
 COPY apps/api apps/api
 COPY packages/contracts packages/contracts
 COPY packages/typescript-config packages/typescript-config
+COPY prisma prisma
+COPY prisma.config.ts prisma.config.ts
 
-RUN pnpm --filter @puk/contracts build \
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+  DATABASE_URL=postgresql://build:build@localhost:5432/build pnpm prisma:generate \
+  && pnpm --filter @puk/contracts build \
   && pnpm --filter @puk/api build \
   && pnpm --filter @puk/api --prod deploy /runtime
 

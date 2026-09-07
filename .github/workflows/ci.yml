@@ -40,12 +40,14 @@ jobs:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${ runner.os }}-pnpm-store-
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Prisma validation & client generation
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/puk?schema=public
         run: |
           pnpm prisma:validate
           pnpm prisma:generate
@@ -64,6 +66,9 @@ jobs:
 
       - name: Build applications
         run: pnpm build
+
+      - name: Synthesize AWS infrastructure
+        run: pnpm infra:synth
 
       - name: Security audit
         run: pnpm audit

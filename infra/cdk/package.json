@@ -1,0 +1,23 @@
+{
+  "name": "@puk/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bootstrap": "cdk bootstrap aws://075566976700/us-east-2 --app 'node --import tsx bin/puk.ts'",
+    "cdk:app": "node --import tsx bin/puk.ts",
+    "deploy": "cdk deploy --all --app 'node --import tsx bin/puk.ts' --require-approval never",
+    "deploy:foundation": "cdk deploy PukStagingFoundation --app 'node --import tsx bin/puk.ts' --require-approval never",
+    "diff": "cdk diff --all --app 'node --import tsx bin/puk.ts'",
+    "synth": "cdk synth --app 'node --import tsx bin/puk.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "aws-cdk": "^2.1029.0",
+    "aws-cdk-lib": "^2.267.0",
+    "constructs": "^10.4.3",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EnvironmentValidationError, parseEnvironment } from './environment.js';
+import { EnvironmentValidationError, buildDatabaseUrl, parseEnvironment } from './environment.js';
 
 const validEnvironment = {
   API_ORIGIN: 'http://localhost:3000',
@@ -63,6 +63,187 @@ describe('parseEnvironment', () => {
 
     expect(() => parseEnvironment(invalidEnvironment)).toThrowError(
       new EnvironmentValidationError(['GOOGLE_PRIVATE_KEY', 'PORT']),
+    );
+  });
+
+  it('builds the database URL from ECS/RDS secret fields', () => {
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      DATABASE_URL: undefined,
+      DIRECT_URL: undefined,
+      PUK_DATABASE_HOST: 'database.internal',
+      PUK_DATABASE_NAME: 'puk',
+      PUK_DATABASE_PASSWORD: 'secret with spaces',
+      PUK_DATABASE_PORT: '5432',
+      PUK_DATABASE_USER: 'puk',
+    });
+
+    expect(environment.DATABASE_URL).toBe(
+      'postgresql://puk:secret%20with%20spaces@database.internal:5432/puk?schema=public',
+    );
+    expect(environment.DIRECT_URL).toBe(environment.DATABASE_URL);
+  });
+
+  it('builds the database URL with sslmode when PUK_DATABASE_SSL_MODE is set', () => {
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      DATABASE_URL: undefined,
+      DIRECT_URL: undefined,
+      PUK_DATABASE_HOST: 'database.internal',
+      PUK_DATABASE_NAME: 'puk',
+      PUK_DATABASE_PASSWORD: 'secret with spaces',
+      PUK_DATABASE_PORT: '5432',
+      PUK_DATABASE_SSL_MODE: 'no-verify',
+      PUK_DATABASE_USER: 'puk',
+    });
+
+    expect(environment.DATABASE_URL).toBe(
+      'postgresql://puk:secret%20with%20spaces@database.internal:5432/puk?schema=public&sslmode=no-verify',
+    );
+    expect(environment.DIRECT_URL).toBe(environment.DATABASE_URL);
+  });
+
+  it('allows omitting S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, and COOKIE_DOMAIN for IAM role authentication in ECS', () => {
+    const envWithoutKeys: Record<string, string | undefined> = { ...validEnvironment };
+    delete envWithoutKeys.COOKIE_DOMAIN;
+    delete envWithoutKeys.S3_ACCESS_KEY_ID;
+    delete envWithoutKeys.S3_SECRET_ACCESS_KEY;
+
+    const environment = parseEnvironment(envWithoutKeys);
+
+    expect(environment.S3_ACCESS_KEY_ID).toBeUndefined();
+    expect(environment.S3_SECRET_ACCESS_KEY).toBeUndefined();
+    expect(environment.COOKIE_DOMAIN).toBeUndefined();
+  });
+
+  it('normalizes empty and whitespace-only optional strings to undefined', () => {
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      COOKIE_DOMAIN: '   ',
+      S3_ACCESS_KEY_ID: '',
+      S3_SECRET_ACCESS_KEY: '  ',
+    });
+
+    expect(environment.COOKIE_DOMAIN).toBeUndefined();
+    expect(environment.S3_ACCESS_KEY_ID).toBeUndefined();
+    expect(environment.S3_SECRET_ACCESS_KEY).toBeUndefined();
+  });
+
+  it('defaults to sslmode=no-verify when connecting to an AWS RDS host without explicit sslMode', () => {
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      DATABASE_URL: undefined,
+      DIRECT_URL: undefined,
+      PUK_DATABASE_HOST: 'pukstagingfoundation-database.cxm0k6co4897.us-east-2.rds.amazonaws.com',
+      PUK_DATABASE_NAME: 'puk',
+      PUK_DATABASE_PASSWORD: 'secretpassword',
+      PUK_DATABASE_PORT: '5432',
+      PUK_DATABASE_SSL_MODE: undefined,
+      PUK_DATABASE_USER: 'puk',
+    });
+
+    expect(environment.DATABASE_URL).toBe(
+      'postgresql://puk:secretpassword@pukstagingfoundation-database.cxm0k6co4897.us-east-2.rds.amazonaws.com:5432/puk?schema=public&sslmode=no-verify',
+    );
+    expect(environment.DIRECT_URL).toBe(environment.DATABASE_URL);
+  });
+
+  it('respects explicit PUK_DATABASE_SSL_MODE even on AWS RDS host', () => {
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      DATABASE_URL: undefined,
+      DIRECT_URL: undefined,
+      PUK_DATABASE_HOST: 'pukstagingfoundation-database.cxm0k6co4897.us-east-2.rds.amazonaws.com',
+      PUK_DATABASE_NAME: 'puk',
+      PUK_DATABASE_PASSWORD: 'secretpassword',
+      PUK_DATABASE_PORT: '5432',
+      PUK_DATABASE_SSL_MODE: 'require',
+      PUK_DATABASE_USER: 'puk',
+    });
+
+    expect(environment.DATABASE_URL).toBe(
+      'postgresql://puk:secretpassword@pukstagingfoundation-database.cxm0k6co4897.us-east-2.rds.amazonaws.com:5432/puk?schema=public&sslmode=require',
+    );
+    expect(environment.DIRECT_URL).toBe(environment.DATABASE_URL);
+  });
+});
+
+describe('buildDatabaseUrl', () => {
+  it('returns undefined when any required parameter is missing or empty', () => {
+    expect(
+      buildDatabaseUrl({
+        database: 'puk',
+        host: undefined,
+        password: 'pass',
+        port: '5432',
+        user: 'puk',
+      }),
+    ).toBeUndefined();
+
+    expect(
+      buildDatabaseUrl({
+        database: '',
+        host: 'localhost',
+        password: 'pass',
+        port: '5432',
+        user: 'puk',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('defaults sslmode to no-verify for AWS RDS endpoints when sslMode is not set', () => {
+    const url = buildDatabaseUrl({
+      database: 'puk',
+      host: 'pukstagingfoundation-databaseb269d8bb.cxm0k6co4897.us-east-2.rds.amazonaws.com',
+      password: 'secret password',
+      port: '5432',
+      user: 'puk',
+    });
+
+    expect(url).toBe(
+      'postgresql://puk:secret%20password@pukstagingfoundation-databaseb269d8bb.cxm0k6co4897.us-east-2.rds.amazonaws.com:5432/puk?schema=public&sslmode=no-verify',
+    );
+  });
+
+  it('preserves explicit sslMode for AWS RDS endpoints', () => {
+    const url = buildDatabaseUrl({
+      database: 'puk',
+      host: 'pukstagingfoundation-databaseb269d8bb.cxm0k6co4897.us-east-2.rds.amazonaws.com',
+      password: 'pass',
+      port: '5432',
+      sslMode: 'require',
+      user: 'puk',
+    });
+
+    expect(url).toBe(
+      'postgresql://puk:pass@pukstagingfoundation-databaseb269d8bb.cxm0k6co4897.us-east-2.rds.amazonaws.com:5432/puk?schema=public&sslmode=require',
+    );
+  });
+
+  it('does not include sslmode for non-RDS endpoints when sslMode is not set', () => {
+    const url = buildDatabaseUrl({
+      database: 'puk',
+      host: 'database.internal',
+      password: 'pass',
+      port: '5432',
+      user: 'puk',
+    });
+
+    expect(url).toBe('postgresql://puk:pass@database.internal:5432/puk?schema=public');
+  });
+
+  it('includes sslmode for non-RDS endpoints when explicitly specified', () => {
+    const url = buildDatabaseUrl({
+      database: 'puk',
+      host: 'database.internal',
+      password: 'pass',
+      port: '5432',
+      sslMode: 'prefer',
+      user: 'puk',
+    });
+
+    expect(url).toBe(
+      'postgresql://puk:pass@database.internal:5432/puk?schema=public&sslmode=prefer',
     );
   });
 });

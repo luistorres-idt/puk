@@ -48,7 +48,7 @@ flowchart TB
     Domain --> Google[Google Sheets]
 ```
 
-En Docker Compose, Nginx sirve el SPA y envía `/api` al contenedor de API. PostgreSQL y MinIO usan volúmenes persistentes. `minio-init` crea el bucket y bloquea el acceso anónimo.
+En AWS, Nginx y Express viven en la misma tarea Fargate y Nginx puede alcanzar la API en `127.0.0.1:3000`. En Docker Compose viven en contenedores distintos; PostgreSQL y MinIO usan volúmenes persistentes y `minio-init` crea el bucket y bloquea el acceso anónimo. La topología detallada y la divergencia conocida del proxy local están documentadas en [Infraestructura y operación](./infrastructure-and-operations.md).
 
 ## Capas lógicas
 
@@ -90,6 +90,9 @@ packages/
 └── typescript-config/   configuraciones TS compartidas
 prisma/                  esquema, migraciones y seed
 infra/docker/            imágenes de API/web y Nginx
+infra/cdk/               stacks de staging en AWS
+infra/scripts/           migración, respaldo, restore, smoke y E2E
+.github/workflows/       CI y despliegue continuo de staging
 docs/                    requisitos, decisiones y documentación técnica
 ```
 
@@ -103,3 +106,4 @@ docs/                    requisitos, decisiones y documentación técnica
 - JWT de acceso en memoria del navegador; refresh token en cookie HTTP-only.
 - TanStack Query para estado remoto; Pinia se limita a sesión y estado global de UI.
 - Mocks de Sheets, almacenamiento y claves JWT únicamente en desarrollo con valores `development-only`.
+- Staging definido como infraestructura inmutable en dos stacks CDK: foundation para estado/red y application para cómputo/entrega.

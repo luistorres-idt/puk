@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - infra/cdk
   - packages/*
 
 allowBuilds:
@@ -17,3 +18,5 @@ injectWorkspacePackages: true
 overrides:
   deepmerge-ts: '>=8.0.0'
   mysql2: '>=3.23.1'
+
+forceLegacyDeploy: true
