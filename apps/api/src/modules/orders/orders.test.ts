@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { OrderServiceTypeSchema, type ExternalEquipment } from '@puk/contracts';
 import { OrdersService } from './orders.service.js';
 import { SyncService } from './sync.service.js';
 import { GoogleSheetsCatalogService } from '../../integrations/google-sheets/google-sheets.service.js';
@@ -41,6 +42,12 @@ class MockSheetsPort implements SheetsPort {
     return list.find((e) => e.externalId === identity.externalId) ?? null;
   }
   public async updateAssignment(): Promise<void> {}
+  public async listTechniciansDirectory(): Promise<readonly (readonly string[])[]> {
+    return [];
+  }
+  public async syncTechnicalReportRow(): Promise<{ row: number; created: boolean }> {
+    return { row: 2, created: true };
+  }
 }
 
 interface MockDatabase {
@@ -169,10 +176,11 @@ describe('OrdersService & SyncService', () => {
 
     ordersService = new OrdersService(mockPrisma as unknown as PrismaClient, catalogService);
     syncService = new SyncService(mockPrisma as unknown as PrismaClient, sheetsPort);
+    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
   });
 
   it('creates an order in DRAFT status with folio and version 1', async () => {
-    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1' });
+    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
 
     const result = await ordersService.createOrder('user-admin-1', {
       clientSheetId: 'CLI-1',
@@ -186,10 +194,11 @@ describe('OrdersService & SyncService', () => {
     expect(result.status).toBe(OrderStatus.DRAFT);
     expect(result.folio).toMatch(/^OS-/);
     expect(result.version).toBe(1);
+    expect(result.technicianId).toBe('tech-1');
   });
 
   it('creates an order with units and equipment atomically', async () => {
-    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1' });
+    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
     mockPrisma.orderEquipment.findFirst.mockResolvedValue(null);
 
     const result = await ordersService.createOrder('user-admin-1', {
@@ -226,6 +235,7 @@ describe('OrdersService & SyncService', () => {
         clientNameSnapshot: 'Transportes Bull Dog',
         serviceType: 'INSTALLATION',
         scheduledAt: new Date().toISOString(),
+        technicianId: 'tech-1',
         units: [
           {
             label: 'Eco-101',
@@ -257,6 +267,7 @@ describe('OrdersService & SyncService', () => {
         clientNameSnapshot: 'Transportes Bull Dog',
         serviceType: 'INSTALLATION',
         scheduledAt: new Date().toISOString(),
+        technicianId: 'tech-1',
         units: [
           {
             label: 'Eco-101',
@@ -279,6 +290,7 @@ describe('OrdersService & SyncService', () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
       status: OrderStatus.DRAFT,
+      serviceType: 'INSTALLATION',
     });
     mockPrisma.orderUnit.findUnique.mockResolvedValue({
       id: 'existing-unit',
@@ -301,6 +313,7 @@ describe('OrdersService & SyncService', () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
       status: OrderStatus.DRAFT,
+      serviceType: 'INSTALLATION',
     });
     mockPrisma.orderUnit.findUnique.mockResolvedValue({
       id: 'unit-1',
@@ -325,6 +338,7 @@ describe('OrdersService & SyncService', () => {
     const orderData = {
       id: 'order-1',
       status: OrderStatus.DRAFT,
+      serviceType: 'INSTALLATION',
       technicianId: 'tech-1',
       clientNameSnapshot: 'Transportes Bull Dog',
       version: 1,
@@ -387,6 +401,7 @@ describe('OrdersService & SyncService', () => {
       status: OrderStatus.DRAFT,
       technicianId: 'tech-1',
       clientSheetId: 'CLI-1',
+      serviceType: 'INSTALLATION',
       clientNameSnapshot: 'Transportes Bull Dog',
       version: 1,
       units: [
@@ -449,6 +464,7 @@ describe('OrdersService & SyncService', () => {
       status: OrderStatus.DRAFT,
       technicianId: 'tech-1',
       clientSheetId: 'CLI-1',
+      serviceType: 'INSTALLATION',
       clientNameSnapshot: 'Transportes Bull Dog',
       version: 1,
       units: [
@@ -512,5 +528,286 @@ describe('OrdersService & SyncService', () => {
         }),
       }),
     );
+  });
+
+  it('processes SHEET_TECHNICAL_REPORT operations and calls syncTechnicalReportRow via SyncService', async () => {
+    const reportSpy = vi.spyOn(sheetsPort, 'syncTechnicalReportRow');
+    mockPrisma.sheetSyncOperation.findMany.mockResolvedValue([
+      {
+        id: 'op-report-1',
+        operationType: 'SHEET_TECHNICAL_REPORT',
+        status: SyncStatus.PENDING,
+        attempts: 0,
+        payload: {
+          folio: 'OS-001',
+          sem: '37',
+          tecnico: 'Juan Perez',
+          economico: 'ECO-01',
+          serie: 'SN-01',
+          imeiId: '861234567890123',
+          cliente: 'Transportes Bull Dog',
+          fecha: '2026-09-09',
+          servicio: 'Instalación',
+          costo: '700.00',
+          viaticos: '350.00',
+          total: '1050.00',
+          notas: '',
+        },
+      },
+    ]);
+
+    const processed = await syncService.processPendingOperations();
+    expect(processed).toBe(1);
+    expect(reportSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        folio: 'OS-001',
+        tecnico: 'Juan Perez',
+        total: '1050.00',
+      }),
+    );
+  });
+
+  it('enqueues correct outbox values for UNINSTALLATION and EQUIPMENT_REPLACEMENT on assignAndSyncOrder', async () => {
+    mockPrisma.orderEquipment.findFirst.mockResolvedValue(null);
+    vi.spyOn(catalogService, 'getEquipment').mockResolvedValue({
+      fetchedAt: new Date().toISOString(),
+      data: [
+        { externalKey: 'EQ-001', hasValidIdentity: true, currentClient: 'Transportes Bull Dog' } as unknown as ExternalEquipment,
+        { externalKey: 'EQ-OLD', hasValidIdentity: true, currentClient: 'Transportes Bull Dog' } as unknown as ExternalEquipment,
+        { externalKey: 'EQ-NEW', hasValidIdentity: true, currentClient: 'Transportes Bull Dog' } as unknown as ExternalEquipment,
+      ],
+    });
+
+    // Test UNINSTALLATION
+    mockPrisma.order.findUnique.mockResolvedValueOnce({
+      id: 'order-uninst',
+      status: OrderStatus.DRAFT,
+      serviceType: 'UNINSTALLATION',
+      technicianId: 'tech-1',
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      version: 1,
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Eco-01',
+          makeModel: 'Kenworth',
+          year: 2022,
+          serialNumber: 'SN-999',
+          equipment: [
+            {
+              id: 'eq-1',
+              externalKey: 'EQ-001',
+              sheetRowHint: 2,
+              activeAssignment: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    let enqueuedOps: Array<{ operationType: string; payload: { values: Record<string, string> } }> = [];
+    mockPrisma.$transaction.mockImplementationOnce(async (callback: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        orderEquipment: { update: vi.fn() },
+        order: { update: vi.fn().mockResolvedValue({ id: 'order-uninst', status: 'ASSIGNED' }) },
+        auditLog: { createMany: vi.fn() },
+        sheetSyncOperation: {
+          createMany: vi.fn(({ data }: { data: typeof enqueuedOps }) => {
+            enqueuedOps = data;
+          }),
+        },
+      };
+      return callback(tx);
+    });
+
+    await ordersService.assignAndSyncOrder('admin', 'order-uninst');
+    expect(enqueuedOps).toHaveLength(1);
+    expect(enqueuedOps[0]?.operationType).toBe('SHEET_EQUIPMENT_ASSIGNMENT');
+    expect(enqueuedOps[0]?.payload.values).toEqual({
+      K: 'STOCK TECNICO',
+      L: '',
+      M: '',
+      N: '',
+      O: '',
+    });
+
+    // Test EQUIPMENT_REPLACEMENT
+    mockPrisma.order.findUnique.mockResolvedValueOnce({
+      id: 'order-replace',
+      status: OrderStatus.DRAFT,
+      serviceType: 'EQUIPMENT_REPLACEMENT',
+      technicianId: 'tech-1',
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      version: 1,
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Eco-01',
+          makeModel: 'Kenworth',
+          year: 2022,
+          serialNumber: 'SN-999',
+          equipment: [
+            {
+              id: 'eq-old',
+              externalKey: 'EQ-OLD',
+              sheetRowHint: 2,
+              serviceStatusSnapshot: 'INSTALADO',
+              activeAssignment: false,
+            },
+            {
+              id: 'eq-new',
+              externalKey: 'EQ-NEW',
+              sheetRowHint: 3,
+              serviceStatusSnapshot: 'STOCK TECNICO',
+              activeAssignment: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    mockPrisma.$transaction.mockImplementationOnce(async (callback: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        orderEquipment: { update: vi.fn() },
+        order: { update: vi.fn().mockResolvedValue({ id: 'order-replace', status: 'ASSIGNED' }) },
+        auditLog: { createMany: vi.fn() },
+        sheetSyncOperation: {
+          createMany: vi.fn(({ data }: { data: typeof enqueuedOps }) => {
+            enqueuedOps = data;
+          }),
+        },
+      };
+      return callback(tx);
+    });
+
+    await ordersService.assignAndSyncOrder('admin', 'order-replace');
+    expect(enqueuedOps).toHaveLength(2);
+    // Old equipment retired to STOCK TECNICO
+    expect(enqueuedOps[0]?.payload.values).toEqual({
+      K: 'STOCK TECNICO',
+      L: '',
+      M: '',
+      N: '',
+      O: '',
+    });
+    // New equipment inherits vehicle details and sets INSTALADO
+    expect(enqueuedOps[1]?.payload.values).toEqual({
+      J: 'Transportes Bull Dog',
+      K: 'INSTALADO',
+      L: 'Eco-01',
+      M: 'Kenworth',
+      N: '2022',
+      O: 'SN-999',
+    });
+  });
+
+  it.each([
+    { technician: null, code: 'TECHNICIAN_NOT_FOUND' },
+    { technician: { id: 'tech-1', active: false }, code: 'TECHNICIAN_INACTIVE' },
+  ])('rejects a non-selectable technician: $code', async ({ technician, code }) => {
+    mockPrisma.technician.findUnique.mockResolvedValue(technician);
+    await expect(
+      ordersService.createOrder('admin', {
+        clientSheetId: 'CLIENT-DEMO',
+        clientNameSnapshot: 'Cliente de prueba',
+        scheduledAt: '2026-09-08T18:00:00.000Z',
+        serviceType: 'INSTALLATION',
+        technicianId: 'tech-1',
+      }),
+    ).rejects.toMatchObject({ code });
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each(['REVIEW', 'UNINSTALLATION'] as const)(
+    'preserves initial nested configuration for %s',
+    async (serviceType) => {
+      const result = await ordersService.createOrder('admin', {
+        clientSheetId: 'CLIENT-DEMO',
+        clientNameSnapshot: 'Cliente de prueba',
+        scheduledAt: '2026-09-08T18:00:00.000Z',
+        serviceType,
+        technicianId: 'tech-1',
+        units: [
+          {
+            label: 'Unidad',
+            makeModel: 'Modelo',
+            serialNumber: 'SERIAL-DEMO',
+            equipment: [{ externalKey: 'EQ-DEMO' }],
+          },
+        ],
+      });
+      expect(result.serviceType).toBe(serviceType);
+      expect(result.technicianId).toBe('tech-1');
+      expect(mockPrisma.$transaction).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(OrderServiceTypeSchema.options)(
+    'enforces the service policy on both addition methods: %s',
+    async (serviceType) => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        status: OrderStatus.DRAFT,
+        serviceType,
+      });
+      mockPrisma.orderUnit.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: 'unit-1', orderId: 'order-1' });
+      const addUnit = ordersService.addUnit('admin', 'order-1', {
+        label: 'Unidad',
+        makeModel: 'Modelo',
+        serialNumber: 'DEMO',
+      });
+      if (serviceType === 'INSTALLATION') {
+        await expect(addUnit).resolves.toMatchObject({ id: 'unit-1' });
+        await expect(
+          ordersService.assignEquipment('admin', 'order-1', 'unit-1', { externalKey: 'EQ-DEMO' }),
+        ).resolves.toMatchObject({ id: 'eq-1' });
+      } else {
+        await expect(addUnit).rejects.toMatchObject({ code: 'ORDER_ADDITIONS_NOT_ALLOWED' });
+        await expect(
+          ordersService.assignEquipment('admin', 'order-1', 'unit-1', { externalKey: 'EQ-DEMO' }),
+        ).rejects.toMatchObject({ code: 'ORDER_ADDITIONS_NOT_ALLOWED' });
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each(['FUEL_SENSOR', 'EQUIPMENT_REPLACEMENT'] as const)(
+    'supports creating orders for %s',
+    async (serviceType) => {
+      const order = await ordersService.createOrder('admin', {
+        clientSheetId: 'CLIENT-DEMO',
+        clientNameSnapshot: 'Cliente de prueba',
+        scheduledAt: '2026-09-08T18:00:00.000Z',
+        serviceType,
+        technicianId: 'tech-1',
+      });
+      expect(order).toBeDefined();
+      expect(order.serviceType).toBe(serviceType);
+    },
+  );
+
+  it('filters orders by service type', async () => {
+    mockPrisma.order.count.mockResolvedValue(0);
+    mockPrisma.order.findMany.mockResolvedValue([]);
+    await ordersService.listOrders({ id: 'admin', role: 'ADMIN' }, { serviceType: 'FUEL_SENSOR' });
+    expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { serviceType: 'FUEL_SENSOR' } }),
+    );
+  });
+
+  it('continues to read historical orders without a technician', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'historical',
+      technicianId: null,
+      technician: null,
+      units: [],
+    });
+    await expect(
+      ordersService.getOrderById('historical', { id: 'admin', role: 'ADMIN' }),
+    ).resolves.toMatchObject({ technicianId: null });
   });
 });

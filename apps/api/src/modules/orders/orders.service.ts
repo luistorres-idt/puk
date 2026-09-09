@@ -16,8 +16,10 @@ import { OrderStatus, UploadStatus, type Prisma } from '../../generated/prisma/c
 import type { EquipmentCatalogPort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
 import {
+  assertCanAddOrderItems,
   assertCanEditOrder,
   assertCanModifyUnits,
+  assertServiceConfigurationSupported,
   assertValidOrderTransition,
 } from './order-state-machine.js';
 
@@ -52,6 +54,9 @@ export class OrdersService {
 
     if (query.status) {
       where.status = query.status as OrderStatus;
+    }
+    if (query.serviceType) {
+      where.serviceType = query.serviceType;
     }
 
     if (query.search) {
@@ -146,14 +151,8 @@ export class OrdersService {
   }
 
   public async createOrder(actorUserId: string, input: CreateOrder) {
-    if (input.technicianId) {
-      const technician = await this.prisma.technician.findUnique({
-        where: { id: input.technicianId },
-      });
-      if (!technician) {
-        throw new AppError(404, 'TECHNICIAN_NOT_FOUND', 'El técnico asignado no existe');
-      }
-    }
+    assertServiceConfigurationSupported(input.serviceType);
+    const tech = await this.assertSelectableTechnician(input.technicianId);
 
     if (input.units && input.units.length > 0) {
       const serials = new Set<string>();
@@ -210,7 +209,9 @@ export class OrdersService {
           status: OrderStatus.DRAFT,
           clientSheetId: input.clientSheetId,
           clientNameSnapshot: input.clientNameSnapshot,
-          technicianId: input.technicianId ?? null,
+          technicianId: input.technicianId,
+          technicianNameSnapshot: tech.name,
+          technicianExternalKeySnapshot: tech.externalKey ?? null,
           scheduledAt: new Date(input.scheduledAt),
           isHomeService: input.isHomeService ?? false,
           serviceAddress: input.serviceAddress ?? null,
@@ -295,11 +296,13 @@ export class OrdersService {
 
     assertCanEditOrder(existing.status);
 
-    if (input.technicianId) {
-      const tech = await this.prisma.technician.findUnique({ where: { id: input.technicianId } });
-      if (!tech) {
-        throw new AppError(404, 'TECHNICIAN_NOT_FOUND', 'Técnico no encontrado');
-      }
+    if (input.serviceType !== undefined) {
+      assertServiceConfigurationSupported(input.serviceType);
+    }
+    let techSnapshot: { name: string; externalKey: string | null } | undefined;
+    if (input.technicianId !== undefined) {
+      const tech = await this.assertSelectableTechnician(input.technicianId);
+      techSnapshot = { name: tech.name, externalKey: tech.externalKey ?? null };
     }
 
     const updateData: Prisma.OrderUncheckedUpdateManyInput = {};
@@ -307,7 +310,13 @@ export class OrdersService {
     if (input.clientSheetId !== undefined) updateData.clientSheetId = input.clientSheetId;
     if (input.clientNameSnapshot !== undefined)
       updateData.clientNameSnapshot = input.clientNameSnapshot;
-    if (input.technicianId !== undefined) updateData.technicianId = input.technicianId;
+    if (input.technicianId !== undefined) {
+      updateData.technicianId = input.technicianId;
+      if (techSnapshot) {
+        updateData.technicianNameSnapshot = techSnapshot.name;
+        updateData.technicianExternalKeySnapshot = techSnapshot.externalKey;
+      }
+    }
     if (input.scheduledAt !== undefined) updateData.scheduledAt = new Date(input.scheduledAt);
     if (input.isHomeService !== undefined) updateData.isHomeService = input.isHomeService;
     if (input.serviceAddress !== undefined) updateData.serviceAddress = input.serviceAddress;
@@ -336,7 +345,7 @@ export class OrdersService {
     if (!order) {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
-    assertCanModifyUnits(order.status, 'agregar unidades');
+    assertCanAddOrderItems(order);
 
     const duplicate = await this.prisma.orderUnit.findUnique({
       where: { orderId_serialNumber: { orderId, serialNumber: input.serialNumber } },
@@ -457,7 +466,7 @@ export class OrdersService {
     if (!order) {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
-    assertCanModifyUnits(order.status, 'asignar equipos');
+    assertCanAddOrderItems(order);
 
     const unit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
     if (!unit || unit.orderId !== orderId) {
@@ -613,6 +622,7 @@ export class OrdersService {
     }
 
     assertValidOrderTransition(order.status, OrderStatus.ASSIGNED, 'La orden ya ha sido asignada');
+    assertServiceConfigurationSupported(order.serviceType);
 
     if (!order.technicianId) {
       throw new AppError(
@@ -621,6 +631,7 @@ export class OrdersService {
         'Debe asignar un técnico antes de confirmar la asignación',
       );
     }
+    await this.assertSelectableTechnician(order.technicianId);
 
     if (order.units.length === 0) {
       throw new AppError(400, 'NO_UNITS', 'La orden debe tener al menos una unidad registrada');
@@ -687,7 +698,47 @@ export class OrdersService {
           data: { activeAssignment: true },
         });
 
-        // Enqueue sync operation for Sheets: Columns J, L, M, N, O
+        let syncValues: Partial<Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>>;
+        if (order.serviceType === 'UNINSTALLATION') {
+          syncValues = {
+            K: 'STOCK TECNICO',
+            L: '',
+            M: '',
+            N: '',
+            O: '',
+          };
+        } else if (order.serviceType === 'EQUIPMENT_REPLACEMENT') {
+          const isPreviouslyInstalled =
+            item.serviceStatusSnapshot?.trim().toUpperCase() === 'INSTALADO';
+          if (isPreviouslyInstalled) {
+            syncValues = {
+              K: 'STOCK TECNICO',
+              L: '',
+              M: '',
+              N: '',
+              O: '',
+            };
+          } else {
+            syncValues = {
+              J: order.clientNameSnapshot,
+              K: 'INSTALADO',
+              L: item.unit.label,
+              M: item.unit.makeModel,
+              N: item.unit.year ? String(item.unit.year) : '',
+              O: item.unit.serialNumber,
+            };
+          }
+        } else {
+          syncValues = {
+            J: order.clientNameSnapshot,
+            L: item.unit.label,
+            M: item.unit.makeModel,
+            N: item.unit.year ? String(item.unit.year) : '',
+            O: item.unit.serialNumber,
+          };
+        }
+
+        // Enqueue sync operation for Sheets
         effects.enqueue({
           idempotencyKey: `ASSIGN:${order.id}:${item.id}:${order.version}`,
           operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
@@ -695,13 +746,7 @@ export class OrdersService {
           payload: {
             externalKey: item.externalKey,
             row: item.sheetRowHint ?? 0,
-            values: {
-              J: order.clientNameSnapshot,
-              L: item.unit.label,
-              M: item.unit.makeModel,
-              N: item.unit.year ? String(item.unit.year) : '',
-              O: item.unit.serialNumber,
-            },
+            values: syncValues,
           },
         });
       }
@@ -726,6 +771,32 @@ export class OrdersService {
 
       return updated;
     });
+  }
+
+  private async assertSelectableTechnician(technicianId: string): Promise<{
+    id: string;
+    name: string;
+    externalKey: string | null;
+    active: boolean;
+  }> {
+    if (!technicianId) {
+      throw new AppError(400, 'MISSING_TECHNICIAN', 'Selecciona un técnico para la orden');
+    }
+    const technician = await this.prisma.technician.findUnique({
+      where: { id: technicianId },
+      select: { id: true, name: true, externalKey: true, active: true },
+    });
+    if (!technician) {
+      throw new AppError(404, 'TECHNICIAN_NOT_FOUND', 'El técnico seleccionado no existe');
+    }
+    if (!technician.active) {
+      throw new AppError(
+        400,
+        'TECHNICIAN_INACTIVE',
+        'El técnico seleccionado está inactivo. Recarga el directorio y elige otro técnico.',
+      );
+    }
+    return technician;
   }
 
   public async getOrderAuditLogs(orderId: string) {

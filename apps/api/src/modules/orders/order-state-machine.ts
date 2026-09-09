@@ -1,4 +1,5 @@
-import { OrderStatus } from '../../generated/prisma/client.js';
+import { canAddOrderItems, isServiceConfigurationSupported } from '@puk/contracts';
+import { OrderStatus, type OrderServiceType } from '../../generated/prisma/client.js';
 import { AppError } from '../../shared/errors.js';
 
 /**
@@ -91,6 +92,30 @@ export function assertCanExecuteWork(
       400,
       'INVALID_ORDER_STATE',
       `La orden debe estar en progreso para ${actionDescription}`,
+    );
+  }
+}
+
+export function assertCanAddOrderItems(order: {
+  status: OrderStatus;
+  serviceType: OrderServiceType;
+}): void {
+  assertCanModifyUnits(order.status, 'agregar unidades o equipos');
+  if (!canAddOrderItems(order)) {
+    throw new AppError(
+      400,
+      'ORDER_ADDITIONS_NOT_ALLOWED',
+      'Solo las instalaciones permiten agregar unidades o equipos después de crear la orden. Configura las unidades y equipos al crearla.',
+    );
+  }
+}
+
+export function assertServiceConfigurationSupported(serviceType: OrderServiceType): void {
+  if (!isServiceConfigurationSupported(serviceType)) {
+    throw new AppError(
+      400,
+      'SERVICE_CONFIGURATION_UNAVAILABLE',
+      'Este servicio aún no está disponible para crear o asignar órdenes.',
     );
   }
 }
