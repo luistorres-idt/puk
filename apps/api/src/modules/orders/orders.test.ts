@@ -739,6 +739,7 @@ describe('OrdersService & SyncService', () => {
     expect(enqueuedOps).toHaveLength(1);
     expect(enqueuedOps[0]?.operationType).toBe('SHEET_EQUIPMENT_ASSIGNMENT');
     expect(enqueuedOps[0]?.payload.values).toEqual({
+      J: '',
       K: 'STOCK TECNICO',
       L: '',
       M: '',
@@ -802,6 +803,7 @@ describe('OrdersService & SyncService', () => {
     expect(enqueuedOps).toHaveLength(2);
     // Old equipment retired to STOCK TECNICO
     expect(enqueuedOps[0]?.payload.values).toEqual({
+      J: '',
       K: 'STOCK TECNICO',
       L: '',
       M: '',

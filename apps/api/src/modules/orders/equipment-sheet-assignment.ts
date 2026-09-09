@@ -26,6 +26,7 @@ function installedAssignment(input: EquipmentSheetAssignmentInput): EquipmentAss
 
 function stockAssignment(): EquipmentAssignmentValues {
   return {
+    J: '',
     K: 'STOCK TECNICO',
     L: '',
     M: '',

@@ -189,9 +189,9 @@ mismo folio. Antes de escribir se validan encabezados e identidad remota.
 | Estado final en SALIDAS      | Al completar se reencola por equipo para reparar asignaciones omitidas o desactualizadas | Confirmado e implementado localmente |
 | Instalación                  | Cliente y vehículo en J, L:O; estado `INSTALADO` en K                                    | Flujo implementado localmente        |
 | Revisión                     | Conserva cliente, vehículo y estado `INSTALADO`                                          | Flujo implementado localmente        |
-| Sensor fuel                  | Equipo de stock; al finalizar escribe cliente, vehículo y estado `INSTALADO`              | Flujo implementado localmente        |
-| Desinstalación               | Equipo retirado pasa a `STOCK TECNICO` (K) y se limpian L, M, N, O                       | Flujo implementado localmente        |
-| Cambio de equipo             | 1 unidad cobrada; anterior -> `STOCK TECNICO` + limpia L:O; nuevo -> hereda vehículo     | Flujo implementado localmente        |
+| Sensor fuel                  | Equipo de stock; al finalizar escribe cliente, vehículo y estado `INSTALADO`             | Flujo implementado localmente        |
+| Desinstalación               | Equipo retirado pasa a `STOCK TECNICO` (K) y se limpian J, L, M, N, O                    | Flujo implementado localmente        |
+| Cambio de equipo             | 1 unidad cobrada; anterior -> `STOCK TECNICO` + limpia J y L:O; nuevo -> hereda vehículo | Flujo implementado localmente        |
 
 ## Validación en desarrollo y staging
 

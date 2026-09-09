@@ -31,6 +31,7 @@ describe('buildEquipmentSheetAssignment', () => {
 
   it('returns uninstalled equipment to technician stock and clears vehicle data', () => {
     expect(buildEquipmentSheetAssignment({ ...baseInput, serviceType: 'UNINSTALLATION' })).toEqual({
+      J: '',
       K: 'STOCK TECNICO',
       L: '',
       M: '',
@@ -46,7 +47,7 @@ describe('buildEquipmentSheetAssignment', () => {
         serviceType: 'EQUIPMENT_REPLACEMENT',
         equipmentServiceStatus: 'INSTALADO',
       }),
-    ).toEqual({ K: 'STOCK TECNICO', L: '', M: '', N: '', O: '' });
+    ).toEqual({ J: '', K: 'STOCK TECNICO', L: '', M: '', N: '', O: '' });
 
     expect(
       buildEquipmentSheetAssignment({

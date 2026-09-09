@@ -71,8 +71,9 @@ Las operaciones fallidas almacenan intentos, código/mensaje y siguiente fecha. 
 Al completar una orden, el backend vuelve a encolar el estado final de cada equipo antes del
 reporte técnico. Esta segunda sincronización es idempotente y corrige una asignación inicial
 omitida o desactualizada: instalación, revisión y sensor fuel conservan cliente y vehículo con
-estado `INSTALADO`; desinstalación devuelve el equipo a `STOCK TECNICO`; y cambio de equipo
-retira el anterior e instala el nuevo. Una cita fallida no modifica el inventario.
+estado `INSTALADO`; desinstalación devuelve el equipo a `STOCK TECNICO` y limpia cliente y
+vehículo; y cambio de equipo hace lo mismo con el anterior antes de instalar el nuevo. Una cita
+fallida no modifica el inventario.
 
 ### Creación atómica y validación de conflictos
 
