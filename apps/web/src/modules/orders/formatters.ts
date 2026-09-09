@@ -40,21 +40,6 @@ export function orderStatusTagType(
   }
 }
 
-export function formatServiceType(type?: string | null): string {
-  switch (type) {
-    case 'INSTALLATION':
-      return 'Instalación';
-    case 'REVIEW':
-      return 'Revisión';
-    case 'UNINSTALLATION':
-      return 'Desinstalación';
-    case 'FAILED_APPOINTMENT':
-      return 'Cita Fallida';
-    default:
-      return type || '';
-  }
-}
-
 export function formatUnitStatus(status?: string | null): string {
   switch (status) {
     case 'PENDING':
@@ -116,3 +101,4 @@ export const CATEGORY_NAMES: Record<string, string> = {
   TRIMS: 'Molduras y Tapicería',
   BODYWORK: 'Carrocería y Exteriores',
 };
+export { formatOrderServiceType as formatServiceType } from '@puk/contracts';

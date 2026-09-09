@@ -17,7 +17,7 @@ import {
   NTag,
   useMessage,
 } from 'naive-ui';
-import type { ExternalEquipment } from '@puk/contracts';
+import { canAddOrderItems, type ExternalEquipment } from '@puk/contracts';
 import { fetchReportDownload, type UnitItem } from '../api.js';
 import {
   CATEGORY_NAMES,
@@ -56,6 +56,9 @@ const reportQuery = useOrderReportQuery(orderId);
 const mutations = useOrderMutations(orderId);
 
 const order = computed(() => orderQuery.data.value);
+const canAddItems = computed(
+  () => session.user?.role === 'ADMIN' && !!order.value && canAddOrderItems(order.value),
+);
 const syncInfo = computed(() => syncQuery.data.value);
 const auditLogs = computed(() => auditQuery.data.value ?? []);
 const report = computed(() => reportQuery.data.value);
@@ -93,6 +96,7 @@ function getErrorMessage(err: unknown, defaultMsg: string): string {
 
 // Actions
 async function handleAddUnit() {
+  if (!canAddItems.value) return;
   if (!newUnit.value.label || !newUnit.value.makeModel || !newUnit.value.serialNumber) {
     message.warning('Por favor completa los campos obligatorios de la unidad.');
     return;
@@ -125,6 +129,7 @@ async function handleDeleteUnit(unitId: string) {
 }
 
 function openAddEquipment(unitId: string) {
+  if (!canAddItems.value) return;
   targetUnitId.value = unitId;
   selectedEquipmentKey.value = null;
   selectedEquipment.value = null;
@@ -136,6 +141,7 @@ function handleEquipmentSelect(eq: ExternalEquipment | null) {
 }
 
 async function handleAddEquipment() {
+  if (!canAddItems.value) return;
   if (!targetUnitId.value || !selectedEquipment.value || !selectedEquipmentKey.value) return;
   try {
     await mutations.attachEquipment.mutateAsync({
@@ -569,7 +575,7 @@ const statusColor = orderStatusTagType;
                 </h2>
 
                 <n-button
-                  v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
+                  v-if="canAddItems"
                   size="small"
                   type="primary"
                   secondary
@@ -585,7 +591,7 @@ const statusColor = orderStatusTagType;
               >
                 <p class="text-sm text-slate-500">No hay unidades registradas en esta orden.</p>
                 <n-button
-                  v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
+                  v-if="canAddItems"
                   size="small"
                   type="primary"
                   class="mt-3"
@@ -619,6 +625,7 @@ const statusColor = orderStatusTagType;
                       class="flex gap-2"
                     >
                       <n-button
+                        v-if="canAddItems"
                         size="tiny"
                         type="primary"
                         secondary

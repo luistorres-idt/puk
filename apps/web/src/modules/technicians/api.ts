@@ -1,4 +1,5 @@
 import { api } from '../../shared/http/client.js';
+import type { TechnicianOption } from '@puk/contracts';
 
 export interface Technician {
   active: boolean;
@@ -23,4 +24,9 @@ export async function listTechnicians(): Promise<Technician[]> {
 export async function listActiveTechnicians(): Promise<Technician[]> {
   const technicians = await listTechnicians();
   return technicians.filter((t) => t.active);
+}
+
+export async function listSelectableTechnicians(): Promise<TechnicianOption[]> {
+  const response = await api.get<ApiResponse<TechnicianOption[]>>('/technicians/selectable');
+  return response.data.data;
 }

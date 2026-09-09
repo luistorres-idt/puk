@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   NSteps,
@@ -15,13 +15,22 @@ import {
   NTag,
   NEmpty,
 } from 'naive-ui';
-import type { ExternalClient, ExternalEquipment } from '@puk/contracts';
+import {
+  ORDER_SERVICE_LABELS,
+  OrderServiceTypeSchema,
+  isServiceConfigurationSupported,
+  type ExternalClient,
+  type ExternalEquipment,
+  type OrderServiceType,
+  type TechnicianOption,
+} from '@puk/contracts';
 import {
   ClientSelect,
   EquipmentSelect,
   extractUnitFromEquipment,
 } from '../../external-catalogs/index.js';
-import { listActiveTechnicians, type Technician } from '../../technicians/index.js';
+import { listSelectableTechnicians } from '../../technicians/index.js';
+import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { createOrder } from '../api.js';
 import { formatServiceType } from '../formatters.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
@@ -35,16 +44,13 @@ const error = ref<string | null>(null);
 // Step 1: Client & Service Type
 const selectedClientId = ref<string | null>(null);
 const selectedClient = ref<ExternalClient | null>(null);
-const serviceType = ref<'INSTALLATION' | 'REVIEW' | 'UNINSTALLATION' | 'FAILED_APPOINTMENT'>(
-  'INSTALLATION',
-);
+const serviceType = ref<OrderServiceType>('INSTALLATION');
 
-const serviceTypeOptions = [
-  { label: 'Instalación', value: 'INSTALLATION' },
-  { label: 'Revisión', value: 'REVIEW' },
-  { label: 'Desinstalación', value: 'UNINSTALLATION' },
-  { label: 'Cita Fallida', value: 'FAILED_APPOINTMENT' },
-];
+const serviceTypeOptions = OrderServiceTypeSchema.options.map((value) => ({
+  label: `${ORDER_SERVICE_LABELS[value]}${isServiceConfigurationSupported(value) ? '' : ' (próximamente)'}`,
+  value,
+  disabled: !isServiceConfigurationSupported(value),
+}));
 
 function handleClientSelect(client: ExternalClient | null) {
   if (selectedClient.value?.id !== client?.id) {
@@ -53,9 +59,7 @@ function handleClientSelect(client: ExternalClient | null) {
   selectedClient.value = client;
 }
 
-function handleServiceTypeChange(
-  val: 'INSTALLATION' | 'REVIEW' | 'UNINSTALLATION' | 'FAILED_APPOINTMENT',
-) {
+function handleServiceTypeChange(val: OrderServiceType) {
   if (serviceType.value !== val) {
     configuredUnits.value = [];
     serviceType.value = val;
@@ -180,19 +184,35 @@ const generalNotes = ref('');
 
 // Step 4: Technician
 const technicianId = ref<string | null>(null);
-const technicians = ref<Technician[]>([]);
+const technicians = ref<TechnicianOption[]>([]);
+const techniciansLoading = ref(false);
+const techniciansError = ref<string | null>(null);
+const selectedTechnician = computed(() =>
+  technicians.value.find((technician) => technician.id === technicianId.value),
+);
+const hasValidTechnician = computed(
+  () => !techniciansLoading.value && !techniciansError.value && !!selectedTechnician.value,
+);
 
 async function loadTechnicians() {
+  if (techniciansLoading.value) return;
+  techniciansLoading.value = true;
+  techniciansError.value = null;
   try {
-    technicians.value = await listActiveTechnicians();
-  } catch {
-    // ignore technician load failure gracefully
+    technicians.value = await listSelectableTechnicians();
+    if (!selectedTechnician.value) technicianId.value = null;
+  } catch (err: unknown) {
+    technicians.value = [];
+    technicianId.value = null;
+    techniciansError.value = extractApiErrorMessage(err, 'No se pudo cargar el directorio técnico');
+  } finally {
+    techniciansLoading.value = false;
   }
 }
 
 function canProceed(): boolean {
   if (currentStep.value === 1) {
-    return !!selectedClientId.value && !!serviceType.value;
+    return !!selectedClientId.value && isServiceConfigurationSupported(serviceType.value);
   }
   if (currentStep.value === 2) {
     if (serviceType.value === 'FAILED_APPOINTMENT') {
@@ -208,11 +228,22 @@ function canProceed(): boolean {
   if (currentStep.value === 3) {
     return !!scheduledAtTimestamp.value;
   }
+  if (currentStep.value === 4) {
+    return hasValidTechnician.value;
+  }
   return true;
 }
 
 async function handleFinish() {
+  if (loading.value) return;
   if (!selectedClientId.value || !selectedClient.value) return;
+  const technician = selectedTechnician.value;
+  if (!hasValidTechnician.value || !technician) {
+    error.value = 'Selecciona un técnico válido antes de crear la orden.';
+    currentStep.value = 4;
+    return;
+  }
+  if (!isServiceConfigurationSupported(serviceType.value)) return;
 
   loading.value = true;
   error.value = null;
@@ -252,18 +283,13 @@ async function handleFinish() {
       isHomeService: isHomeService.value,
       serviceAddress: serviceAddress.value || null,
       generalNotes: generalNotes.value || null,
-      technicianId: technicianId.value || null,
+      technicianId: technician.id,
       units: unitsPayload.length > 0 ? unitsPayload : undefined,
     });
 
     router.push(`/orders/${created.id}`);
   } catch (err: unknown) {
-    const message =
-      err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
-            ?.message
-        : undefined;
-    error.value = message || 'Error al crear la orden de servicio';
+    error.value = extractApiErrorMessage(err, 'Error al crear la orden de servicio');
   } finally {
     loading.value = false;
   }
@@ -549,7 +575,10 @@ onMounted(() => {
         </div>
 
         <!-- Case C: Failed appointment -->
-        <div v-else class="p-4 text-center text-slate-500 text-sm space-y-2">
+        <div
+          v-else-if="serviceType === 'FAILED_APPOINTMENT'"
+          class="p-4 text-center text-slate-500 text-sm space-y-2"
+        >
           <p>Para citas fallidas, la asignación de unidades y equipos es opcional.</p>
           <p class="text-xs text-slate-400">Puedes continuar al siguiente paso directamente.</p>
         </div>
@@ -599,23 +628,32 @@ onMounted(() => {
       <!-- Step 4: Técnico -->
       <NCard v-if="currentStep === 4" title="Paso 4: Técnico Asignado">
         <div class="space-y-4">
-          <label class="block text-sm font-medium text-slate-700 mb-1"
-            >Seleccionar Técnico (Opcional en borrador)</label
-          >
+          <label class="block text-sm font-medium text-slate-700 mb-1">Seleccionar Técnico</label>
+          <NAlert v-if="techniciansError" type="error" role="alert">
+            {{ techniciansError }}
+          </NAlert>
+          <NAlert v-else-if="!techniciansLoading && technicians.length === 0" type="warning">
+            No hay técnicos activos disponibles. Recarga el directorio para volver a consultar.
+          </NAlert>
           <NSelect
             v-model:value="technicianId"
             :options="
               technicians.map((t) => ({
-                label: t.name,
+                label: [t.name, t.workshop, t.city].filter(Boolean).join(' · '),
                 value: t.id,
               }))
             "
-            clearable
-            placeholder="Seleccionar técnico..."
+            :loading="techniciansLoading"
+            :disabled="techniciansLoading || !!techniciansError"
+            filterable
+            placeholder="Buscar por técnico, taller o ciudad..."
           />
+          <NButton :loading="techniciansLoading" @click="loadTechnicians">
+            {{ techniciansError ? 'Reintentar' : 'Recargar directorio' }}
+          </NButton>
           <p class="text-xs text-slate-500">
-            Nota: Puede dejarse vacío en borrador, pero será obligatorio antes de confirmar la
-            asignación y sincronizar a Sheets.
+            Selecciona un técnico activo para continuar. La orden quedará relacionada con él desde
+            su creación.
           </p>
         </div>
       </NCard>
@@ -660,7 +698,7 @@ onMounted(() => {
           <div class="p-3 bg-slate-50 rounded">
             <span class="text-slate-500 block">Técnico:</span>
             <span class="font-semibold text-slate-800">
-              {{ technicians.find((t) => t.id === technicianId)?.name || 'Sin asignar (Borrador)' }}
+              {{ selectedTechnician?.name }}
             </span>
           </div>
         </div>
@@ -681,7 +719,13 @@ onMounted(() => {
           Siguiente →
         </NButton>
 
-        <NButton v-else type="primary" :loading="loading" @click="handleFinish">
+        <NButton
+          v-else
+          type="primary"
+          :loading="loading"
+          :disabled="!hasValidTechnician"
+          @click="handleFinish"
+        >
           Crear Orden de Servicio
         </NButton>
       </div>

@@ -12,7 +12,12 @@ import {
   NSpin,
   NTag,
 } from 'naive-ui';
-import type { OrderStatus } from '@puk/contracts';
+import {
+  ORDER_SERVICE_LABELS,
+  OrderServiceTypeSchema,
+  type OrderStatus,
+  type OrderServiceType,
+} from '@puk/contracts';
 import { formatOrderStatus, formatServiceType, orderStatusTagType } from '../formatters.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { useSessionStore } from '@/stores/session';
@@ -25,6 +30,9 @@ const session = useSessionStore();
 // Initialize filters from URL query
 const search = ref<string>(typeof route.query.search === 'string' ? route.query.search : '');
 const statusFilter = ref<string>(typeof route.query.status === 'string' ? route.query.status : '');
+const serviceTypeFilter = ref<OrderServiceType | ''>(
+  OrderServiceTypeSchema.options.find((type) => type === route.query.serviceType) ?? '',
+);
 const page = ref<number>(
   typeof route.query.page === 'string' && !isNaN(Number(route.query.page))
     ? Math.max(1, Number(route.query.page))
@@ -35,6 +43,7 @@ const pageSize = 15;
 const queryParams = computed(() => ({
   search: search.value ? search.value.trim() : undefined,
   status: statusFilter.value ? (statusFilter.value as OrderStatus) : undefined,
+  serviceType: serviceTypeFilter.value || undefined,
   page: page.value,
   pageSize,
 }));
@@ -49,6 +58,7 @@ function updateUrlQuery() {
   const query: Record<string, string> = {};
   if (search.value.trim()) query.search = search.value.trim();
   if (statusFilter.value) query.status = statusFilter.value;
+  if (serviceTypeFilter.value) query.serviceType = serviceTypeFilter.value;
   if (page.value > 1) query.page = String(page.value);
 
   router.replace({ query });
@@ -60,6 +70,8 @@ watch(
   (newQuery) => {
     const querySearch = typeof newQuery.search === 'string' ? newQuery.search : '';
     const queryStatus = typeof newQuery.status === 'string' ? newQuery.status : '';
+    const queryServiceType =
+      OrderServiceTypeSchema.options.find((type) => type === newQuery.serviceType) ?? '';
     const queryPage =
       typeof newQuery.page === 'string' && !isNaN(Number(newQuery.page))
         ? Math.max(1, Number(newQuery.page))
@@ -67,6 +79,7 @@ watch(
 
     if (querySearch !== search.value) search.value = querySearch;
     if (queryStatus !== statusFilter.value) statusFilter.value = queryStatus;
+    if (queryServiceType !== serviceTypeFilter.value) serviceTypeFilter.value = queryServiceType;
     if (queryPage !== page.value) page.value = queryPage;
   },
 );
@@ -85,6 +98,7 @@ function onPageChange(newPage: number) {
 function resetFilters() {
   search.value = '';
   statusFilter.value = '';
+  serviceTypeFilter.value = '';
   page.value = 1;
   updateUrlQuery();
 }
@@ -101,6 +115,10 @@ const statusOptions = [
 ];
 
 const statusColor = orderStatusTagType;
+const serviceTypeOptions = [
+  { label: 'Todos los servicios', value: '' },
+  ...OrderServiceTypeSchema.options.map((value) => ({ label: ORDER_SERVICE_LABELS[value], value })),
+];
 </script>
 
 <template>
@@ -131,7 +149,7 @@ const statusColor = orderStatusTagType;
 
       <!-- Filters Card -->
       <n-card class="shadow-sm">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">Buscar</label>
             <n-input
@@ -146,6 +164,16 @@ const statusColor = orderStatusTagType;
             <n-select
               v-model:value="statusFilter"
               :options="statusOptions"
+              @update:value="onFilterChange"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1"
+              >Filtrar por Servicio</label
+            >
+            <n-select
+              v-model:value="serviceTypeFilter"
+              :options="serviceTypeOptions"
               @update:value="onFilterChange"
             />
           </div>
@@ -173,7 +201,12 @@ const statusColor = orderStatusTagType;
       >
         <n-empty description="No se encontraron órdenes con los filtros seleccionados.">
           <template #extra>
-            <n-button v-if="search || statusFilter" size="small" secondary @click="resetFilters">
+            <n-button
+              v-if="search || statusFilter || serviceTypeFilter"
+              size="small"
+              secondary
+              @click="resetFilters"
+            >
               Restablecer filtros
             </n-button>
           </template>
