@@ -184,7 +184,8 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
    - Indicador de servicio a domicilio / en sitio con captura de dirección física.
    - Notas generales e instrucciones para el técnico.
 6. **Paso 4: Técnico Asignado**:
-   - Selección opcional del técnico responsable durante la creación en borrador.
+   - Selecciona obligatoriamente un técnico activo; puedes buscar por nombre, taller o ciudad.
+   - Si el directorio falla, pulsa **Reintentar**. Si está vacío, usa **Recargar directorio**. No podrás continuar hasta elegir un técnico disponible.
 7. **Paso 5: Resumen y Confirmación**:
    - Revisa el resumen integral con cliente, servicio, vehículos y hardware asignado.
    - Al pulsar **`Crear Orden de Servicio`**, el sistema genera un **Folio único**, crea las unidades y vincula los equipos atómicamente en estado **`DRAFT` (Borrador)**.

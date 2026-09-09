@@ -159,7 +159,7 @@ erDiagram
 
 ## Agregado principal
 
-`Order` es la raíz del agregado operativo. Conserva el cliente como snapshot, pertenece opcionalmente a un técnico y contiene unidades. Cada unidad agrupa equipos, checklist, fotografías y discrepancias. La firma se captura una vez por orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
+`Order` es la raíz del agregado operativo. Conserva el cliente como snapshot y contiene unidades. La API exige un técnico activo desde la creación; la relación en base de datos permanece nullable para conservar órdenes históricas sin técnico. Cada unidad agrupa equipos, checklist, fotografías y discrepancias. La firma se captura una vez por orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
 
 ## Enumeraciones de estado
 
