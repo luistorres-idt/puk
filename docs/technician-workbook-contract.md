@@ -168,27 +168,30 @@ mismo folio. Antes de escribir se validan encabezados e identidad remota.
 
 ## Decisiones funcionales y estado de implementación
 
-| Decisión                     | Regla confirmada e implementada                                         | Estado                          |
-| ---------------------------- | ---------------------------------------------------------------------- | ------------------------------- |
-| Unidad de cobro              | Tarifa del técnico por servicio × total de equipos (1 en cambio de equipo) | Confirmado e implementado localmente |
-| Moneda, decimales y redondeo | Aritmética decimal en MXN, 2 decimales y redondeo normal               | Confirmado e implementado localmente |
-| Congelación                  | Al completar (`COMPLETED`); congelado en snapshot de la orden           | Confirmado e implementado localmente |
-| Viáticos                     | `isHomeService` activa costo de salida del taller una vez por orden    | Confirmado e implementado localmente |
-| Estados cobrables            | `COMPLETED`; `FAILED_APPOINTMENT` solo con tarifa CITA FALLIDA válida  | Confirmado e implementado localmente |
-| Inclusión en reporte         | Toda `FAILED_APPOINTMENT` aparece en outbox aunque no tenga tarifa     | Confirmado e implementado localmente |
-| Importe sin tarifa           | `0.00` en costo y total cuando CITA FALLIDA no tiene tarifa válida     | Confirmado e implementado localmente |
-| Nombre/RFC                   | Columnas D (`nombre`) y E (`rfc`) son manuales: no se tocan ni escriben | Confirmado e implementado localmente |
-| Columna DHL                  | Columna O (`envio dhl`) es manual: nunca se escribe ni se sobrescribe   | Confirmado e implementado localmente |
-| Fecha, semana, zona horaria  | `scheduledAt`; semana ISO y zona `America/Hermosillo`                  | Confirmado e implementado localmente |
-| Correcciones                 | Reabrir folio, recalcular con tarifa vigente, actualizar fila y version | Confirmado e implementado localmente |
-| Permiso de corrección       | Solo el rol `ADMIN` puede reabrir una orden completada                 | Confirmado e implementado localmente |
-| Motivo de corrección        | Comentario opcional al reabrir; no bloquea la operación                 | Confirmado e implementado localmente |
-| Fallo de sincronización      | Outbox pendiente reintentable; no bloquea cierre ni corrección         | Confirmado e implementado localmente |
-| Reintento de sincronización  | Manual por administrador vía endpoint de retry o automático vía worker  | Confirmado e implementado localmente |
-| Fila inexistente             | Inserción automática (rangos A:C, F:N, P); búsqueda por folio          | Confirmado e implementado localmente |
-| Sensor fuel                  | Alta en orden permitida; equipo de stock en unidad existente           | Flujo implementado localmente   |
-| Desinstalación               | Equipo retirado pasa a `STOCK TECNICO` (K) y se limpian L, M, N, O     | Flujo implementado localmente   |
-| Cambio de equipo             | 1 unidad cobrada; anterior -> `STOCK TECNICO` + limpia L:O; nuevo -> hereda vehículo | Flujo implementado localmente |
+| Decisión                     | Regla confirmada e implementada                                                          | Estado                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------ |
+| Unidad de cobro              | Tarifa del técnico por servicio × total de equipos (1 en cambio de equipo)               | Confirmado e implementado localmente |
+| Moneda, decimales y redondeo | Aritmética decimal en MXN, 2 decimales y redondeo normal                                 | Confirmado e implementado localmente |
+| Congelación                  | Al completar (`COMPLETED`); congelado en snapshot de la orden                            | Confirmado e implementado localmente |
+| Viáticos                     | `isHomeService` activa costo de salida del taller una vez por orden                      | Confirmado e implementado localmente |
+| Estados cobrables            | `COMPLETED`; `FAILED_APPOINTMENT` solo con tarifa CITA FALLIDA válida                    | Confirmado e implementado localmente |
+| Inclusión en reporte         | Toda `FAILED_APPOINTMENT` aparece en outbox aunque no tenga tarifa                       | Confirmado e implementado localmente |
+| Importe sin tarifa           | `0.00` en costo y total cuando CITA FALLIDA no tiene tarifa válida                       | Confirmado e implementado localmente |
+| Nombre/RFC                   | Columnas D (`nombre`) y E (`rfc`) son manuales: no se tocan ni escriben                  | Confirmado e implementado localmente |
+| Columna DHL                  | Columna O (`envio dhl`) es manual: nunca se escribe ni se sobrescribe                    | Confirmado e implementado localmente |
+| Fecha, semana, zona horaria  | `scheduledAt`; semana ISO y zona `America/Hermosillo`                                    | Confirmado e implementado localmente |
+| Correcciones                 | Reabrir folio, recalcular con tarifa vigente, actualizar fila y version                  | Confirmado e implementado localmente |
+| Permiso de corrección        | Solo el rol `ADMIN` puede reabrir una orden completada                                   | Confirmado e implementado localmente |
+| Motivo de corrección         | Comentario opcional al reabrir; no bloquea la operación                                  | Confirmado e implementado localmente |
+| Fallo de sincronización      | Outbox pendiente reintentable; no bloquea cierre ni corrección                           | Confirmado e implementado localmente |
+| Reintento de sincronización  | Manual por administrador vía endpoint de retry o automático vía worker                   | Confirmado e implementado localmente |
+| Fila inexistente             | Inserción automática (rangos A:C, F:N, P); búsqueda por folio                            | Confirmado e implementado localmente |
+| Estado final en SALIDAS      | Al completar se reencola por equipo para reparar asignaciones omitidas o desactualizadas | Confirmado e implementado localmente |
+| Instalación                  | Cliente y vehículo en J, L:O; estado `INSTALADO` en K                                    | Flujo implementado localmente        |
+| Revisión                     | Conserva cliente, vehículo y estado `INSTALADO`                                          | Flujo implementado localmente        |
+| Sensor fuel                  | Equipo de stock; al finalizar escribe cliente, vehículo y estado `INSTALADO`              | Flujo implementado localmente        |
+| Desinstalación               | Equipo retirado pasa a `STOCK TECNICO` (K) y se limpian L, M, N, O                       | Flujo implementado localmente        |
+| Cambio de equipo             | 1 unidad cobrada; anterior -> `STOCK TECNICO` + limpia L:O; nuevo -> hereda vehículo     | Flujo implementado localmente        |
 
 ## Validación en desarrollo y staging
 

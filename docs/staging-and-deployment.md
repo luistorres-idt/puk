@@ -79,6 +79,7 @@ pnpm infra:bootstrap
 pnpm infra:foundation
 
 GOOGLE_SPREADSHEET_ID="..." \
+GOOGLE_TECHNICIANS_SPREADSHEET_ID="..." \
 GOOGLE_SERVICE_ACCOUNT_FILE="/ruta/segura/service-account.json" \
 SEED_ADMIN_EMAIL="admin@ejemplo.com" \
 pnpm infra:configure

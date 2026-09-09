@@ -146,6 +146,9 @@ Google Sheets permanece como fuente oficial de los catálogos externos:
 
 - `Clientes`: lectura de `IDCliente` y `Cliente`.
 - `SALIDAS`: lectura del catálogo de equipos y actualización limitada de su asignación.
+- `DIRECTORIO TECNICO` y `2026`: directorio y reporte en el libro configurado por
+  `GOOGLE_TECHNICIANS_SPREADSHEET_ID`. Cada cobro nuevo se inserta en la fila 2 del
+  reporte y desplaza los cobros anteriores hacia abajo.
 
 La aplicación solo puede escribir las columnas autorizadas:
 
@@ -226,7 +229,7 @@ La aplicación valida su configuración al iniciar y se detiene si falta una var
 | JWT           | Claves pública/privada, issuer, audience y TTL de cada token  |
 | Cookies       | Dominio, modo seguro y política SameSite                      |
 | Objetos       | Endpoint, región, bucket y credenciales S3                    |
-| Google Sheets | ID del documento, cuenta de servicio y nombres de pestañas    |
+| Google Sheets | IDs de catálogos y técnicos, cuenta de servicio y pestañas    |
 | Límites       | Tamaños de evidencia/firma, TTL de URLs y caché de catálogos  |
 | Resiliencia   | Timeouts, reintentos, circuit breaker y frecuencia del outbox |
 | Logs          | `LOG_LEVEL`                                                   |
