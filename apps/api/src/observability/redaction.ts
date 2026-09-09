@@ -1,5 +1,5 @@
 const SENSITIVE_KEY =
-  /authorization|cookie|password|secret|token|private.?key|signed.?url|email|imei/i;
+  /authorization|cookie|password|secret|token|private.?key|signed.?url|email|imei|rfc|tax.?data|tax.?address|fiscal|account|bancaria/i;
 const SIGNED_QUERY = /([?&](?:X-Amz-[^=]+|token|signature)=)[^&]*/gi;
 const BEARER = /(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi;
 const DATABASE_CREDENTIALS = /(postgres(?:ql)?:\/\/[^:/\s]+:)[^@/\s]+@/gi;

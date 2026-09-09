@@ -10,6 +10,7 @@ import { ExecutionService } from './modules/execution/index.js';
 import { S3StorageClient } from './integrations/object-storage/s3.client.js';
 import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
 import { ReportsService } from './modules/reports/index.js';
+import { TechniciansService } from './modules/technicians/index.js';
 import {
   CircuitBreaker,
   CircuitBreakerSheetsPort,
@@ -57,6 +58,8 @@ const rawSheetsPort = usesPlaceholderSheets
       spreadsheetId: environment.GOOGLE_SPREADSHEET_ID,
       clientsSheetName: environment.GOOGLE_CLIENTS_SHEET,
       equipmentSheetName: environment.GOOGLE_EQUIPMENT_SHEET,
+      techniciansSheetName: environment.GOOGLE_TECHNICIANS_SHEET_NAME,
+      reportsSheetName: environment.GOOGLE_TECHNICIAN_REPORT_SHEET_NAME,
       clientEmail: environment.GOOGLE_CLIENT_EMAIL,
       privateKey: normalizePem(environment.GOOGLE_PRIVATE_KEY),
       timeoutMs: environment.SHEETS_TIMEOUT_MS,
@@ -74,6 +77,7 @@ const catalogsService = new GoogleSheetsCatalogService(
   environment.CATALOG_CACHE_TTL_SECONDS,
 );
 
+const techniciansService = new TechniciansService(prisma, sheetsPort);
 const ordersService = new OrdersService(prisma, catalogsService);
 const syncService = new SyncService(prisma, sheetsPort, {
   maxRetries: environment.SHEETS_RETRY_LIMIT,
@@ -129,6 +133,12 @@ const executionService = new ExecutionService(prisma, storagePort, {
 });
 
 const server = createApp({
+  administration: {
+    prisma,
+    tokens,
+    techniciansService,
+    minimumPasswordLength: environment.MIN_PASSWORD_LENGTH,
+  },
   allowedOrigins: [environment.APP_ORIGIN],
   auth: {
     cookie: {

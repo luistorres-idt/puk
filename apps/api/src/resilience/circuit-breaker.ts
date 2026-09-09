@@ -3,6 +3,7 @@ import type {
   ExternalEquipmentRecord,
   ObjectStoragePort,
   SheetsPort,
+  TechnicalReportRowInput,
 } from '../integrations/ports.js';
 import { MetricsService } from '../observability/metrics.js';
 import { AppError } from '../shared/errors.js';
@@ -139,9 +140,19 @@ export class CircuitBreakerSheetsPort implements SheetsPort {
 
   public updateAssignment(input: {
     row: number;
-    values: Readonly<Partial<Record<'J' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
+    values: Readonly<Partial<Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
   }): Promise<void> {
     return this.breaker.execute(() => this.inner.updateAssignment(input));
+  }
+
+  public listTechniciansDirectory(): Promise<readonly (readonly string[])[]> {
+    return this.breaker.execute(() => this.inner.listTechniciansDirectory());
+  }
+
+  public syncTechnicalReportRow(
+    input: TechnicalReportRowInput,
+  ): Promise<{ row: number; created: boolean }> {
+    return this.breaker.execute(() => this.inner.syncTechnicalReportRow(input));
   }
 }
 

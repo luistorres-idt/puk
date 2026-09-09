@@ -56,6 +56,12 @@ export function createAdministrationRouter(options: AdministrationRouterOptions)
   router.get('/technicians', authorize('technicians:manage'), async (_request, response) =>
     sendSuccess(response, await technicians.list()),
   );
+  router.get('/technicians/selectable', authorize('orders:manage'), async (_request, response) =>
+    sendSuccess(response, await technicians.listSelectable()),
+  );
+  router.post('/technicians/sync', authorize('technicians:manage'), async (request, response) =>
+    sendSuccess(response, await technicians.syncFromSheets(request.auth!.userId)),
+  );
   router.post(
     '/technicians',
     authorize('technicians:manage'),
