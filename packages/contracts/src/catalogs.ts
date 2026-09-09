@@ -64,8 +64,7 @@ export function normalizeString(value: string | null | undefined): string {
 }
 
 /**
- * Compares two client names with normalization (case-insensitive, accent-insensitive).
- * Also matches if one contains the other as a significant prefix/substring (e.g. legal suffix omission).
+ * Compares normalized client names while ignoring supported Mexican legal suffixes.
  */
 export function isMatchingClient(
   clientA: string | null | undefined,
@@ -81,13 +80,16 @@ export function isMatchingClient(
     return true;
   }
 
-  // Check substring containment for company name variations (e.g. omitting "S.A. de C.V.")
-  if (normA.length >= 4 && normB.includes(normA)) {
-    return true;
-  }
-  if (normB.length >= 4 && normA.includes(normB)) {
-    return true;
-  }
+  return stripLegalSuffix(normA) === stripLegalSuffix(normB);
+}
 
-  return false;
+function stripLegalSuffix(value: string): string {
+  return value
+    .replace(/[.,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\s+s a de c v$/i, '')
+    .replace(/\s+s de r l de c v$/i, '')
+    .replace(/\s+s a p i de c v$/i, '')
+    .trim();
 }

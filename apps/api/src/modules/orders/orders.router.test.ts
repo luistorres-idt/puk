@@ -111,22 +111,20 @@ describe('order HTTP validation', () => {
   });
 
   it.each(OrderServiceTypeSchema.options)(
-    'enforces additions through both HTTP endpoints for %s',
+    'allows additions through both HTTP endpoints in draft for %s',
     async (serviceType) => {
       database.order.findUnique.mockResolvedValue({ id: orderId, status: 'DRAFT', serviceType });
       const unit = await request(app)
         .post(`/orders/${orderId}/units`)
         .set('Authorization', 'Bearer test-session')
-        .send({ label: 'Unidad', makeModel: 'Modelo', serialNumber: 'SERIAL-DEMO' });
+        .send({ label: 'Unidad', makeModel: 'Modelo', serialNumber: 'SERIAL-DEMO', serviceType });
       database.orderUnit.findUnique.mockResolvedValue({ id: unitId, orderId });
       const equipment = await request(app)
         .post(`/orders/${orderId}/units/${unitId}/equipment`)
         .set('Authorization', 'Bearer test-session')
         .send({ externalKey: 'EQ-DEMO' });
       for (const response of [unit, equipment]) {
-        expect(response.status).toBe(serviceType === 'INSTALLATION' ? 201 : 400);
-        if (serviceType !== 'INSTALLATION')
-          expect(response.body.error.code).toBe('ORDER_ADDITIONS_NOT_ALLOWED');
+        expect(response.status).toBe(201);
       }
     },
   );

@@ -151,6 +151,15 @@ describe('filterEquipmentByServiceType', () => {
     expect(result.map((e) => e.externalKey)).toEqual(['STOCK-1', 'STOCK-2']);
   });
 
+  it('filters only available / in-stock equipment for FUEL_SENSOR', () => {
+    const result = filterEquipmentByServiceType(allItems, {
+      serviceType: 'FUEL_SENSOR',
+      clientName: 'Transportes Bull Dog S.A. de C.V.',
+    });
+
+    expect(result.map((equipment) => equipment.externalKey)).toEqual(['STOCK-1', 'STOCK-2']);
+  });
+
   it('filters only installed equipment for the specified client for REVIEW', () => {
     const result = filterEquipmentByServiceType(allItems, {
       serviceType: 'REVIEW',
@@ -176,6 +185,34 @@ describe('filterEquipmentByServiceType', () => {
     });
 
     expect(result).toEqual([]);
+  });
+
+  it('excludes equipment specified in excludeKeys array', () => {
+    const result = filterEquipmentByServiceType(allItems, {
+      serviceType: 'INSTALLATION',
+      clientName: 'Transportes Bull Dog S.A. de C.V.',
+      excludeKeys: ['STOCK-1'],
+    });
+
+    expect(result.map((e) => e.externalKey)).toEqual(['STOCK-2']);
+  });
+
+  it('excludes equipment specified in excludeKeys Set', () => {
+    const result = filterEquipmentByServiceType(allItems, {
+      serviceType: 'INSTALLATION',
+      clientName: 'Transportes Bull Dog S.A. de C.V.',
+      excludeKeys: new Set(['STOCK-1', 'STOCK-2']),
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it('excludes equipment without serviceType specified', () => {
+    const result = filterEquipmentByServiceType(allItems, {
+      excludeKeys: ['STOCK-1', 'INST-A1'],
+    });
+
+    expect(result.map((e) => e.externalKey)).toEqual(['STOCK-2', 'INST-B1']);
   });
 });
 

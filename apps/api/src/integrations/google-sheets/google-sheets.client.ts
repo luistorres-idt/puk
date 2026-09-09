@@ -10,10 +10,12 @@ import { AppError } from '../../shared/errors.js';
 
 export interface GoogleSheetsClientConfig {
   spreadsheetId: string;
+  techniciansSpreadsheetId?: string;
   clientsSheetName: string;
   equipmentSheetName: string;
   techniciansSheetName?: string;
   reportsSheetName?: string;
+  reportsSheetId?: number;
   clientEmail: string;
   privateKey: string;
   timeoutMs?: number;
@@ -22,17 +24,23 @@ export interface GoogleSheetsClientConfig {
 export class GoogleSheetsClient implements SheetsPort {
   private readonly sheets: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
+  private readonly techniciansSpreadsheetId: string;
   private readonly clientsSheetName: string;
   private readonly equipmentSheetName: string;
   private readonly techniciansSheetName: string;
   private readonly reportsSheetName: string;
+  private reportsSheetId?: number | undefined;
 
   public constructor(config: GoogleSheetsClientConfig) {
     this.spreadsheetId = config.spreadsheetId;
+    this.techniciansSpreadsheetId = config.techniciansSpreadsheetId ?? config.spreadsheetId;
     this.clientsSheetName = config.clientsSheetName;
     this.equipmentSheetName = config.equipmentSheetName;
     this.techniciansSheetName = config.techniciansSheetName ?? 'DIRECTORIO TECNICO';
     this.reportsSheetName = config.reportsSheetName ?? '2026';
+    if (config.reportsSheetId !== undefined) {
+      this.reportsSheetId = config.reportsSheetId;
+    }
 
     const auth = new google.auth.JWT({
       email: config.clientEmail,
@@ -148,7 +156,7 @@ export class GoogleSheetsClient implements SheetsPort {
 
   public async listTechniciansDirectory(): Promise<readonly (readonly string[])[]> {
     const response = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
+      spreadsheetId: this.techniciansSpreadsheetId,
       range: `'${this.techniciansSheetName}'!A1:W`,
       valueRenderOption: 'FORMATTED_VALUE',
     });
@@ -161,7 +169,7 @@ export class GoogleSheetsClient implements SheetsPort {
   ): Promise<{ row: number; created: boolean }> {
     const range = `'${this.reportsSheetName}'!A1:P`;
     const response = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
+      spreadsheetId: this.techniciansSpreadsheetId,
       range,
     });
     const rows = response.data.values ?? [];
@@ -200,14 +208,38 @@ export class GoogleSheetsClient implements SheetsPort {
       );
     }
 
-    const targetRow = matchingRows.length === 1 ? matchingRows[0]! : rows.length + 1;
     const isUpdate = matchingRows.length === 1;
+    const targetRow = matchingRows[0] ?? 2;
+    let prevD = '';
+    let prevE = '';
+    let prevO = '';
 
-    // Capture previous unmanaged values if update
-    const prevRow = isUpdate ? (rows[targetRow - 1] ?? []) : [];
-    const prevD = (prevRow[3] ?? '').toString();
-    const prevE = (prevRow[4] ?? '').toString();
-    const prevO = (prevRow[14] ?? '').toString();
+    if (isUpdate) {
+      const prevRow = rows[targetRow - 1] ?? [];
+      prevD = (prevRow[3] ?? '').toString();
+      prevE = (prevRow[4] ?? '').toString();
+      prevO = (prevRow[14] ?? '').toString();
+    } else {
+      const sheetId = await this.getReportsSheetId();
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.techniciansSpreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              insertDimension: {
+                range: {
+                  sheetId,
+                  dimension: 'ROWS',
+                  startIndex: 1,
+                  endIndex: 2,
+                },
+                inheritFromBefore: false,
+              },
+            },
+          ],
+        },
+      });
+    }
 
     // Write ONLY managed columns: A:C, F:N, P
     const batchData = [
@@ -217,17 +249,19 @@ export class GoogleSheetsClient implements SheetsPort {
       },
       {
         range: `'${this.reportsSheetName}'!F${targetRow}:N${targetRow}`,
-        values: [[
-          input.economico,
-          input.serie,
-          input.imeiId,
-          input.cliente,
-          input.fecha,
-          input.servicio,
-          input.costo,
-          input.viaticos,
-          input.total,
-        ]],
+        values: [
+          [
+            input.economico,
+            input.serie,
+            input.imeiId,
+            input.cliente,
+            input.fecha,
+            input.servicio,
+            input.costo,
+            input.viaticos,
+            input.total,
+          ],
+        ],
       },
       {
         range: `'${this.reportsSheetName}'!P${targetRow}`,
@@ -236,7 +270,7 @@ export class GoogleSheetsClient implements SheetsPort {
     ];
 
     await this.sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: this.spreadsheetId,
+      spreadsheetId: this.techniciansSpreadsheetId,
       requestBody: {
         valueInputOption: 'USER_ENTERED',
         data: batchData,
@@ -245,7 +279,7 @@ export class GoogleSheetsClient implements SheetsPort {
 
     // Re-read row after write to verify identity and confirm unmanaged cells remain intact
     const verifyRes = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
+      spreadsheetId: this.techniciansSpreadsheetId,
       range: `'${this.reportsSheetName}'!A${targetRow}:P${targetRow}`,
     });
     const afterRow = verifyRes.data.values?.[0] ?? [];
@@ -270,5 +304,29 @@ export class GoogleSheetsClient implements SheetsPort {
     }
 
     return { row: targetRow, created: !isUpdate };
+  }
+
+  private async getReportsSheetId(): Promise<number> {
+    if (this.reportsSheetId !== undefined) {
+      return this.reportsSheetId;
+    }
+
+    const metadata = await this.sheets.spreadsheets.get({
+      spreadsheetId: this.techniciansSpreadsheetId,
+      fields: 'sheets(properties(sheetId,title))',
+    });
+
+    const sheet = metadata.data.sheets?.find((s) => s.properties?.title === this.reportsSheetName);
+
+    if (sheet?.properties?.sheetId === undefined || sheet.properties.sheetId === null) {
+      throw new AppError(
+        404,
+        'REPORT_SHEET_NOT_FOUND',
+        `No se encontró la pestaña '${this.reportsSheetName}' en el libro de técnicos`,
+      );
+    }
+
+    this.reportsSheetId = sheet.properties.sheetId;
+    return this.reportsSheetId;
   }
 }

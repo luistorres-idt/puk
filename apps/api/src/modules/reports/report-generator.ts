@@ -30,7 +30,7 @@ const VERIFICATION_LABELS: Record<string, string> = {
 
 export interface ReportOrder {
   folio: string;
-  serviceType: string;
+  serviceType: string | null;
   clientNameSnapshot: string;
   scheduledAt: Date;
   startedAt: Date | null;
@@ -44,6 +44,7 @@ export interface ReportOrder {
     makeModel: string;
     year: number | null;
     serialNumber: string;
+    serviceType?: string | null;
     status: string;
     equipment: Array<{
       id: string;
@@ -201,9 +202,21 @@ export class ServiceOrderReportGenerator implements ReportGeneratorPort {
         width: 520,
       });
 
+    const serviceTypeLabel =
+      order.units.length > 0 && order.units.some((u) => u.serviceType)
+        ? Array.from(
+            new Set(
+              order.units
+                .map((u) => u.serviceType ?? order.serviceType)
+                .filter((t): t is string => Boolean(t))
+                .map((t) => formatOrderServiceType(t)),
+            ),
+          ).join(', ')
+        : formatOrderServiceType(order.serviceType);
+
     this.drawInfoGrid(document, 218, [
       ['Cliente', order.clientNameSnapshot],
-      ['Tipo de servicio', formatOrderServiceType(order.serviceType)],
+      ['Tipo de servicio', serviceTypeLabel || 'No registrado'],
       ['Fecha programada', this.formatDate(order.scheduledAt)],
       ['Inicio', this.formatDate(order.startedAt)],
       ['Conclusión', this.formatDate(order.completedAt)],
@@ -293,6 +306,7 @@ export class ServiceOrderReportGenerator implements ReportGeneratorPort {
     this.drawSectionHeader(document, folio, `Unidad ${position} de ${total}: ${unit.label}`);
     this.drawInfoGrid(document, 105, [
       ['Nombre de unidad', unit.label],
+      ['Tipo de servicio', formatOrderServiceType(unit.serviceType)],
       ['Marca y modelo', unit.makeModel],
       ['Año', unit.year?.toString() ?? 'No registrado'],
       ['VIN / número de serie', unit.serialNumber],

@@ -110,10 +110,19 @@ describe('OrdersService & SyncService', () => {
             })),
           },
           orderUnit: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
-              id: 'unit-1',
-              ...data,
-            })),
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+              const nestedEquipment = (
+                data.equipment as { create?: Array<Record<string, unknown>> } | undefined
+              )?.create;
+              return {
+                id: 'unit-1',
+                ...data,
+                equipment: (nestedEquipment ?? []).map((equipment, index) => ({
+                  id: `eq-${index + 1}`,
+                  ...equipment,
+                })),
+              };
+            }),
             update: vi.fn(
               async ({
                 where,
@@ -177,6 +186,7 @@ describe('OrdersService & SyncService', () => {
     ordersService = new OrdersService(mockPrisma as unknown as PrismaClient, catalogService);
     syncService = new SyncService(mockPrisma as unknown as PrismaClient, sheetsPort);
     mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
+    mockPrisma.sheetSyncOperation.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('creates an order in DRAFT status with folio and version 1', async () => {
@@ -309,7 +319,31 @@ describe('OrdersService & SyncService', () => {
     });
   });
 
-  it('prevents assigning equipment actively assigned to another order', async () => {
+  it('adds a unit and its equipment in the same transaction', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.DRAFT,
+      serviceType: 'EQUIPMENT_REPLACEMENT',
+    });
+    mockPrisma.orderUnit.findUnique.mockResolvedValue(null);
+    mockPrisma.orderEquipment.findFirst.mockResolvedValue(null);
+
+    const unit = await ordersService.addUnit('user-admin-1', 'order-1', {
+      label: 'Camion 1',
+      makeModel: 'Kenworth T680',
+      serialNumber: 'SERIAL-123',
+      serviceType: 'EQUIPMENT_REPLACEMENT',
+      equipment: [{ externalKey: 'EQ-OLD' }, { externalKey: 'EQ-NEW' }],
+    });
+
+    expect(unit.equipment).toEqual([
+      expect.objectContaining({ externalKey: 'EQ-OLD' }),
+      expect.objectContaining({ externalKey: 'EQ-NEW' }),
+    ]);
+    expect(mockPrisma.$transaction).toHaveBeenCalledOnce();
+  });
+
+  it('prevents assigning duplicate equipment within the same order', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
       status: OrderStatus.DRAFT,
@@ -320,10 +354,41 @@ describe('OrdersService & SyncService', () => {
       orderId: 'order-1',
     });
     mockPrisma.orderEquipment.findFirst.mockResolvedValue({
-      id: 'other-eq',
+      id: 'existing-eq',
       externalKey: 'EQ-001',
-      activeAssignment: true,
     });
+
+    await expect(
+      ordersService.assignEquipment('user-admin-1', 'order-1', 'unit-1', {
+        externalKey: 'EQ-001',
+      }),
+    ).rejects.toMatchObject({
+      code: 'DUPLICATE_EQUIPMENT',
+    });
+  });
+
+  it('prevents assigning equipment actively assigned to another order', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.DRAFT,
+      serviceType: 'INSTALLATION',
+    });
+    mockPrisma.orderUnit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      orderId: 'order-1',
+    });
+    mockPrisma.orderEquipment.findFirst.mockImplementation(
+      async (args: { where?: { orderUnit?: unknown } }) => {
+        if (args?.where?.orderUnit) {
+          return null; // Not in this order
+        }
+        return {
+          id: 'other-eq',
+          externalKey: 'EQ-001',
+          activeAssignment: true,
+        };
+      },
+    );
 
     await expect(
       ordersService.assignEquipment('user-admin-1', 'order-1', 'unit-1', {
@@ -501,6 +566,7 @@ describe('OrdersService & SyncService', () => {
     mockPrisma.sheetSyncOperation.findMany.mockResolvedValue([
       {
         id: 'op-1',
+        operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
         status: SyncStatus.PENDING,
         attempts: 0,
         payload: {
@@ -528,6 +594,39 @@ describe('OrdersService & SyncService', () => {
         }),
       }),
     );
+  });
+
+  it('skips an outbox operation claimed by another worker', async () => {
+    const updateSpy = vi.spyOn(sheetsPort, 'updateAssignment');
+    mockPrisma.sheetSyncOperation.findMany.mockResolvedValue([
+      {
+        id: 'op-claimed',
+        operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
+        status: SyncStatus.PENDING,
+        attempts: 0,
+        payload: { externalKey: 'EQ-001', row: 2, values: { J: 'Cliente' } },
+      },
+    ]);
+    mockPrisma.sheetSyncOperation.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(syncService.processPendingOperations()).resolves.toBe(0);
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it('reclaims a stale processing operation after its lease expires', async () => {
+    const updateSpy = vi.spyOn(sheetsPort, 'updateAssignment');
+    mockPrisma.sheetSyncOperation.findMany.mockResolvedValue([
+      {
+        id: 'op-stale',
+        operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
+        status: SyncStatus.PROCESSING,
+        attempts: 0,
+        payload: { externalKey: 'EQ-001', row: 2, values: { J: 'Cliente' } },
+      },
+    ]);
+
+    await expect(syncService.processPendingOperations()).resolves.toBe(1);
+    expect(updateSpy).toHaveBeenCalledOnce();
   });
 
   it('processes SHEET_TECHNICAL_REPORT operations and calls syncTechnicalReportRow via SyncService', async () => {
@@ -572,9 +671,21 @@ describe('OrdersService & SyncService', () => {
     vi.spyOn(catalogService, 'getEquipment').mockResolvedValue({
       fetchedAt: new Date().toISOString(),
       data: [
-        { externalKey: 'EQ-001', hasValidIdentity: true, currentClient: 'Transportes Bull Dog' } as unknown as ExternalEquipment,
-        { externalKey: 'EQ-OLD', hasValidIdentity: true, currentClient: 'Transportes Bull Dog' } as unknown as ExternalEquipment,
-        { externalKey: 'EQ-NEW', hasValidIdentity: true, currentClient: 'Transportes Bull Dog' } as unknown as ExternalEquipment,
+        {
+          externalKey: 'EQ-001',
+          hasValidIdentity: true,
+          currentClient: 'Transportes Bull Dog',
+        } as unknown as ExternalEquipment,
+        {
+          externalKey: 'EQ-OLD',
+          hasValidIdentity: true,
+          currentClient: 'Transportes Bull Dog',
+        } as unknown as ExternalEquipment,
+        {
+          externalKey: 'EQ-NEW',
+          hasValidIdentity: true,
+          currentClient: 'Transportes Bull Dog',
+        } as unknown as ExternalEquipment,
       ],
     });
 
@@ -606,20 +717,23 @@ describe('OrdersService & SyncService', () => {
       ],
     });
 
-    let enqueuedOps: Array<{ operationType: string; payload: { values: Record<string, string> } }> = [];
-    mockPrisma.$transaction.mockImplementationOnce(async (callback: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        orderEquipment: { update: vi.fn() },
-        order: { update: vi.fn().mockResolvedValue({ id: 'order-uninst', status: 'ASSIGNED' }) },
-        auditLog: { createMany: vi.fn() },
-        sheetSyncOperation: {
-          createMany: vi.fn(({ data }: { data: typeof enqueuedOps }) => {
-            enqueuedOps = data;
-          }),
-        },
-      };
-      return callback(tx);
-    });
+    let enqueuedOps: Array<{ operationType: string; payload: { values: Record<string, string> } }> =
+      [];
+    mockPrisma.$transaction.mockImplementationOnce(
+      async (callback: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          orderEquipment: { update: vi.fn() },
+          order: { update: vi.fn().mockResolvedValue({ id: 'order-uninst', status: 'ASSIGNED' }) },
+          auditLog: { createMany: vi.fn() },
+          sheetSyncOperation: {
+            createMany: vi.fn(({ data }: { data: typeof enqueuedOps }) => {
+              enqueuedOps = data;
+            }),
+          },
+        };
+        return callback(tx);
+      },
+    );
 
     await ordersService.assignAndSyncOrder('admin', 'order-uninst');
     expect(enqueuedOps).toHaveLength(1);
@@ -668,19 +782,21 @@ describe('OrdersService & SyncService', () => {
       ],
     });
 
-    mockPrisma.$transaction.mockImplementationOnce(async (callback: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        orderEquipment: { update: vi.fn() },
-        order: { update: vi.fn().mockResolvedValue({ id: 'order-replace', status: 'ASSIGNED' }) },
-        auditLog: { createMany: vi.fn() },
-        sheetSyncOperation: {
-          createMany: vi.fn(({ data }: { data: typeof enqueuedOps }) => {
-            enqueuedOps = data;
-          }),
-        },
-      };
-      return callback(tx);
-    });
+    mockPrisma.$transaction.mockImplementationOnce(
+      async (callback: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          orderEquipment: { update: vi.fn() },
+          order: { update: vi.fn().mockResolvedValue({ id: 'order-replace', status: 'ASSIGNED' }) },
+          auditLog: { createMany: vi.fn() },
+          sheetSyncOperation: {
+            createMany: vi.fn(({ data }: { data: typeof enqueuedOps }) => {
+              enqueuedOps = data;
+            }),
+          },
+        };
+        return callback(tx);
+      },
+    );
 
     await ordersService.assignAndSyncOrder('admin', 'order-replace');
     expect(enqueuedOps).toHaveLength(2);
@@ -745,7 +861,7 @@ describe('OrdersService & SyncService', () => {
   );
 
   it.each(OrderServiceTypeSchema.options)(
-    'enforces the service policy on both addition methods: %s',
+    'allows additions in draft for any service type: %s',
     async (serviceType) => {
       mockPrisma.order.findUnique.mockResolvedValue({
         id: 'order-1',
@@ -759,19 +875,12 @@ describe('OrdersService & SyncService', () => {
         label: 'Unidad',
         makeModel: 'Modelo',
         serialNumber: 'DEMO',
+        serviceType,
       });
-      if (serviceType === 'INSTALLATION') {
-        await expect(addUnit).resolves.toMatchObject({ id: 'unit-1' });
-        await expect(
-          ordersService.assignEquipment('admin', 'order-1', 'unit-1', { externalKey: 'EQ-DEMO' }),
-        ).resolves.toMatchObject({ id: 'eq-1' });
-      } else {
-        await expect(addUnit).rejects.toMatchObject({ code: 'ORDER_ADDITIONS_NOT_ALLOWED' });
-        await expect(
-          ordersService.assignEquipment('admin', 'order-1', 'unit-1', { externalKey: 'EQ-DEMO' }),
-        ).rejects.toMatchObject({ code: 'ORDER_ADDITIONS_NOT_ALLOWED' });
-        expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-      }
+      await expect(addUnit).resolves.toMatchObject({ id: 'unit-1' });
+      await expect(
+        ordersService.assignEquipment('admin', 'order-1', 'unit-1', { externalKey: 'EQ-DEMO' }),
+      ).resolves.toMatchObject({ id: 'eq-1' });
     },
   );
 
@@ -795,7 +904,18 @@ describe('OrdersService & SyncService', () => {
     mockPrisma.order.findMany.mockResolvedValue([]);
     await ordersService.listOrders({ id: 'admin', role: 'ADMIN' }, { serviceType: 'FUEL_SENSOR' });
     expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { serviceType: 'FUEL_SENSOR' } }),
+      expect.objectContaining({
+        where: {
+          AND: [
+            {
+              OR: [
+                { serviceType: 'FUEL_SENSOR' },
+                { units: { some: { serviceType: 'FUEL_SENSOR' } } },
+              ],
+            },
+          ],
+        },
+      }),
     );
   });
 

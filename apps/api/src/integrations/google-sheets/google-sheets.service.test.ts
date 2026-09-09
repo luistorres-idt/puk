@@ -225,8 +225,42 @@ describe('DevMockSheetsClient Directory and Report Sync', () => {
 
     const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
     mockRows.push(
-      ['37', 'OS-DUP-001', 'Tech 1', '', '', 'E1', 'S1', 'I1', 'C1', '2026-09-09', 'Instalación', '100', '0', '100', '', ''],
-      ['37', 'OS-DUP-001', 'Tech 2', '', '', 'E2', 'S2', 'I2', 'C2', '2026-09-09', 'Instalación', '100', '0', '100', '', ''],
+      [
+        '37',
+        'OS-DUP-001',
+        'Tech 1',
+        '',
+        '',
+        'E1',
+        'S1',
+        'I1',
+        'C1',
+        '2026-09-09',
+        'Instalación',
+        '100',
+        '0',
+        '100',
+        '',
+        '',
+      ],
+      [
+        '37',
+        'OS-DUP-001',
+        'Tech 2',
+        '',
+        '',
+        'E2',
+        'S2',
+        'I2',
+        'C2',
+        '2026-09-09',
+        'Instalación',
+        '100',
+        '0',
+        '100',
+        '',
+        '',
+      ],
     );
 
     await expect(
@@ -247,5 +281,73 @@ describe('DevMockSheetsClient Directory and Report Sync', () => {
       }),
     ).rejects.toThrow(AppError);
   });
-});
 
+  it('inserts each new order at row 2 and shifts previous rows down', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const client = new DevMockSheetsClient();
+    const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
+
+    // First insert
+    const res1 = await client.syncTechnicalReportRow({
+      folio: 'OS-FIRST',
+      sem: '37',
+      tecnico: 'Tech A',
+      economico: 'ECO-A',
+      serie: 'SER-A',
+      imeiId: 'IMEI-A',
+      cliente: 'Client A',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '500.00',
+      viaticos: '0.00',
+      total: '500.00',
+      notas: 'First order',
+    });
+    expect(res1.created).toBe(true);
+    expect(res1.row).toBe(2);
+    expect(mockRows[1]![1]).toBe('OS-FIRST');
+
+    // Second insert: must be inserted at row 2, pushing OS-FIRST to row 3
+    const res2 = await client.syncTechnicalReportRow({
+      folio: 'OS-SECOND',
+      sem: '37',
+      tecnico: 'Tech B',
+      economico: 'ECO-B',
+      serie: 'SER-B',
+      imeiId: 'IMEI-B',
+      cliente: 'Client B',
+      fecha: '2026-09-09',
+      servicio: 'Revisión',
+      costo: '300.00',
+      viaticos: '100.00',
+      total: '400.00',
+      notas: 'Second order',
+    });
+    expect(res2.created).toBe(true);
+    expect(res2.row).toBe(2);
+    expect(mockRows[1]![1]).toBe('OS-SECOND'); // at row 2 (index 1)
+    expect(mockRows[2]![1]).toBe('OS-FIRST'); // shifted to row 3 (index 2)
+
+    // Updating OS-FIRST should update row 3 in-place, NOT row 2
+    const updateRes = await client.syncTechnicalReportRow({
+      folio: 'OS-FIRST',
+      sem: '37',
+      tecnico: 'Tech A',
+      economico: 'ECO-A-UPDATED',
+      serie: 'SER-A',
+      imeiId: 'IMEI-A',
+      cliente: 'Client A',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '500.00',
+      viaticos: '0.00',
+      total: '500.00',
+      notas: 'First order updated',
+    });
+    expect(updateRes.created).toBe(false);
+    expect(updateRes.row).toBe(3);
+    expect(mockRows[2]![1]).toBe('OS-FIRST');
+    expect(mockRows[2]![5]).toBe('ECO-A-UPDATED');
+    expect(mockRows[1]![1]).toBe('OS-SECOND'); // row 2 remains OS-SECOND
+  });
+});

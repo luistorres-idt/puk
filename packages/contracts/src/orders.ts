@@ -37,10 +37,25 @@ export function isServiceConfigurationSupported(type: OrderServiceType): boolean
   }
 }
 
-/** Applies to additions after creation, not to the initial nested order payload. */
-export function canAddOrderItems(order: { status: string; serviceType: string }): boolean {
-  return order.status === 'DRAFT' && order.serviceType === 'INSTALLATION';
+export function canAddOrderItems(order: { status: string; serviceType?: string | null }): boolean {
+  return order.status === 'DRAFT';
 }
+
+export const PricingBreakdownItemSchema = v.object({
+  serviceType: OrderServiceTypeSchema,
+  rate: v.string(),
+  quantity: v.number(),
+  subtotal: v.string(),
+});
+export type PricingBreakdownItem = v.InferOutput<typeof PricingBreakdownItemSchema>;
+
+export const PricingBreakdownSchema = v.object({
+  breakdown: v.array(PricingBreakdownItemSchema),
+  departureCost: v.string(),
+  travelExpenses: v.string(),
+  warnings: v.array(v.string()),
+});
+export type PricingBreakdown = v.InferOutput<typeof PricingBreakdownSchema>;
 
 export const OrderPricingSnapshotSchema = v.object({
   appliedQuantity: v.number(),
@@ -56,6 +71,7 @@ export const OrderPricingSnapshotSchema = v.object({
   totalAmount: v.string(),
   travelExpenses: v.string(),
   unitRate: v.optional(v.nullable(v.string())),
+  breakdown: v.optional(v.array(PricingBreakdownItemSchema)),
 });
 export type OrderPricingSnapshot = v.InferOutput<typeof OrderPricingSnapshotSchema>;
 
@@ -105,6 +121,7 @@ export const CreateOrderUnitSchema = v.object({
   makeModel: v.pipe(v.string(), v.nonEmpty()),
   serialNumber: v.pipe(v.string(), v.nonEmpty()),
   year: v.optional(v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1900), v.maxValue(2100)))),
+  serviceType: v.optional(OrderServiceTypeSchema),
   equipment: v.optional(v.array(AssignEquipmentSchema)),
 });
 export type CreateOrderUnit = v.InferOutput<typeof CreateOrderUnitSchema>;
@@ -116,7 +133,7 @@ export const CreateOrderSchema = v.object({
   isHomeService: v.optional(v.boolean()),
   scheduledAt: v.pipe(v.string(), v.isoTimestamp()),
   serviceAddress: v.optional(v.nullable(v.string())),
-  serviceType: OrderServiceTypeSchema,
+  serviceType: v.optional(OrderServiceTypeSchema),
   technicianId: v.pipe(
     v.string('Selecciona un técnico para crear la orden'),
     v.uuid('El técnico debe tener un identificador UUID válido'),
@@ -143,6 +160,8 @@ export const CreateUnitSchema = v.object({
   makeModel: v.pipe(v.string(), v.nonEmpty()),
   serialNumber: v.pipe(v.string(), v.nonEmpty()),
   year: v.optional(v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1900), v.maxValue(2100)))),
+  serviceType: v.optional(OrderServiceTypeSchema),
+  equipment: v.optional(v.array(AssignEquipmentSchema)),
 });
 export type CreateUnit = v.InferOutput<typeof CreateUnitSchema>;
 

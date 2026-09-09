@@ -1,10 +1,8 @@
 import { Prisma, type PrismaClient } from '../../generated/prisma/client.js';
 import type { SheetsPort } from '../../integrations/ports.js';
+import { logger } from '../../observability/logger.js';
 import { AppError } from '../../shared/errors.js';
-import {
-  allocateNextTechnicianId,
-  parseTechnicianDirectoryRows,
-} from './directory-parser.js';
+import { allocateNextTechnicianId, parseTechnicianDirectoryRows } from './directory-parser.js';
 
 type TechnicianInput = {
   active?: boolean;
@@ -31,19 +29,57 @@ type TechnicianInput = {
 };
 
 export class TechniciansService {
+  private lastSyncAt: number | null = null;
+  private readonly syncTtlMs: number = 60_000;
+
   public constructor(
     private readonly prisma: PrismaClient,
     private readonly sheetsPort?: SheetsPort,
-  ) {}
+    options?: { syncTtlSeconds?: number },
+  ) {
+    if (options?.syncTtlSeconds !== undefined) {
+      this.syncTtlMs = options.syncTtlSeconds * 1000;
+    }
+  }
+
+  public getLastSyncAt(): number | null {
+    return this.lastSyncAt;
+  }
 
   public list() {
     return this.prisma.technician.findMany({ orderBy: { name: 'asc' } });
   }
 
-  public listSelectable() {
+  public async listSelectable(options?: { forceSync?: boolean }) {
+    if (this.sheetsPort) {
+      const now = Date.now();
+      const shouldSync =
+        Boolean(options?.forceSync) ||
+        this.lastSyncAt === null ||
+        now - this.lastSyncAt > this.syncTtlMs;
+
+      if (shouldSync) {
+        try {
+          await this.syncFromSheets();
+        } catch (error) {
+          logger.warn('No se pudo sincronizar el directorio técnico desde Google Sheets', {
+            error,
+          });
+        }
+      }
+    }
+
     return this.prisma.technician.findMany({
       where: { active: true },
-      select: { id: true, name: true, workshop: true, city: true },
+      select: {
+        id: true,
+        name: true,
+        workshop: true,
+        city: true,
+        state: true,
+        phone: true,
+        externalKey: true,
+      },
       orderBy: { name: 'asc' },
     });
   }
@@ -109,7 +145,7 @@ export class TechniciansService {
     const rawRows = await this.sheetsPort.listTechniciansDirectory();
     const parseResult = parseTechnicianDirectoryRows(rawRows);
 
-    return this.prisma.$transaction(async (transaction) => {
+    const result = await this.prisma.$transaction(async (transaction) => {
       const incomingKeys = new Set<string>();
       let syncedCount = 0;
 
@@ -190,6 +226,9 @@ export class TechniciansService {
         maxExternalId: parseResult.maxExternalId,
       };
     });
+
+    this.lastSyncAt = Date.now();
+    return result;
   }
 }
 
@@ -200,7 +239,9 @@ function toDecimal(parsedRate: { isValid: boolean; value: string | null }): Pris
   return new Prisma.Decimal(parsedRate.value);
 }
 
-function toDecimalInput(val?: Prisma.Decimal | string | number | null): Prisma.Decimal | null | undefined {
+function toDecimalInput(
+  val?: Prisma.Decimal | string | number | null,
+): Prisma.Decimal | null | undefined {
   if (val === undefined) return undefined;
   if (val === null || val === '') return null;
   return new Prisma.Decimal(val);

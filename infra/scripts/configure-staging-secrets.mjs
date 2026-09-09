@@ -9,7 +9,10 @@ import { spawnSync } from 'node:child_process';
 const accountId = '075566976700';
 const region = process.env.AWS_REGION ?? 'us-east-2';
 const secretId = 'puk/staging/runtime';
-const missing = process.env.GOOGLE_SPREADSHEET_ID ? [] : ['GOOGLE_SPREADSHEET_ID'];
+const missing = [];
+for (const name of ['GOOGLE_SPREADSHEET_ID', 'GOOGLE_TECHNICIANS_SPREADSHEET_ID']) {
+  if (!process.env[name]) missing.push(name);
+}
 if (!process.env.GOOGLE_SERVICE_ACCOUNT_FILE && !process.env.GOOGLE_PRIVATE_KEY) {
   missing.push('GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_PRIVATE_KEY');
 }
@@ -46,6 +49,7 @@ const secret = JSON.stringify({
   GOOGLE_CLIENT_EMAIL: googleClientEmail,
   GOOGLE_PRIVATE_KEY: googlePrivateKey,
   GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID,
+  GOOGLE_TECHNICIANS_SPREADSHEET_ID: process.env.GOOGLE_TECHNICIANS_SPREADSHEET_ID,
   JWT_ACCESS_PRIVATE_KEY: access.privateKey.export({ format: 'pem', type: 'pkcs8' }),
   JWT_ACCESS_PUBLIC_KEY: access.publicKey.export({ format: 'pem', type: 'spki' }),
   JWT_REFRESH_PRIVATE_KEY: refresh.privateKey.export({ format: 'pem', type: 'pkcs8' }),

@@ -28,6 +28,10 @@ export interface TechnicalReportRowInput {
   notas: string;
 }
 
+export type EquipmentAssignmentValues = Partial<
+  Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>
+>;
+
 export interface SheetsPort {
   findEquipment(identity: {
     externalId: string;
@@ -37,7 +41,7 @@ export interface SheetsPort {
   listEquipment(): Promise<readonly ExternalEquipmentRecord[]>;
   updateAssignment(input: {
     row: number;
-    values: Readonly<Partial<Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
+    values: Readonly<EquipmentAssignmentValues>;
   }): Promise<void>;
   listTechniciansDirectory(): Promise<readonly (readonly string[])[]>;
   syncTechnicalReportRow(

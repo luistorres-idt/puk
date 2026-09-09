@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NButton,
@@ -15,7 +15,12 @@ import {
   NTabPane,
   useMessage,
 } from 'naive-ui';
-import type { ChecklistCategory, ChecklistCondition, SaveChecklistItem } from '@puk/contracts';
+import type {
+  ChecklistCategory,
+  ChecklistCondition,
+  OrderServiceType,
+  SaveChecklistItem,
+} from '@puk/contracts';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { useSessionStore } from '../../../stores/session.js';
@@ -24,6 +29,7 @@ import {
   formatServiceType,
   type ChecklistEvidenceItem,
   type OrderDetail,
+  type TechnicianPricing,
 } from '../../orders/index.js';
 import {
   checkCompleteness,
@@ -301,9 +307,61 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
   }
 }
 
+type TechnicianRateField = keyof Pick<
+  TechnicianPricing,
+  | 'installationRate'
+  | 'reviewRate'
+  | 'uninstallationRate'
+  | 'replacementRate'
+  | 'failedAppointmentRate'
+  | 'fuelSensorRate'
+>;
+
+const RATE_CONFIG: Record<OrderServiceType, { field: TechnicianRateField; label: string }> = {
+  INSTALLATION: { field: 'installationRate', label: 'Instalación' },
+  REVIEW: { field: 'reviewRate', label: 'Revisión' },
+  UNINSTALLATION: { field: 'uninstallationRate', label: 'Desinstalación' },
+  EQUIPMENT_REPLACEMENT: { field: 'replacementRate', label: 'Cambio de equipo' },
+  FAILED_APPOINTMENT: { field: 'failedAppointmentRate', label: 'Cita fallida' },
+  FUEL_SENSOR: { field: 'fuelSensorRate', label: 'Sensor de combustible' },
+};
+
+function isInvalidRate(rate: number | string | null | undefined): boolean {
+  if (rate === null || rate === undefined || rate === '') return true;
+  const numericRate = Number(rate);
+  return !Number.isFinite(numericRate) || numericRate < 0;
+}
+
+const missingTechnicianRates = computed<string[]>(() => {
+  if (!order.value?.technician || !order.value?.units) return [];
+  const tech = order.value.technician;
+  const neededServices = new Set<OrderServiceType>();
+  for (const u of order.value.units) {
+    if (u.serviceType) {
+      neededServices.add(u.serviceType);
+    }
+  }
+  if (neededServices.size === 0 && order.value.serviceType) {
+    neededServices.add(order.value.serviceType);
+  }
+
+  return [...neededServices].flatMap((serviceType) => {
+    const config = RATE_CONFIG[serviceType];
+    return isInvalidRate(tech[config.field])
+      ? [`El técnico no tiene tarifa para ${config.label} (se liquidará con tarifa $0.00 MXN).`]
+      : [];
+  });
+});
+
 async function handleCompleteOrder() {
   try {
-    await completeOrder(orderId);
+    const res = await completeOrder(orderId);
+    const warnings = res.warnings ?? [];
+    if (warnings.length > 0) {
+      for (const w of warnings) {
+        message.warning(w, { duration: 10000, closable: true });
+      }
+    }
     message.success('¡Orden de servicio finalizada y cerrada con éxito!');
     await loadData();
   } catch (err: unknown) {
@@ -593,6 +651,26 @@ onMounted(() => {
                     {{ req }}
                   </li>
                 </ul>
+              </div>
+
+              <!-- Warning if technician is missing rate for any service in the order -->
+              <div
+                v-if="missingTechnicianRates.length > 0 && order.status !== 'COMPLETED'"
+                class="p-3 rounded-lg border text-xs bg-amber-50 border-amber-300 text-amber-900 space-y-1"
+              >
+                <div class="font-bold flex items-center gap-1.5 text-amber-800">
+                  <span>⚠️</span>
+                  <span>Aviso: Tarifas no configuradas para el técnico</span>
+                </div>
+                <ul class="list-disc list-inside space-y-0.5 text-amber-900">
+                  <li v-for="(msg, mIdx) in missingTechnicianRates" :key="mIdx">
+                    {{ msg }}
+                  </li>
+                </ul>
+                <p class="text-[11px] text-amber-700 mt-1">
+                  La orden puede finalizarse normalmente, pero estos conceptos se calcularán con
+                  importe $0.00 en la liquidación técnica.
+                </p>
               </div>
 
               <div class="flex flex-wrap gap-3 items-center justify-between pt-2">

@@ -153,6 +153,7 @@ model Order {
   pricingCurrency               String?              @default("MXN")
   pricingSnapshotAt             DateTime?            @db.Timestamptz(3)
   pricingVersion                Int?                 @default(1)
+  pricingBreakdown              Json?                @db.JsonB
   scheduledAt                   DateTime             @db.Timestamptz(3)
   isHomeService                 Boolean              @default(false)
   serviceAddress                String?
@@ -206,6 +207,7 @@ model OrderUnit {
   makeModel     String
   year          Int?
   serialNumber  String
+  serviceType   OrderServiceType @default(INSTALLATION)
   status        UnitStatus       @default(PENDING)
   createdAt     DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
@@ -216,6 +218,7 @@ model OrderUnit {
 
   @@unique([orderId, serialNumber])
   @@index([orderId, status])
+  @@index([orderId, serviceType])
 }
 
 model OrderEquipment {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { AppError } from '../../shared/errors.js';
 import {
   calculateOrderPricing,
   resolveServiceRate,
@@ -149,20 +148,27 @@ describe('Pricing Calculation Module', () => {
       expect(pricing.total.toFixed(2)).toBe('1111.10');
     });
 
-    it('throws AppError when required rate is missing for normal services', () => {
+    it('defaults to 0.00 and emits warning when required rate is missing for normal services', () => {
       const techMissing: TechnicianPricingSource = {
         ...mockTech,
         reviewRate: null,
       };
 
-      expect(() =>
-        calculateOrderPricing({
-          technician: techMissing,
-          serviceType: 'REVIEW',
-          equipmentCount: 1,
-          isHomeService: false,
-        }),
-      ).toThrow(AppError);
+      const pricing = calculateOrderPricing({
+        technician: techMissing,
+        serviceType: 'REVIEW',
+        equipmentCount: 1,
+        isHomeService: false,
+      });
+
+      expect(pricing.unitRate?.toFixed(2)).toBe('0.00');
+      expect(pricing.baseCost.toFixed(2)).toBe('0.00');
+      expect(pricing.total.toFixed(2)).toBe('0.00');
+      expect(pricing.warnings).toBeDefined();
+      expect(pricing.warnings?.length).toBeGreaterThan(0);
+      expect(pricing.warnings?.[0]).toContain(
+        'no tiene configurada una tarifa válida para el servicio REVISION',
+      );
     });
 
     it('handles FAILED_APPOINTMENT with valid rate', () => {
@@ -213,6 +219,55 @@ describe('Pricing Calculation Module', () => {
       expect(pricing.baseCost.toFixed(2)).toBe('0.00');
       expect(pricing.total.toFixed(2)).toBe('0.00');
       expect(pricing.unitRate?.toFixed(2)).toBe('0.00');
+    });
+
+    it('calculates multi-service order pricing with combined base cost and itemized breakdown', () => {
+      // mockTech has installationRate: 700.00, reviewRate: 400.00, departureCost: 350.00
+      const pricing = calculateOrderPricing({
+        technician: mockTech,
+        isHomeService: true,
+        items: [
+          { serviceType: 'INSTALLATION', equipmentCount: 2 },
+          { serviceType: 'REVIEW', equipmentCount: 1 },
+        ],
+      });
+
+      // Base: (2 * 700) + (1 * 400) = 1400 + 400 = 1800.00
+      expect(pricing.baseCost.toFixed(2)).toBe('1800.00');
+      // Travel: 350.00 once
+      expect(pricing.travelExpenses.toFixed(2)).toBe('350.00');
+      // Total: 2150.00
+      expect(pricing.total.toFixed(2)).toBe('2150.00');
+      expect(pricing.appliedQuantity).toBe(3);
+      expect(pricing.breakdown).toHaveLength(2);
+
+      const installBreakdown = pricing.breakdown.find((b) => b.serviceType === 'INSTALLATION');
+      expect(installBreakdown?.quantity).toBe(2);
+      expect(installBreakdown?.subtotal.toFixed(2)).toBe('1400.00');
+
+      const reviewBreakdown = pricing.breakdown.find((b) => b.serviceType === 'REVIEW');
+      expect(reviewBreakdown?.quantity).toBe(1);
+      expect(reviewBreakdown?.subtotal.toFixed(2)).toBe('400.00');
+    });
+
+    it('charges each replacement unit once when an order has multiple replacements', () => {
+      const pricing = calculateOrderPricing({
+        technician: mockTech,
+        isHomeService: false,
+        items: [
+          { serviceType: 'EQUIPMENT_REPLACEMENT', equipmentCount: 2 },
+          { serviceType: 'EQUIPMENT_REPLACEMENT', equipmentCount: 2 },
+        ],
+      });
+
+      expect(pricing.appliedQuantity).toBe(2);
+      expect(pricing.baseCost.toFixed(2)).toBe('1000.00');
+      expect(pricing.breakdown).toEqual([
+        expect.objectContaining({
+          serviceType: 'EQUIPMENT_REPLACEMENT',
+          quantity: 2,
+        }),
+      ]);
     });
   });
 });

@@ -87,4 +87,42 @@ describe('Technical Report Formatter', () => {
       'Motivo cita fallida: Cliente no estuvo presente en el domicilio | Se esperaron 45 minutos',
     );
   });
+
+  it('formats mixed services in servicio column matching multiline units', () => {
+    const order: ReportOrderSource = {
+      folio: 'OS-MIXED-001',
+      clientNameSnapshot: 'Logistica Del Norte',
+      scheduledAt: '2026-09-09T18:00:00.000Z',
+      technicianNameSnapshot: 'Carlos Lopez',
+      pricingBaseCost: '1100.00',
+      pricingTravelExpenses: '350.00',
+      pricingTotal: '1450.00',
+      units: [
+        {
+          id: 'u-1',
+          label: 'Eco-101',
+          serialNumber: 'SN-101',
+          serviceType: 'INSTALLATION',
+          createdAt: '2026-09-09T10:00:00.000Z',
+          equipment: [{ imei: '111111111111111' }],
+        },
+        {
+          id: 'u-2',
+          label: 'Eco-202',
+          serialNumber: 'SN-202',
+          serviceType: 'REVIEW',
+          createdAt: '2026-09-09T10:05:00.000Z',
+          equipment: [{ imei: '222222222222222' }],
+        },
+      ],
+    };
+
+    const row = formatTechnicalReportRow(order);
+    expect(row.economico).toBe('Eco-101\nEco-202');
+    expect(row.serie).toBe('SN-101\nSN-202');
+    expect(row.imeiId).toBe('111111111111111\n222222222222222');
+    expect(row.servicio).toBe('Instalación\nRevisión');
+    expect(row.costo).toBe('1100.00');
+    expect(row.total).toBe('1450.00');
+  });
 });

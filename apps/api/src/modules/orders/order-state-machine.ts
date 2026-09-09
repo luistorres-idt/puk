@@ -98,14 +98,14 @@ export function assertCanExecuteWork(
 
 export function assertCanAddOrderItems(order: {
   status: OrderStatus;
-  serviceType: OrderServiceType;
+  serviceType?: OrderServiceType | null;
 }): void {
   assertCanModifyUnits(order.status, 'agregar unidades o equipos');
   if (!canAddOrderItems(order)) {
     throw new AppError(
       400,
       'ORDER_ADDITIONS_NOT_ALLOWED',
-      'Solo las instalaciones permiten agregar unidades o equipos después de crear la orden. Configura las unidades y equipos al crearla.',
+      'Solo se pueden agregar unidades o equipos a órdenes en borrador.',
     );
   }
 }

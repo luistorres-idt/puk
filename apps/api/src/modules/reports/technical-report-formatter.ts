@@ -2,7 +2,7 @@ import { ORDER_SERVICE_LABELS, type OrderServiceType } from '@puk/contracts';
 
 export interface ReportOrderSource {
   readonly folio: string;
-  readonly serviceType: OrderServiceType;
+  readonly serviceType?: OrderServiceType | null;
   readonly clientNameSnapshot: string;
   readonly scheduledAt: Date | string;
   readonly generalNotes?: string | null;
@@ -15,6 +15,7 @@ export interface ReportOrderSource {
     readonly id: string;
     readonly label: string;
     readonly serialNumber: string;
+    readonly serviceType?: OrderServiceType | null;
     readonly createdAt?: Date | string;
     readonly equipment?: ReadonlyArray<{
       readonly imei?: string | null;
@@ -64,7 +65,10 @@ export function getIsoWeek(dateInput: Date | string, timeZone = 'America/Hermosi
   return 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
 }
 
-export function formatReportDate(dateInput: Date | string, timeZone = 'America/Hermosillo'): string {
+export function formatReportDate(
+  dateInput: Date | string,
+  timeZone = 'America/Hermosillo',
+): string {
   const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -75,7 +79,9 @@ export function formatReportDate(dateInput: Date | string, timeZone = 'America/H
   return formatter.format(date);
 }
 
-function formatDecimalString(val?: { toFixed(digits: number): string } | number | string | null): string {
+function formatDecimalString(
+  val?: { toFixed(digits: number): string } | number | string | null,
+): string {
   if (val === null || val === undefined || val === '') return '0.00';
   if (typeof val === 'object' && typeof val.toFixed === 'function') {
     return val.toFixed(2);
@@ -93,7 +99,6 @@ export function formatTechnicalReportRow(
   const fecha = formatReportDate(order.scheduledAt, timeZone);
   const tecnico = (order.technicianNameSnapshot ?? '').trim();
   const cliente = (order.clientNameSnapshot ?? '').trim();
-  const servicio = ORDER_SERVICE_LABELS[order.serviceType] ?? order.serviceType;
 
   const sortedUnits = [...(order.units ?? [])].sort((a, b) => {
     const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -101,6 +106,20 @@ export function formatTechnicalReportRow(
     if (timeA !== timeB) return timeA - timeB;
     return a.id.localeCompare(b.id);
   });
+
+  let servicio: string;
+  if (sortedUnits.length > 0 && sortedUnits.some((u) => u.serviceType)) {
+    servicio = sortedUnits
+      .map((u) => {
+        const type = u.serviceType ?? order.serviceType;
+        return type ? (ORDER_SERVICE_LABELS[type] ?? type) : '';
+      })
+      .join('\n');
+  } else if (order.serviceType) {
+    servicio = ORDER_SERVICE_LABELS[order.serviceType] ?? order.serviceType;
+  } else {
+    servicio = '';
+  }
 
   const economico = sortedUnits.map((u) => u.label.trim()).join('\n');
   const serie = sortedUnits.map((u) => u.serialNumber.trim()).join('\n');

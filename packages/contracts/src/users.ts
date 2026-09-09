@@ -40,5 +40,8 @@ export const TechnicianOptionSchema = v.object({
   name: v.string(),
   workshop: v.nullable(v.string()),
   city: v.nullable(v.string()),
+  state: v.optional(v.nullable(v.string())),
+  phone: v.optional(v.nullable(v.string())),
+  externalKey: v.optional(v.nullable(v.string())),
 });
 export type TechnicianOption = v.InferOutput<typeof TechnicianOptionSchema>;

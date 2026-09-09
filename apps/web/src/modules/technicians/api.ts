@@ -26,7 +26,29 @@ export async function listActiveTechnicians(): Promise<Technician[]> {
   return technicians.filter((t) => t.active);
 }
 
-export async function listSelectableTechnicians(): Promise<TechnicianOption[]> {
-  const response = await api.get<ApiResponse<TechnicianOption[]>>('/technicians/selectable');
-  return response.data.data;
+export interface SelectableTechniciansResult {
+  technicians: TechnicianOption[];
+  fetchedAt: string | null;
+  total: number;
+}
+
+export async function fetchSelectableTechnicians(
+  options: { forceFresh?: boolean } = {},
+): Promise<SelectableTechniciansResult> {
+  const response = await api.get<{
+    data: TechnicianOption[];
+    meta?: { fetchedAt?: string; total?: number };
+  }>('/technicians/selectable', {
+    params: options.forceFresh ? { fresh: 'true' } : undefined,
+  });
+  return {
+    technicians: response.data.data,
+    fetchedAt: response.data.meta?.fetchedAt ?? null,
+    total: response.data.meta?.total ?? response.data.data.length,
+  };
+}
+
+export async function listSelectableTechnicians(forceFresh = false): Promise<TechnicianOption[]> {
+  const { technicians } = await fetchSelectableTechnicians({ forceFresh });
+  return technicians;
 }

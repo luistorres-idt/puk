@@ -1,4 +1,4 @@
-import type { ExternalEquipment, OrderServiceType } from '@puk/contracts';
+import type { AssignEquipment, ExternalEquipment, OrderServiceType } from '@puk/contracts';
 import { normalizeString, isMatchingClient } from '@puk/contracts';
 
 export { normalizeString, isMatchingClient };
@@ -14,10 +14,12 @@ export function isInstalledEquipment(equipment: ExternalEquipment): boolean {
 export interface EquipmentFilterOptions {
   serviceType?: OrderServiceType | string | null | undefined;
   clientName?: string | null | undefined;
+  excludeKeys?: readonly string[] | Set<string> | null | undefined;
 }
 
 /**
  * Filters equipment according to the order's service type and client:
+ * - Exclude any equipment whose externalKey is in options.excludeKeys.
  * - INSTALLATION: Only available / in-stock equipment (not installed, not assigned to another client).
  * - REVIEW / UNINSTALLATION: Only installed equipment that belongs to the order's client.
  * - Other/Undefined: All equipment.
@@ -26,16 +28,25 @@ export function filterEquipmentByServiceType(
   equipmentList: readonly ExternalEquipment[],
   options: EquipmentFilterOptions = {},
 ): ExternalEquipment[] {
-  const { serviceType, clientName } = options;
+  const { serviceType, clientName, excludeKeys } = options;
+
+  let filtered = equipmentList;
+
+  if (excludeKeys) {
+    const excludeSet = excludeKeys instanceof Set ? excludeKeys : new Set(excludeKeys);
+    if (excludeSet.size > 0) {
+      filtered = filtered.filter((eq) => !excludeSet.has(eq.externalKey));
+    }
+  }
 
   if (!serviceType) {
-    return [...equipmentList];
+    return [...filtered];
   }
 
   const normalizedServiceType = normalizeString(serviceType);
 
-  if (normalizedServiceType === 'installation') {
-    return equipmentList.filter((eq) => {
+  if (normalizedServiceType === 'installation' || normalizedServiceType === 'fuel_sensor') {
+    return filtered.filter((eq) => {
       // Must not be currently installed
       if (isInstalledEquipment(eq)) {
         return false;
@@ -53,7 +64,7 @@ export function filterEquipmentByServiceType(
   }
 
   if (normalizedServiceType === 'review' || normalizedServiceType === 'uninstallation') {
-    return equipmentList.filter((eq) => {
+    return filtered.filter((eq) => {
       // Must be installed
       if (!isInstalledEquipment(eq)) {
         return false;
@@ -68,7 +79,7 @@ export function filterEquipmentByServiceType(
     });
   }
 
-  return [...equipmentList];
+  return [...filtered];
 }
 
 /**
@@ -94,5 +105,23 @@ export function extractUnitFromEquipment(equipment: ExternalEquipment): {
     makeModel: equipment.unitMakeModel?.trim() || 'No especificada',
     serialNumber: equipment.unitSerialNumber?.trim() || `SN-${fallbackIdentifier}`,
     year: validYear,
+  };
+}
+
+export function toEquipmentAssignment(equipment: ExternalEquipment): AssignEquipment {
+  return {
+    externalKey: equipment.externalKey,
+    externalId: equipment.id,
+    imei: equipment.imei,
+    sheetName: 'SALIDAS',
+    sheetRowHint: equipment.rowNumber,
+    brandSnapshot: equipment.brand,
+    modelSnapshot: equipment.model,
+    lineSnapshot: equipment.line,
+    iccidSnapshot: equipment.iccid,
+    carrierSnapshot: equipment.carrier,
+    equipmentConditionSnapshot: equipment.condition,
+    serviceStatusSnapshot: equipment.serviceStatus,
+    rawSnapshot: equipment.rawValues,
   };
 }

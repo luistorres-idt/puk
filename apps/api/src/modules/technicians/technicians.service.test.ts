@@ -10,9 +10,76 @@ describe('technician selection', () => {
     await service.listSelectable();
     expect(findMany).toHaveBeenCalledWith({
       where: { active: true },
-      select: { id: true, name: true, workshop: true, city: true },
+      select: {
+        id: true,
+        name: true,
+        workshop: true,
+        city: true,
+        state: true,
+        phone: true,
+        externalKey: true,
+      },
       orderBy: { name: 'asc' },
     });
+  });
+
+  it('synchronizes technicians from sheets on listSelectable when sheetsPort is provided', async () => {
+    const validHeaderRow = [
+      'TECNICO', 'TALLER', 'RAZON SOCIAL', 'TELEFONO', 'CORREO', 'DIRECCIÓN',
+      'CIUDAD', 'ESTADO', 'FACTURA', 'DATOS FISCALES', 'DIRECCION FISCAL',
+      'COSTO SALIDA DEL TALLER', 'CAMBIO DE EQUIPO', 'INSTALACION', 'REVISION',
+      'DESINSTALACION', 'CITA FALLIDA', 'SENSOR FUEL', 'NOTAS ADICIONALES',
+      'NOMBRE DE LA CUENTA BANCARIA', 'CUENTA BANCARIA', 'BANCO', 'ID_TECNICO',
+    ];
+    const mockSheetsPort = {
+      listTechniciansDirectory: vi.fn().mockResolvedValue([
+        validHeaderRow,
+        [
+          'Ana Gomez', 'Taller Sur', '', '6620000000', '',
+          '', 'Hermosillo', 'Sonora', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', 'TEC-0001',
+        ],
+      ]),
+    };
+    const findMany = vi.fn().mockResolvedValue([]);
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const create = vi.fn().mockResolvedValue({});
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const mockPrisma = {
+      technician: { findMany, findUnique, create, updateMany },
+      $transaction: vi.fn().mockImplementation((cb) => cb(mockPrisma)),
+    } as unknown as PrismaClient;
+
+    const service = new TechniciansService(mockPrisma, mockSheetsPort as unknown as SheetsPort);
+    await service.listSelectable();
+
+    expect(mockSheetsPort.listTechniciansDirectory).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: 'Ana Gomez',
+          externalKey: 'TEC-0001',
+        }),
+      }),
+    );
+    expect(findMany).toHaveBeenCalled();
+  });
+
+  it('falls back to local database technicians if sheetsPort fails during listSelectable', async () => {
+    const mockSheetsPort = {
+      listTechniciansDirectory: vi.fn().mockRejectedValue(new Error('Google Sheets API unavailable')),
+    };
+    const fallbackTechs = [{ id: 'tech-fallback', name: 'Tecnico Local', workshop: 'Taller', city: 'Ciudad' }];
+    const findMany = vi.fn().mockResolvedValue(fallbackTechs);
+    const mockPrisma = {
+      technician: { findMany },
+    } as unknown as PrismaClient;
+
+    const service = new TechniciansService(mockPrisma, mockSheetsPort as unknown as SheetsPort);
+    const result = await service.listSelectable();
+
+    expect(result).toEqual(fallbackTechs);
+    expect(findMany).toHaveBeenCalled();
   });
 
   it('allocates next durable ID when creating technician without externalKey', async () => {

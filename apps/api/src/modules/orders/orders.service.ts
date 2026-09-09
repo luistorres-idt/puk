@@ -12,7 +12,12 @@ import {
 import { domainTransaction } from '../../database/transaction.js';
 import { updateOrderVersion } from '../../database/optimistic-lock.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
-import { OrderStatus, UploadStatus, type Prisma } from '../../generated/prisma/client.js';
+import {
+  OrderStatus,
+  UploadStatus,
+  type OrderServiceType,
+  type Prisma,
+} from '../../generated/prisma/client.js';
 import type { EquipmentCatalogPort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -22,6 +27,7 @@ import {
   assertServiceConfigurationSupported,
   assertValidOrderTransition,
 } from './order-state-machine.js';
+import { buildEquipmentSheetAssignment } from './equipment-sheet-assignment.js';
 
 export class OrdersService {
   public constructor(
@@ -38,6 +44,7 @@ export class OrdersService {
     const skip = (page - 1) * pageSize;
 
     const where: Prisma.OrderWhereInput = {};
+    const filters: Prisma.OrderWhereInput[] = [];
 
     if (actor.role === 'TECHNICIAN') {
       const user = await this.prisma.user.findUnique({
@@ -56,21 +63,32 @@ export class OrdersService {
       where.status = query.status as OrderStatus;
     }
     if (query.serviceType) {
-      where.serviceType = query.serviceType;
+      filters.push({
+        OR: [
+          { serviceType: query.serviceType },
+          { units: { some: { serviceType: query.serviceType } } },
+        ],
+      });
     }
 
     if (query.search) {
       const term = query.search.trim();
-      where.OR = [
-        { folio: { contains: term, mode: 'insensitive' } },
-        { clientNameSnapshot: { contains: term, mode: 'insensitive' } },
-      ];
+      filters.push({
+        OR: [
+          { folio: { contains: term, mode: 'insensitive' } },
+          { clientNameSnapshot: { contains: term, mode: 'insensitive' } },
+        ],
+      });
     }
 
     if (query.from || query.to) {
       where.scheduledAt = {};
       if (query.from) where.scheduledAt.gte = new Date(query.from);
       if (query.to) where.scheduledAt.lte = new Date(query.to);
+    }
+
+    if (filters.length > 0) {
+      where.AND = filters;
     }
 
     const orderBy: Prisma.OrderOrderByWithRelationInput = {};
@@ -151,12 +169,13 @@ export class OrdersService {
   }
 
   public async createOrder(actorUserId: string, input: CreateOrder) {
-    assertServiceConfigurationSupported(input.serviceType);
+    const primaryServiceType = input.serviceType ?? input.units?.[0]?.serviceType ?? 'INSTALLATION';
+    assertServiceConfigurationSupported(primaryServiceType);
     const tech = await this.assertSelectableTechnician(input.technicianId);
 
     if (input.units && input.units.length > 0) {
       const serials = new Set<string>();
-      const equipmentKeys = new Set<string>();
+      const equipmentInputs: AssignEquipment[] = [];
 
       for (const unit of input.units) {
         if (serials.has(unit.serialNumber)) {
@@ -168,35 +187,10 @@ export class OrdersService {
         }
         serials.add(unit.serialNumber);
 
-        if (unit.equipment) {
-          for (const eq of unit.equipment) {
-            if (equipmentKeys.has(eq.externalKey)) {
-              throw new AppError(
-                409,
-                'DUPLICATE_EQUIPMENT',
-                `El equipo ${eq.externalKey} está duplicado en la orden`,
-              );
-            }
-            equipmentKeys.add(eq.externalKey);
-          }
-        }
+        equipmentInputs.push(...(unit.equipment ?? []));
       }
 
-      for (const key of equipmentKeys) {
-        const conflict = await this.prisma.orderEquipment.findFirst({
-          where: {
-            externalKey: key,
-            activeAssignment: true,
-          },
-        });
-        if (conflict) {
-          throw new AppError(
-            409,
-            'EQUIPMENT_ALREADY_ASSIGNED',
-            `El equipo ${key} ya se encuentra asignado a otra orden activa`,
-          );
-        }
-      }
+      await this.assertEquipmentAvailable(null, equipmentInputs);
     }
 
     const folio = `OS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
@@ -205,7 +199,7 @@ export class OrdersService {
       const order = await tx.order.create({
         data: {
           folio,
-          serviceType: input.serviceType,
+          serviceType: primaryServiceType,
           status: OrderStatus.DRAFT,
           clientSheetId: input.clientSheetId,
           clientNameSnapshot: input.clientNameSnapshot,
@@ -231,6 +225,8 @@ export class OrdersService {
 
       if (input.units && input.units.length > 0) {
         for (const unitInput of input.units) {
+          const unitServiceType = unitInput.serviceType ?? primaryServiceType;
+          assertServiceConfigurationSupported(unitServiceType);
           const unit = await tx.orderUnit.create({
             data: {
               orderId: order.id,
@@ -238,8 +234,13 @@ export class OrdersService {
               makeModel: unitInput.makeModel,
               serialNumber: unitInput.serialNumber,
               year: unitInput.year ?? null,
+              serviceType: unitServiceType,
               status: 'PENDING',
+              equipment: {
+                create: (unitInput.equipment ?? []).map(buildEquipmentCreateInput),
+              },
             },
+            include: { equipment: true },
           });
 
           effects.audit({
@@ -250,36 +251,14 @@ export class OrdersService {
             after: unit as unknown as Prisma.InputJsonValue,
           });
 
-          if (unitInput.equipment && unitInput.equipment.length > 0) {
-            for (const eqInput of unitInput.equipment) {
-              const equipment = await tx.orderEquipment.create({
-                data: {
-                  orderUnitId: unit.id,
-                  externalKey: eqInput.externalKey,
-                  externalId: eqInput.externalId ?? null,
-                  imei: eqInput.imei ?? null,
-                  sheetName: eqInput.sheetName ?? 'SALIDAS',
-                  sheetRowHint: eqInput.sheetRowHint ?? null,
-                  brandSnapshot: eqInput.brandSnapshot ?? null,
-                  modelSnapshot: eqInput.modelSnapshot ?? null,
-                  lineSnapshot: eqInput.lineSnapshot ?? null,
-                  iccidSnapshot: eqInput.iccidSnapshot ?? null,
-                  carrierSnapshot: eqInput.carrierSnapshot ?? null,
-                  equipmentConditionSnapshot: eqInput.equipmentConditionSnapshot ?? null,
-                  serviceStatusSnapshot: eqInput.serviceStatusSnapshot ?? null,
-                  rawSnapshot: (eqInput.rawSnapshot ?? {}) as unknown as Prisma.InputJsonValue,
-                  activeAssignment: false,
-                },
-              });
-
-              effects.audit({
-                action: 'EQUIPMENT_ASSIGNED',
-                actorUserId,
-                entityType: 'OrderEquipment',
-                entityId: equipment.id,
-                after: equipment as unknown as Prisma.InputJsonValue,
-              });
-            }
+          for (const equipment of unit.equipment ?? []) {
+            effects.audit({
+              action: 'EQUIPMENT_ASSIGNED',
+              actorUserId,
+              entityType: 'OrderEquipment',
+              entityId: equipment.id,
+              after: equipment as unknown as Prisma.InputJsonValue,
+            });
           }
         }
       }
@@ -358,6 +337,10 @@ export class OrdersService {
       );
     }
 
+    const unitServiceType = input.serviceType ?? order.serviceType;
+    assertServiceConfigurationSupported(unitServiceType);
+    await this.assertEquipmentAvailable(orderId, input.equipment ?? []);
+
     return domainTransaction(this.prisma, async (tx, effects) => {
       const unit = await tx.orderUnit.create({
         data: {
@@ -366,7 +349,12 @@ export class OrdersService {
           makeModel: input.makeModel,
           year: input.year ?? null,
           serialNumber: input.serialNumber,
+          serviceType: unitServiceType,
+          equipment: {
+            create: (input.equipment ?? []).map(buildEquipmentCreateInput),
+          },
         },
+        include: { equipment: true },
       });
 
       effects.audit({
@@ -376,6 +364,16 @@ export class OrdersService {
         entityId: unit.id,
         after: unit as unknown as Prisma.InputJsonValue,
       });
+
+      for (const equipment of unit.equipment ?? []) {
+        effects.audit({
+          action: 'EQUIPMENT_ASSIGNED',
+          actorUserId,
+          entityType: 'OrderEquipment',
+          entityId: equipment.id,
+          after: equipment as unknown as Prisma.InputJsonValue,
+        });
+      }
 
       return unit;
     });
@@ -473,6 +471,24 @@ export class OrdersService {
       throw new AppError(404, 'UNIT_NOT_FOUND', 'Unidad no encontrada');
     }
 
+    // Check if equipment is already assigned within this order
+    const existingInOrder = await this.prisma.orderEquipment.findFirst({
+      where: {
+        externalKey: input.externalKey,
+        orderUnit: {
+          orderId,
+        },
+      },
+    });
+
+    if (existingInOrder) {
+      throw new AppError(
+        409,
+        'DUPLICATE_EQUIPMENT',
+        `El equipo ${input.externalKey} ya se encuentra asignado a esta orden`,
+      );
+    }
+
     // Check PostgreSQL constraint: equipment cannot be actively assigned to another active order
     const conflict = await this.prisma.orderEquipment.findFirst({
       where: {
@@ -493,20 +509,7 @@ export class OrdersService {
       const equipment = await tx.orderEquipment.create({
         data: {
           orderUnitId: unitId,
-          externalKey: input.externalKey,
-          externalId: input.externalId ?? null,
-          imei: input.imei ?? null,
-          sheetName: input.sheetName ?? 'SALIDAS',
-          sheetRowHint: input.sheetRowHint ?? null,
-          brandSnapshot: input.brandSnapshot ?? null,
-          modelSnapshot: input.modelSnapshot ?? null,
-          lineSnapshot: input.lineSnapshot ?? null,
-          iccidSnapshot: input.iccidSnapshot ?? null,
-          carrierSnapshot: input.carrierSnapshot ?? null,
-          equipmentConditionSnapshot: input.equipmentConditionSnapshot ?? null,
-          serviceStatusSnapshot: input.serviceStatusSnapshot ?? null,
-          rawSnapshot: (input.rawSnapshot ?? {}) as unknown as Prisma.InputJsonValue,
-          activeAssignment: false, // will activate when order transitions to ASSIGNED
+          ...buildEquipmentCreateInput(input),
         },
       });
 
@@ -622,7 +625,13 @@ export class OrdersService {
     }
 
     assertValidOrderTransition(order.status, OrderStatus.ASSIGNED, 'La orden ya ha sido asignada');
-    assertServiceConfigurationSupported(order.serviceType);
+    const servicesToCheck = new Set<OrderServiceType>([order.serviceType]);
+    for (const unit of order.units) {
+      servicesToCheck.add(unit.serviceType ?? order.serviceType);
+    }
+    for (const service of servicesToCheck) {
+      assertServiceConfigurationSupported(service);
+    }
 
     if (!order.technicianId) {
       throw new AppError(
@@ -698,57 +707,27 @@ export class OrdersService {
           data: { activeAssignment: true },
         });
 
-        let syncValues: Partial<Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>>;
-        if (order.serviceType === 'UNINSTALLATION') {
-          syncValues = {
-            K: 'STOCK TECNICO',
-            L: '',
-            M: '',
-            N: '',
-            O: '',
-          };
-        } else if (order.serviceType === 'EQUIPMENT_REPLACEMENT') {
-          const isPreviouslyInstalled =
-            item.serviceStatusSnapshot?.trim().toUpperCase() === 'INSTALADO';
-          if (isPreviouslyInstalled) {
-            syncValues = {
-              K: 'STOCK TECNICO',
-              L: '',
-              M: '',
-              N: '',
-              O: '',
-            };
-          } else {
-            syncValues = {
-              J: order.clientNameSnapshot,
-              K: 'INSTALADO',
-              L: item.unit.label,
-              M: item.unit.makeModel,
-              N: item.unit.year ? String(item.unit.year) : '',
-              O: item.unit.serialNumber,
-            };
-          }
-        } else {
-          syncValues = {
-            J: order.clientNameSnapshot,
-            L: item.unit.label,
-            M: item.unit.makeModel,
-            N: item.unit.year ? String(item.unit.year) : '',
-            O: item.unit.serialNumber,
-          };
-        }
+        const effectiveServiceType = item.unit.serviceType ?? order.serviceType;
+        const syncValues = buildEquipmentSheetAssignment({
+          clientName: order.clientNameSnapshot,
+          equipmentServiceStatus: item.serviceStatusSnapshot,
+          serviceType: effectiveServiceType,
+          unit: item.unit,
+        });
 
         // Enqueue sync operation for Sheets
-        effects.enqueue({
-          idempotencyKey: `ASSIGN:${order.id}:${item.id}:${order.version}`,
-          operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
-          orderId: order.id,
-          payload: {
-            externalKey: item.externalKey,
-            row: item.sheetRowHint ?? 0,
-            values: syncValues,
-          },
-        });
+        if (syncValues) {
+          effects.enqueue({
+            idempotencyKey: `ASSIGN:${order.id}:${item.id}:${order.version}`,
+            operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
+            orderId: order.id,
+            payload: {
+              externalKey: item.externalKey,
+              row: item.sheetRowHint ?? 0,
+              values: syncValues,
+            },
+          });
+        }
       }
 
       const updated = await tx.order.update({
@@ -799,6 +778,47 @@ export class OrdersService {
     return technician;
   }
 
+  private async assertEquipmentAvailable(
+    orderId: string | null,
+    equipmentInputs: readonly AssignEquipment[],
+  ): Promise<void> {
+    const keys = equipmentInputs.map((equipment) => equipment.externalKey);
+    const duplicateKey = keys.find((key, index) => keys.indexOf(key) !== index);
+    if (duplicateKey) {
+      throw new AppError(
+        409,
+        'DUPLICATE_EQUIPMENT',
+        `El equipo ${duplicateKey} está duplicado en la orden`,
+      );
+    }
+
+    for (const externalKey of keys) {
+      if (orderId) {
+        const existingInOrder = await this.prisma.orderEquipment.findFirst({
+          where: { externalKey, orderUnit: { orderId } },
+        });
+        if (existingInOrder) {
+          throw new AppError(
+            409,
+            'DUPLICATE_EQUIPMENT',
+            `El equipo ${externalKey} ya se encuentra asignado a esta orden`,
+          );
+        }
+      }
+
+      const activeConflict = await this.prisma.orderEquipment.findFirst({
+        where: { externalKey, activeAssignment: true },
+      });
+      if (activeConflict) {
+        throw new AppError(
+          409,
+          'EQUIPMENT_ALREADY_ASSIGNED',
+          `El equipo ${externalKey} ya se encuentra asignado a otra orden activa`,
+        );
+      }
+    }
+  }
+
   public async getOrderAuditLogs(orderId: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
@@ -810,4 +830,25 @@ export class OrdersService {
       include: { actor: { select: { id: true, name: true, email: true } } },
     });
   }
+}
+
+function buildEquipmentCreateInput(
+  input: AssignEquipment,
+): Prisma.OrderEquipmentUncheckedCreateWithoutOrderUnitInput {
+  return {
+    externalKey: input.externalKey,
+    externalId: input.externalId ?? null,
+    imei: input.imei ?? null,
+    sheetName: input.sheetName ?? 'SALIDAS',
+    sheetRowHint: input.sheetRowHint ?? null,
+    brandSnapshot: input.brandSnapshot ?? null,
+    modelSnapshot: input.modelSnapshot ?? null,
+    lineSnapshot: input.lineSnapshot ?? null,
+    iccidSnapshot: input.iccidSnapshot ?? null,
+    carrierSnapshot: input.carrierSnapshot ?? null,
+    equipmentConditionSnapshot: input.equipmentConditionSnapshot ?? null,
+    serviceStatusSnapshot: input.serviceStatusSnapshot ?? null,
+    rawSnapshot: (input.rawSnapshot ?? {}) as Prisma.InputJsonValue,
+    activeAssignment: false,
+  };
 }

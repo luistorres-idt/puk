@@ -16,6 +16,7 @@ import {
   CircuitBreakerSheetsPort,
   CircuitBreakerStoragePort,
 } from './resilience/index.js';
+import { logger } from './observability/logger.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
@@ -56,6 +57,8 @@ const rawSheetsPort = usesPlaceholderSheets
   ? new DevMockSheetsClient()
   : new GoogleSheetsClient({
       spreadsheetId: environment.GOOGLE_SPREADSHEET_ID,
+      techniciansSpreadsheetId:
+        environment.GOOGLE_TECHNICIANS_SPREADSHEET_ID ?? environment.GOOGLE_SPREADSHEET_ID,
       clientsSheetName: environment.GOOGLE_CLIENTS_SHEET,
       equipmentSheetName: environment.GOOGLE_EQUIPMENT_SHEET,
       techniciansSheetName: environment.GOOGLE_TECHNICIANS_SHEET_NAME,
@@ -84,7 +87,9 @@ const syncService = new SyncService(prisma, sheetsPort, {
 });
 
 const syncInterval = setInterval(() => {
-  syncService.processPendingOperations().catch(() => {});
+  syncService.processPendingOperations().catch((error) => {
+    logger.error('Falló la ejecución programada del outbox de Google Sheets', { error });
+  });
 }, environment.OUTBOX_POLL_INTERVAL_MS);
 syncInterval.unref();
 
@@ -121,7 +126,9 @@ const reportsService = new ReportsService(
 );
 
 const reportsInterval = setInterval(() => {
-  reportsService.processPendingReports().catch(() => {});
+  reportsService.processPendingReports().catch((error) => {
+    logger.error('Falló la ejecución programada del generador de reportes', { error });
+  });
 }, environment.OUTBOX_POLL_INTERVAL_MS);
 reportsInterval.unref();
 

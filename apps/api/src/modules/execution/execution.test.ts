@@ -54,9 +54,11 @@ describe('ExecutionService', () => {
   let mockPrisma: MockPrismaExecution;
   let storagePort: DevMockStorageClient;
   let service: ExecutionService;
+  let enqueuedOperations: Array<Record<string, unknown>>;
 
   beforeEach(() => {
     storagePort = new DevMockStorageClient();
+    enqueuedOperations = [];
 
     mockPrisma = {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
@@ -128,7 +130,9 @@ describe('ExecutionService', () => {
             createMany: vi.fn(),
           },
           sheetSyncOperation: {
-            createMany: vi.fn(),
+            createMany: vi.fn(({ data }: { data: Array<Record<string, unknown>> }) => {
+              enqueuedOperations.push(...data);
+            }),
           },
         };
         return callback(tx);
@@ -331,8 +335,19 @@ describe('ExecutionService', () => {
         {
           id: 'unit-1',
           label: 'Unidad 01',
+          makeModel: 'Freightliner Cascadia',
+          year: 2025,
           serialNumber: 'SN-001',
-          equipment: [{ externalKey: 'EQ-001', verificationStatus: 'MATCHED' }],
+          serviceType: 'INSTALLATION',
+          equipment: [
+            {
+              id: 'eq-1',
+              externalKey: 'EQ-001',
+              sheetRowHint: 7,
+              serviceStatusSnapshot: 'STOCK TECNICO',
+              verificationStatus: 'MATCHED',
+            },
+          ],
           checklist: { items: checklistItems },
         },
       ],
@@ -343,6 +358,27 @@ describe('ExecutionService', () => {
 
     expect(result.status).toBe(OrderStatus.COMPLETED);
     expect(requestGeneration).toHaveBeenCalledWith('order-1', 'admin-1');
+    expect(enqueuedOperations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          idempotencyKey: 'COMPLETE_ASSIGNMENT:order-1:eq-1:1',
+          operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
+          payload: {
+            externalKey: 'EQ-001',
+            row: 7,
+            values: {
+              J: 'Cliente Demo',
+              K: 'INSTALADO',
+              L: 'Unidad 01',
+              M: 'Freightliner Cascadia',
+              N: '2025',
+              O: 'SN-001',
+            },
+          },
+        }),
+        expect.objectContaining({ operationType: 'SHEET_TECHNICAL_REPORT' }),
+      ]),
+    );
   });
 
   it('marks an appointment as failed with a reason and releases equipment', async () => {
@@ -354,7 +390,12 @@ describe('ExecutionService', () => {
       scheduledAt: new Date(),
       status: OrderStatus.ASSIGNED,
       technicianId: 'tech-1',
-      technician: { id: 'tech-1', name: 'Tecnico Demo', failedAppointmentRate: 200, departureCost: 100 },
+      technician: {
+        id: 'tech-1',
+        name: 'Tecnico Demo',
+        failedAppointmentRate: 200,
+        departureCost: 100,
+      },
       units: [],
     });
 
@@ -399,7 +440,7 @@ describe('ExecutionService', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('fails order completion if technician lacks configured rate for service', async () => {
+  it('completes order with 0.00 rate and returns warnings when technician lacks configured rate', async () => {
     const checklistItems = ALL_CHECKLIST_CATEGORIES.map((category) => ({
       category,
       condition: 'GOOD',
@@ -424,9 +465,12 @@ describe('ExecutionService', () => {
       signature: { signerName: 'Cliente' },
     });
 
-    await expect(
-      service.completeOrder('admin-1', 'ADMIN', 'order-1'),
-    ).rejects.toMatchObject({ code: 'MISSING_SERVICE_RATE' });
+    const result = await service.completeOrder('admin-1', 'ADMIN', 'order-1');
+    expect(result.status).toBe(OrderStatus.COMPLETED);
+    expect(result.pricingTotal?.toString()).toBe('0');
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.warnings[0]).toContain('no tiene configurada una tarifa válida');
   });
 
   it('allows failing appointment with 0.00 pricing when technician rate is unconfigured', async () => {

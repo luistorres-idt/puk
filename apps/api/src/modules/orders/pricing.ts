@@ -1,6 +1,6 @@
+import type { PricingBreakdown } from '@puk/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { OrderServiceType } from '../../generated/prisma/client.js';
-import { AppError } from '../../shared/errors.js';
 
 export interface TechnicianPricingSource {
   readonly id: string;
@@ -21,6 +21,13 @@ export interface ServiceRateResolution {
   readonly rateLabel: string;
 }
 
+export interface ServiceBreakdownResult {
+  readonly serviceType: OrderServiceType;
+  readonly rate: Prisma.Decimal;
+  readonly quantity: number;
+  readonly subtotal: Prisma.Decimal;
+}
+
 export interface CalculatedOrderPricing {
   readonly technicianId: string;
   readonly technicianNameSnapshot: string;
@@ -35,18 +42,40 @@ export interface CalculatedOrderPricing {
   readonly currency: 'MXN';
   readonly snapshotAt: Date;
   readonly pricingVersion: number;
+  readonly breakdown: readonly ServiceBreakdownResult[];
+  readonly warnings?: readonly string[];
 }
 
 export interface CalculateOrderPricingInput {
   readonly technician: TechnicianPricingSource;
-  readonly serviceType: OrderServiceType;
-  readonly equipmentCount: number;
+  readonly serviceType?: OrderServiceType | null;
+  readonly equipmentCount?: number;
   readonly isHomeService: boolean;
   readonly pricingVersion?: number;
   readonly snapshotAt?: Date;
+  readonly items?: ReadonlyArray<{
+    serviceType: OrderServiceType;
+    equipmentCount?: number;
+  }>;
 }
 
-function toDecimalOrNull(val: Prisma.Decimal | string | number | null | undefined): Prisma.Decimal | null {
+export function createPricingBreakdownSnapshot(pricing: CalculatedOrderPricing): PricingBreakdown {
+  return {
+    breakdown: pricing.breakdown.map((item) => ({
+      serviceType: item.serviceType,
+      rate: item.rate.toFixed(2),
+      quantity: item.quantity,
+      subtotal: item.subtotal.toFixed(2),
+    })),
+    departureCost: pricing.departureCost.toFixed(2),
+    travelExpenses: pricing.travelExpenses.toFixed(2),
+    warnings: [...(pricing.warnings ?? [])],
+  };
+}
+
+function toDecimalOrNull(
+  val: Prisma.Decimal | string | number | null | undefined,
+): Prisma.Decimal | null {
   if (val === null || val === undefined || val === '') return null;
   try {
     const d = new Prisma.Decimal(val);
@@ -107,26 +136,28 @@ export function resolveServiceRate(
 }
 
 export function calculateOrderPricing(input: CalculateOrderPricingInput): CalculatedOrderPricing {
-  const { technician, serviceType, equipmentCount, isHomeService } = input;
-  const resolution = resolveServiceRate(technician, serviceType);
+  const { technician, isHomeService } = input;
 
   const rawDeparture = toDecimalOrNull(technician.departureCost);
-  const departureCost = rawDeparture ? roundToTwoDecimals(rawDeparture) : new Prisma.Decimal('0.00');
+  const departureCost = rawDeparture
+    ? roundToTwoDecimals(rawDeparture)
+    : new Prisma.Decimal('0.00');
   const travelExpenses = isHomeService ? departureCost : new Prisma.Decimal('0.00');
 
   const pricingVersion = input.pricingVersion ?? 1;
   const snapshotAt = input.snapshotAt ?? new Date();
 
   // Special case: FAILED_APPOINTMENT
-  if (serviceType === 'FAILED_APPOINTMENT') {
-    const appliedQuantity = Math.max(1, equipmentCount);
+  if (input.serviceType === 'FAILED_APPOINTMENT') {
+    const resolution = resolveServiceRate(technician, 'FAILED_APPOINTMENT');
+    const appliedQuantity = Math.max(1, input.equipmentCount ?? 0);
     if (!resolution.isConfigured || resolution.rate === null) {
       // Missing or invalid fee in CITA FALLIDA => 0.00
       return {
         technicianId: technician.id,
         technicianNameSnapshot: technician.name,
         technicianExternalKeySnapshot: technician.externalKey ?? null,
-        serviceType,
+        serviceType: 'FAILED_APPOINTMENT',
         unitRate: null,
         appliedQuantity,
         baseCost: new Prisma.Decimal('0.00'),
@@ -136,6 +167,10 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
         currency: 'MXN',
         snapshotAt,
         pricingVersion,
+        breakdown: [],
+        warnings: [
+          `El técnico ${technician.name} no tiene configurada tarifa para CITA FALLIDA. Se aplicó $0.00.`,
+        ],
       };
     }
 
@@ -146,7 +181,7 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
       technicianId: technician.id,
       technicianNameSnapshot: technician.name,
       technicianExternalKeySnapshot: technician.externalKey ?? null,
-      serviceType,
+      serviceType: 'FAILED_APPOINTMENT',
       unitRate: resolution.rate,
       appliedQuantity,
       baseCost,
@@ -156,26 +191,93 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
       currency: 'MXN',
       snapshotAt,
       pricingVersion,
+      breakdown: [
+        {
+          serviceType: 'FAILED_APPOINTMENT',
+          rate: resolution.rate,
+          quantity: appliedQuantity,
+          subtotal: baseCost,
+        },
+      ],
+      warnings: [],
     };
   }
 
-  // All other services require a valid configured rate!
-  if (!resolution.isConfigured || resolution.rate === null) {
-    throw new AppError(
-      400,
-      'MISSING_SERVICE_RATE',
-      `El técnico ${technician.name} no tiene configurada una tarifa válida para el servicio ${resolution.rateLabel}.`,
-      {
-        technicianId: technician.id,
-        technicianName: technician.name,
-        serviceType,
-        rateLabel: resolution.rateLabel,
-      },
-    );
+  if (input.items && input.items.length > 0) {
+    const grouped = new Map<OrderServiceType, number>();
+    for (const item of input.items) {
+      const count =
+        item.serviceType === 'EQUIPMENT_REPLACEMENT' ? 1 : Math.max(0, item.equipmentCount ?? 0);
+      grouped.set(item.serviceType, (grouped.get(item.serviceType) ?? 0) + count);
+    }
+
+    const breakdown: ServiceBreakdownResult[] = [];
+    const warnings: string[] = [];
+    let baseCost = new Prisma.Decimal('0.00');
+
+    for (const [sType, count] of grouped.entries()) {
+      const resolution = resolveServiceRate(technician, sType);
+      let effectiveRate: Prisma.Decimal;
+      if (!resolution.isConfigured || resolution.rate === null) {
+        effectiveRate = new Prisma.Decimal('0.00');
+        warnings.push(
+          `El técnico ${technician.name} no tiene configurada una tarifa válida para el servicio ${resolution.rateLabel}. Se aplicó tarifa de $0.00 MXN.`,
+        );
+      } else {
+        effectiveRate = resolution.rate;
+      }
+
+      const subtotal = roundToTwoDecimals(effectiveRate.times(count));
+      baseCost = roundToTwoDecimals(baseCost.plus(subtotal));
+
+      breakdown.push({
+        serviceType: sType,
+        rate: effectiveRate,
+        quantity: count,
+        subtotal,
+      });
+    }
+
+    const total = roundToTwoDecimals(baseCost.plus(travelExpenses));
+    const totalAppliedQuantity = breakdown.reduce((sum, b) => sum + b.quantity, 0);
+    const distinctTypes = Array.from(grouped.keys());
+
+    return {
+      technicianId: technician.id,
+      technicianNameSnapshot: technician.name,
+      technicianExternalKeySnapshot: technician.externalKey ?? null,
+      serviceType:
+        distinctTypes.length === 1 ? distinctTypes[0]! : (input.serviceType ?? distinctTypes[0]!),
+      unitRate: distinctTypes.length === 1 ? breakdown[0]!.rate : null,
+      appliedQuantity: totalAppliedQuantity,
+      baseCost,
+      departureCost,
+      travelExpenses,
+      total,
+      currency: 'MXN',
+      snapshotAt,
+      pricingVersion,
+      breakdown,
+      warnings,
+    };
   }
 
-  // Equipment count rules:
-  // In EQUIPMENT_REPLACEMENT, charge exactly 1 unit for the complete service
+  // Single-service fallback
+  const serviceType = input.serviceType ?? 'INSTALLATION';
+  const equipmentCount = input.equipmentCount ?? 0;
+  const resolution = resolveServiceRate(technician, serviceType);
+  const warnings: string[] = [];
+  let effectiveRate: Prisma.Decimal;
+
+  if (!resolution.isConfigured || resolution.rate === null) {
+    effectiveRate = new Prisma.Decimal('0.00');
+    warnings.push(
+      `El técnico ${technician.name} no tiene configurada una tarifa válida para el servicio ${resolution.rateLabel}. Se aplicó tarifa de $0.00 MXN.`,
+    );
+  } else {
+    effectiveRate = resolution.rate;
+  }
+
   let appliedQuantity: number;
   if (serviceType === 'EQUIPMENT_REPLACEMENT') {
     appliedQuantity = 1;
@@ -183,7 +285,7 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
     appliedQuantity = equipmentCount;
   }
 
-  const baseCost = roundToTwoDecimals(resolution.rate.times(appliedQuantity));
+  const baseCost = roundToTwoDecimals(effectiveRate.times(appliedQuantity));
   const total = roundToTwoDecimals(baseCost.plus(travelExpenses));
 
   return {
@@ -191,7 +293,7 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
     technicianNameSnapshot: technician.name,
     technicianExternalKeySnapshot: technician.externalKey ?? null,
     serviceType,
-    unitRate: resolution.rate,
+    unitRate: effectiveRate,
     appliedQuantity,
     baseCost,
     departureCost,
@@ -200,5 +302,14 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
     currency: 'MXN',
     snapshotAt,
     pricingVersion,
+    breakdown: [
+      {
+        serviceType,
+        rate: effectiveRate,
+        quantity: appliedQuantity,
+        subtotal: baseCost,
+      },
+    ],
+    warnings,
   };
 }

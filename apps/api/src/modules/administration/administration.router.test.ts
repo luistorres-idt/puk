@@ -33,6 +33,7 @@ describe('createAdministrationRouter', () => {
   };
 
   const mockTechniciansService = {
+    getLastSyncAt: vi.fn().mockReturnValue(null),
     listSelectable: vi
       .fn()
       .mockResolvedValue([{ id: 'tech-1', name: 'Carlos', workshop: 'Norte', city: 'Ciudad' }]),

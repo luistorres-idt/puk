@@ -18,6 +18,7 @@ const validEnvironment = {
   GOOGLE_EQUIPMENT_SHEET: 'SALIDAS',
   GOOGLE_PRIVATE_KEY: 'development-only',
   GOOGLE_SPREADSHEET_ID: 'development-only',
+  GOOGLE_TECHNICIANS_SPREADSHEET_ID: 'development-only-technicians',
   JWT_ACCESS_PRIVATE_KEY: 'development-only',
   JWT_ACCESS_PUBLIC_KEY: 'development-only',
   JWT_ACCESS_TTL: '15m',
@@ -52,6 +53,7 @@ describe('parseEnvironment', () => {
     expect(environment.PORT).toBe(3000);
     expect(environment.COOKIE_DOMAIN).toBeUndefined();
     expect(environment.S3_FORCE_PATH_STYLE).toBe(true);
+    expect(environment.GOOGLE_TECHNICIANS_SPREADSHEET_ID).toBe('development-only-technicians');
   });
 
   it('reports invalid field names without exposing their values', () => {

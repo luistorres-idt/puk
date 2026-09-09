@@ -41,11 +41,9 @@ describe('order contracts', () => {
   });
 
   it.each(OrderServiceTypeSchema.options)(
-    'allows additions only to installation drafts: %s',
+    'allows additions to all draft orders: %s',
     (serviceType) => {
-      expect(canAddOrderItems({ status: 'DRAFT', serviceType })).toBe(
-        serviceType === 'INSTALLATION',
-      );
+      expect(canAddOrderItems({ status: 'DRAFT', serviceType })).toBe(true);
       expect(canAddOrderItems({ status: 'ASSIGNED', serviceType })).toBe(false);
       expect(canAddOrderItems({ status: 'REQUIRES_CORRECTION', serviceType })).toBe(false);
     },

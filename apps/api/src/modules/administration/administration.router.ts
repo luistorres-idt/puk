@@ -56,9 +56,15 @@ export function createAdministrationRouter(options: AdministrationRouterOptions)
   router.get('/technicians', authorize('technicians:manage'), async (_request, response) =>
     sendSuccess(response, await technicians.list()),
   );
-  router.get('/technicians/selectable', authorize('orders:manage'), async (_request, response) =>
-    sendSuccess(response, await technicians.listSelectable()),
-  );
+  router.get('/technicians/selectable', authorize('orders:manage'), async (request, response) => {
+    const forceFresh = request.query.fresh === 'true';
+    const data = await technicians.listSelectable({ forceSync: forceFresh });
+    const lastSync = technicians.getLastSyncAt();
+    sendSuccess(response, data, 200, {
+      fetchedAt: lastSync ? new Date(lastSync).toISOString() : null,
+      total: data.length,
+    });
+  });
   router.post('/technicians/sync', authorize('technicians:manage'), async (request, response) =>
     sendSuccess(response, await technicians.syncFromSheets(request.auth!.userId)),
   );

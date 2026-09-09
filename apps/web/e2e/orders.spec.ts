@@ -107,10 +107,13 @@ async function reachTechnicianStep(page: Page) {
   await page.goto('/orders/new');
   await page.getByRole('textbox').first().click();
   await page.getByText('Cliente de prueba (CLIENT-DEMO)', { exact: true }).click();
-  await page.getByText('Instalación', { exact: true }).click();
-  await page.getByText('Cita Fallida', { exact: true }).click();
-  for (let step = 0; step < 3; step++)
-    await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByPlaceholder('ej. Camión 01, T-12...').fill('Unidad E2E');
+  await page.getByPlaceholder('ej. Kenworth T680').fill('Modelo E2E');
+  await page.getByPlaceholder('ej. 3AKJH567...').fill('SERIE-E2E');
+  await page.getByRole('button', { name: '+ Agregar a Instalación' }).click();
+  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByRole('button', { name: 'Siguiente' }).click();
   await expect(page.getByText('Paso 4: Técnico Asignado', { exact: true })).toBeVisible();
 }
 
@@ -150,32 +153,28 @@ test('wizard blocks an empty technician directory', async ({ page }) => {
 });
 
 for (const serviceType of OrderServiceTypeSchema.options) {
-  test(`draft detail preserves existing items and restricts additions: ${serviceType}`, async ({
+  test(`draft detail preserves existing items and allows additions: ${serviceType}`, async ({
     page,
   }) => {
     await mockApi(page, { serviceType });
     await page.goto(`/orders/${orderId}`);
-    await expect(page.getByText(ORDER_SERVICE_LABELS[serviceType], { exact: true })).toBeVisible();
+    await expect(page.getByText(ORDER_SERVICE_LABELS[serviceType], { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Unidad Demo', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Eliminar', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Quitar', exact: true })).toBeVisible();
     for (const name of ['Agregar Unidad', 'Asignar Equipo']) {
-      await expect(page.getByRole('button', { name })).toHaveCount(
-        serviceType === 'INSTALLATION' ? 1 : 0,
-      );
+      await expect(page.getByRole('button', { name })).toHaveCount(1);
     }
   });
 
-  test(`empty draft restricts both unit entry points: ${serviceType}`, async ({ page }) => {
+  test(`empty draft allows both unit entry points: ${serviceType}`, async ({ page }) => {
     await mockApi(page, { serviceType, empty: true });
     await page.goto(`/orders/${orderId}`);
     await expect(
       page.getByText('No hay unidades registradas en esta orden.', { exact: true }),
     ).toBeVisible();
     for (const name of ['Agregar Unidad', 'Registrar Primera Unidad']) {
-      await expect(page.getByRole('button', { name })).toHaveCount(
-        serviceType === 'INSTALLATION' ? 1 : 0,
-      );
+      await expect(page.getByRole('button', { name })).toHaveCount(1);
     }
   });
 }

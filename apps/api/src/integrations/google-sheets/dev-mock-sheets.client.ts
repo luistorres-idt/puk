@@ -352,7 +352,7 @@ export class DevMockSheetsClient implements SheetsPort {
     newRow[14] = ''; // Col O manual: preserve empty
     newRow[15] = input.notas;
 
-    this.reportRows.push(newRow);
-    return { row: this.reportRows.length, created: true };
+    this.reportRows.splice(1, 0, newRow);
+    return { row: 2, created: true };
   }
 }

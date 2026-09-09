@@ -275,6 +275,10 @@ export class PukStagingApplicationStack extends Stack {
           foundation.runtimeSecret,
           'GOOGLE_SPREADSHEET_ID',
         ),
+        GOOGLE_TECHNICIANS_SPREADSHEET_ID: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'GOOGLE_TECHNICIANS_SPREADSHEET_ID',
+        ),
         JWT_ACCESS_PRIVATE_KEY: ecs.Secret.fromSecretsManager(
           foundation.runtimeSecret,
           'JWT_ACCESS_PRIVATE_KEY',

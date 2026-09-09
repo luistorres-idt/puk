@@ -21,10 +21,13 @@ import {
 } from '../../generated/prisma/client.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
+import { logger } from '../../observability/logger.js';
 import {
   assertCanExecuteWork,
   assertValidOrderTransition,
+  buildEquipmentSheetAssignment,
   calculateOrderPricing,
+  createPricingBreakdownSnapshot,
 } from '../orders/index.js';
 import { formatTechnicalReportRow } from '../reports/index.js';
 import { ALL_CHECKLIST_CATEGORIES, evaluateOrderCompleteness } from './order-completeness.js';
@@ -609,16 +612,33 @@ export class ExecutionService {
       throw new AppError(400, 'MISSING_TECHNICIAN', 'La orden debe tener un técnico asignado');
     }
 
-    const equipmentCount = (fullOrder.units ?? []).reduce((sum, u) => sum + (u.equipment?.length ?? 0), 0);
+    const equipmentCount = (fullOrder.units ?? []).reduce(
+      (sum, u) => sum + (u.equipment?.length ?? 0),
+      0,
+    );
+
+    const items = (fullOrder.units ?? []).map((u) => ({
+      serviceType: u.serviceType ?? fullOrder.serviceType,
+      equipmentCount: u.equipment.length,
+    }));
 
     const pricing = calculateOrderPricing({
       technician: fullOrder.technician,
       serviceType: fullOrder.serviceType,
+      items,
       equipmentCount,
       isHomeService: fullOrder.isHomeService,
       pricingVersion: (fullOrder.pricingVersion ?? 0) + 1,
       snapshotAt: new Date(),
     });
+
+    if (pricing.warnings && pricing.warnings.length > 0) {
+      logger.warn('Orden completada con tarifa(s) no configurada(s) ($0.00) para el técnico', {
+        orderId,
+        technicianId: fullOrder.technician.id,
+        warnings: pricing.warnings,
+      });
+    }
 
     const completedOrder = await domainTransaction(this.prisma, async (tx, effects) => {
       // Mark units as completed
@@ -652,6 +672,9 @@ export class ExecutionService {
           pricingCurrency: pricing.currency,
           pricingSnapshotAt: pricing.snapshotAt,
           pricingVersion: pricing.pricingVersion,
+          pricingBreakdown: createPricingBreakdownSnapshot(
+            pricing,
+          ) as unknown as Prisma.InputJsonValue,
           technicianNameSnapshot: pricing.technicianNameSnapshot,
           technicianExternalKeySnapshot: pricing.technicianExternalKeySnapshot,
         },
@@ -661,6 +684,31 @@ export class ExecutionService {
           },
         },
       });
+
+      for (const unit of fullOrder.units) {
+        for (const equipment of unit.equipment) {
+          const values = buildEquipmentSheetAssignment({
+            clientName: fullOrder.clientNameSnapshot,
+            equipmentServiceStatus: equipment.serviceStatusSnapshot,
+            serviceType: unit.serviceType ?? fullOrder.serviceType,
+            unit,
+          });
+          if (!values) {
+            continue;
+          }
+
+          effects.enqueue({
+            idempotencyKey: `COMPLETE_ASSIGNMENT:${order.id}:${equipment.id}:${pricing.pricingVersion}`,
+            operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
+            orderId: order.id,
+            payload: {
+              externalKey: equipment.externalKey,
+              row: equipment.sheetRowHint ?? 0,
+              values,
+            },
+          });
+        }
+      }
 
       const reportPayload = formatTechnicalReportRow(updated);
       effects.enqueue({
@@ -684,8 +732,16 @@ export class ExecutionService {
 
     // El cierre de la orden no se revierte si el trabajo de generación no puede encolarse.
     // El administrador puede solicitarlo nuevamente desde el detalle de la orden.
-    await this.reportGeneration?.requestGeneration(orderId, userId).catch(() => undefined);
-    return completedOrder;
+    await this.reportGeneration?.requestGeneration(orderId, userId).catch((error) => {
+      logger.error('No se pudo encolar la generación del PDF al completar la orden', {
+        error,
+        orderId,
+      });
+    });
+    return {
+      ...completedOrder,
+      warnings: pricing.warnings ?? [],
+    };
   }
 
   public async failAppointment(
@@ -716,7 +772,10 @@ export class ExecutionService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
-    const equipmentCount = (fullOrder.units ?? []).reduce((sum, u) => sum + (u.equipment?.length ?? 0), 0);
+    const equipmentCount = (fullOrder.units ?? []).reduce(
+      (sum, u) => sum + (u.equipment?.length ?? 0),
+      0,
+    );
 
     const pricing = fullOrder.technician
       ? calculateOrderPricing({
@@ -741,7 +800,8 @@ export class ExecutionService {
         data: { activeAssignment: false },
       });
 
-      const nextVersion = pricing?.pricingVersion ?? (order.pricingVersion ? order.pricingVersion + 1 : 1);
+      const nextVersion =
+        pricing?.pricingVersion ?? (order.pricingVersion ? order.pricingVersion + 1 : 1);
 
       const updated = await tx.order.update({
         where: { id: orderId },
@@ -750,7 +810,8 @@ export class ExecutionService {
           failedReason: input.failedReason,
           completedAt: new Date(),
           pricingUnitRate: pricing?.unitRate ?? null,
-          pricingAppliedQuantity: pricing?.appliedQuantity ?? (equipmentCount > 0 ? equipmentCount : 1),
+          pricingAppliedQuantity:
+            pricing?.appliedQuantity ?? (equipmentCount > 0 ? equipmentCount : 1),
           pricingBaseCost: pricing?.baseCost ?? new Prisma.Decimal('0.00'),
           pricingDepartureCost: pricing?.departureCost ?? new Prisma.Decimal('0.00'),
           pricingTravelExpenses: pricing?.travelExpenses ?? new Prisma.Decimal('0.00'),
@@ -758,8 +819,12 @@ export class ExecutionService {
           pricingCurrency: 'MXN',
           pricingSnapshotAt: pricing?.snapshotAt ?? new Date(),
           pricingVersion: nextVersion,
+          pricingBreakdown: (pricing
+            ? createPricingBreakdownSnapshot(pricing)
+            : null) as unknown as Prisma.InputJsonValue,
           technicianNameSnapshot: pricing?.technicianNameSnapshot ?? order.technicianNameSnapshot,
-          technicianExternalKeySnapshot: pricing?.technicianExternalKeySnapshot ?? order.technicianExternalKeySnapshot,
+          technicianExternalKeySnapshot:
+            pricing?.technicianExternalKeySnapshot ?? order.technicianExternalKeySnapshot,
         },
         include: {
           units: {
@@ -809,7 +874,11 @@ export class ExecutionService {
         select: { role: true },
       });
       if (user?.role !== 'ADMIN') {
-        throw new AppError(403, 'FORBIDDEN', 'Solo un administrador puede reabrir una orden completada');
+        throw new AppError(
+          403,
+          'FORBIDDEN',
+          'Solo un administrador puede reabrir una orden completada',
+        );
       }
     }
 
@@ -819,13 +888,21 @@ export class ExecutionService {
       'Solo se puede solicitar corrección a órdenes completadas o en progreso',
     );
 
-    const equipmentCount = (order.units ?? []).reduce((sum, u) => sum + (u.equipment?.length ?? 0), 0);
+    const equipmentCount = (order.units ?? []).reduce(
+      (sum, u) => sum + (u.equipment?.length ?? 0),
+      0,
+    );
     const nextVersion = (order.pricingVersion ?? 1) + 1;
     let pricing: ReturnType<typeof calculateOrderPricing> | null = null;
     if (order.technician) {
+      const items = (order.units ?? []).map((u) => ({
+        serviceType: u.serviceType ?? order.serviceType,
+        equipmentCount: u.equipment.length,
+      }));
       pricing = calculateOrderPricing({
         technician: order.technician,
         serviceType: order.serviceType,
+        items,
         equipmentCount,
         isHomeService: order.isHomeService,
         pricingVersion: nextVersion,
@@ -856,6 +933,9 @@ export class ExecutionService {
                 pricingCurrency: pricing.currency,
                 pricingSnapshotAt: pricing.snapshotAt,
                 pricingVersion: pricing.pricingVersion,
+                pricingBreakdown: createPricingBreakdownSnapshot(
+                  pricing,
+                ) as unknown as Prisma.InputJsonValue,
                 technicianNameSnapshot: pricing.technicianNameSnapshot,
                 technicianExternalKeySnapshot: pricing.technicianExternalKeySnapshot,
               }
