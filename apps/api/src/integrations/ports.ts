@@ -12,6 +12,22 @@ export interface ExternalEquipmentRecord {
   values: Readonly<Record<string, string>>;
 }
 
+export interface TechnicalReportRowInput {
+  folio: string;
+  sem: string;
+  tecnico: string;
+  economico: string;
+  serie: string;
+  imeiId: string;
+  cliente: string;
+  fecha: string;
+  servicio: string;
+  costo: string;
+  viaticos: string;
+  total: string;
+  notas: string;
+}
+
 export interface SheetsPort {
   findEquipment(identity: {
     externalId: string;
@@ -21,8 +37,12 @@ export interface SheetsPort {
   listEquipment(): Promise<readonly ExternalEquipmentRecord[]>;
   updateAssignment(input: {
     row: number;
-    values: Readonly<Partial<Record<'J' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
+    values: Readonly<Partial<Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
   }): Promise<void>;
+  listTechniciansDirectory(): Promise<readonly (readonly string[])[]>;
+  syncTechnicalReportRow(
+    input: TechnicalReportRowInput,
+  ): Promise<{ row: number; created: boolean }>;
 }
 
 export interface ObjectStoragePort {

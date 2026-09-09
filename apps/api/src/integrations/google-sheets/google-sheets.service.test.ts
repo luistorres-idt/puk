@@ -80,12 +80,20 @@ class MockSheetsPort implements SheetsPort {
 
   public async updateAssignment(input: {
     row: number;
-    values: Readonly<Partial<Record<'J' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
+    values: Readonly<Partial<Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
   }): Promise<void> {
     const item = this.equipment.find((e) => e.row === input.row);
     if (item) {
       item.values = { ...item.values, ...input.values };
     }
+  }
+
+  public async listTechniciansDirectory(): Promise<readonly (readonly string[])[]> {
+    return [];
+  }
+
+  public async syncTechnicalReportRow(): Promise<{ row: number; created: boolean }> {
+    return { row: 2, created: true };
   }
 }
 
@@ -139,3 +147,105 @@ describe('GoogleSheetsCatalogService', () => {
     expect(moved.equipment?.rowNumber).toBe(15);
   });
 });
+
+describe('DevMockSheetsClient Directory and Report Sync', () => {
+  it('reads technicians directory from mock', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const client = new DevMockSheetsClient();
+    const rows = await client.listTechniciansDirectory();
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    expect(rows[0]?.[0]).toBe('TECNICO');
+    expect(rows[0]?.[22]).toBe('ID_TECNICO');
+  });
+
+  it('inserts and updates technical report row preserving D, E, O', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const client = new DevMockSheetsClient();
+
+    // 1. Insert first row
+    const insertRes = await client.syncTechnicalReportRow({
+      folio: 'OS-TEST-001',
+      sem: '37',
+      tecnico: 'Juan Perez',
+      economico: 'ECO-10',
+      serie: 'SER-10',
+      imeiId: '861234567890123',
+      cliente: 'Flotillas SA',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '700.00',
+      viaticos: '350.00',
+      total: '1050.00',
+      notas: 'Prueba',
+    });
+
+    expect(insertRes.created).toBe(true);
+    expect(insertRes.row).toBe(2);
+
+    // Simulate manual entry into D, E, O (which are manual columns!)
+    // In DevMockSheetsClient private array:
+    const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
+    mockRows[1]![3] = 'Juan Perez Manual'; // D: nombre
+    mockRows[1]![4] = 'PEPJ800101XXX'; // E: rfc
+    mockRows[1]![14] = 'DHL-TRACK-123'; // O: envio dhl
+
+    // 2. Update existing row with same folio (e.g. correction)
+    const updateRes = await client.syncTechnicalReportRow({
+      folio: 'OS-TEST-001',
+      sem: '37',
+      tecnico: 'Juan Perez',
+      economico: 'ECO-10-CORREGIDO',
+      serie: 'SER-10',
+      imeiId: '861234567890123',
+      cliente: 'Flotillas SA',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '700.00',
+      viaticos: '350.00',
+      total: '1050.00',
+      notas: 'Actualizado tras corrección',
+    });
+
+    expect(updateRes.created).toBe(false);
+    expect(updateRes.row).toBe(2);
+
+    // Verify D, E, O were PRESERVED intact!
+    expect(mockRows[1]![3]).toBe('Juan Perez Manual');
+    expect(mockRows[1]![4]).toBe('PEPJ800101XXX');
+    expect(mockRows[1]![14]).toBe('DHL-TRACK-123');
+    // Verify managed columns updated
+    expect(mockRows[1]![5]).toBe('ECO-10-CORREGIDO');
+    expect(mockRows[1]![15]).toBe('Actualizado tras corrección');
+  });
+
+  it('rejects update if duplicate folio exists in sheet', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const { AppError } = await import('../../shared/errors.js');
+    const client = new DevMockSheetsClient();
+
+    const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
+    mockRows.push(
+      ['37', 'OS-DUP-001', 'Tech 1', '', '', 'E1', 'S1', 'I1', 'C1', '2026-09-09', 'Instalación', '100', '0', '100', '', ''],
+      ['37', 'OS-DUP-001', 'Tech 2', '', '', 'E2', 'S2', 'I2', 'C2', '2026-09-09', 'Instalación', '100', '0', '100', '', ''],
+    );
+
+    await expect(
+      client.syncTechnicalReportRow({
+        folio: 'OS-DUP-001',
+        sem: '37',
+        tecnico: 'Tech 1',
+        economico: 'E1',
+        serie: 'S1',
+        imeiId: 'I1',
+        cliente: 'C1',
+        fecha: '2026-09-09',
+        servicio: 'Instalación',
+        costo: '100.00',
+        viaticos: '0.00',
+        total: '100.00',
+        notas: '',
+      }),
+    ).rejects.toThrow(AppError);
+  });
+});
+

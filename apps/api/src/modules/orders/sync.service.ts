@@ -1,6 +1,8 @@
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { SyncStatus } from '../../generated/prisma/client.js';
-import type { SheetsPort } from '../../integrations/ports.js';
+import type { SheetsPort, TechnicalReportRowInput } from '../../integrations/ports.js';
+import { metrics } from '../../observability/metrics.js';
+import { redact } from '../../observability/redaction.js';
 import { AppError } from '../../shared/errors.js';
 
 export interface SyncServiceOptions {
@@ -31,6 +33,18 @@ export class SyncService {
       (op) => op.status === SyncStatus.PENDING || op.status === SyncStatus.PROCESSING,
     ).length;
 
+    const equipmentOps = operations.filter((op) => op.operationType === 'SHEET_EQUIPMENT_ASSIGNMENT');
+    const reportOps = operations.filter((op) => op.operationType === 'SHEET_TECHNICAL_REPORT');
+
+    const summarize = (list: typeof operations) => ({
+      total: list.length,
+      synced: list.filter((op) => op.status === SyncStatus.SYNCED).length,
+      failed: list.filter((op) => op.status === SyncStatus.FAILED).length,
+      pending: list.filter(
+        (op) => op.status === SyncStatus.PENDING || op.status === SyncStatus.PROCESSING,
+      ).length,
+    });
+
     return {
       orderId,
       isFullySynced: total > 0 && synced === total,
@@ -38,6 +52,8 @@ export class SyncService {
       synced,
       failed,
       pending,
+      equipmentSync: summarize(equipmentOps),
+      reportSync: summarize(reportOps),
       operations,
     };
   }
@@ -94,28 +110,33 @@ export class SyncService {
       });
 
       try {
-        const payload = op.payload as {
-          externalKey: string;
-          row: number;
-          values: Record<'J' | 'L' | 'M' | 'N' | 'O' | 'P', string>;
-        };
+        if (op.operationType === 'SHEET_TECHNICAL_REPORT') {
+          const payload = op.payload as unknown as TechnicalReportRowInput;
+          await this.sheetsPort.syncTechnicalReportRow(payload);
+        } else {
+          const payload = op.payload as {
+            externalKey: string;
+            row: number;
+            values: Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>;
+          };
 
-        // Re-locate row by external key to guarantee row accuracy
-        let targetRow = payload.row;
-        const equipment = await this.sheetsPort.findEquipment({
-          externalId: payload.externalKey,
-          imei: payload.externalKey,
-        });
-
-        if (equipment) {
-          targetRow = equipment.row;
-        }
-
-        if (targetRow > 1) {
-          await this.sheetsPort.updateAssignment({
-            row: targetRow,
-            values: payload.values,
+          // Re-locate row by external key to guarantee row accuracy
+          let targetRow = payload.row;
+          const equipment = await this.sheetsPort.findEquipment({
+            externalId: payload.externalKey,
+            imei: payload.externalKey,
           });
+
+          if (equipment) {
+            targetRow = equipment.row;
+          }
+
+          if (targetRow > 1) {
+            await this.sheetsPort.updateAssignment({
+              row: targetRow,
+              values: payload.values,
+            });
+          }
         }
 
         await this.prisma.sheetSyncOperation.update({
@@ -127,6 +148,7 @@ export class SyncService {
           },
         });
 
+        metrics.recordSheetsOperation('COMPLETED', op.operationType);
         processed++;
       } catch (err: unknown) {
         const error = err as Error;
@@ -142,10 +164,12 @@ export class SyncService {
             attempts: nextAttempts,
             nextAttemptAt,
             lastErrorCode: error.name || 'SYNC_ERROR',
-            lastErrorMessage: error.message || 'Error desconocido de sincronización',
+            lastErrorMessage: String(redact(error.message || 'Error desconocido de sincronización')),
             updatedAt: new Date(),
           },
         });
+
+        metrics.recordSheetsOperation('FAILED', op.operationType);
       }
     }
 

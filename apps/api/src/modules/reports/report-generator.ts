@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
+import { formatOrderServiceType } from '@puk/contracts';
 
 import type { ObjectStoragePort } from '../../integrations/ports.js';
 
@@ -19,12 +20,6 @@ const CONDITION_LABELS: Record<string, string> = {
   GOOD: 'Bien',
   BAD: 'Mal',
   NOT_APPLICABLE: 'No aplica',
-};
-
-const SERVICE_LABELS: Record<string, string> = {
-  INSTALLATION: 'Instalación',
-  REVIEW: 'Revisión',
-  UNINSTALLATION: 'Desinstalación',
 };
 
 const VERIFICATION_LABELS: Record<string, string> = {
@@ -208,7 +203,7 @@ export class ServiceOrderReportGenerator implements ReportGeneratorPort {
 
     this.drawInfoGrid(document, 218, [
       ['Cliente', order.clientNameSnapshot],
-      ['Tipo de servicio', SERVICE_LABELS[order.serviceType] ?? order.serviceType],
+      ['Tipo de servicio', formatOrderServiceType(order.serviceType)],
       ['Fecha programada', this.formatDate(order.scheduledAt)],
       ['Inicio', this.formatDate(order.startedAt)],
       ['Conclusión', this.formatDate(order.completedAt)],
