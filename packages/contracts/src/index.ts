@@ -10,6 +10,8 @@ export {
   CreateTechnicianSchema,
   CreateUserSchema,
   IdParamsSchema,
+  TechnicianOptionSchema,
+  type TechnicianOption,
   UpdateTechnicianSchema,
   UpdateUserSchema,
 } from './users.js';
@@ -35,6 +37,10 @@ export {
   EquipmentVerificationStatusSchema,
   OrderListQuerySchema,
   OrderServiceTypeSchema,
+  ORDER_SERVICE_LABELS,
+  canAddOrderItems,
+  formatOrderServiceType,
+  isServiceConfigurationSupported,
   OrderStatusSchema,
   SyncStatusSchema,
   UnitParamsSchema,
@@ -51,6 +57,8 @@ export {
   type OrderStatus,
   type SyncStatus,
   type UnitStatus,
+  OrderPricingSnapshotSchema,
+  type OrderPricingSnapshot,
   type UpdateOrder,
   type UpdateUnit,
 } from './orders.js';

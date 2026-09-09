@@ -5,8 +5,59 @@ export const OrderServiceTypeSchema = v.picklist([
   'REVIEW',
   'UNINSTALLATION',
   'FAILED_APPOINTMENT',
+  'FUEL_SENSOR',
+  'EQUIPMENT_REPLACEMENT',
 ]);
 export type OrderServiceType = v.InferOutput<typeof OrderServiceTypeSchema>;
+
+export const ORDER_SERVICE_LABELS = {
+  INSTALLATION: 'Instalación',
+  REVIEW: 'Revisión',
+  UNINSTALLATION: 'Desinstalación',
+  FAILED_APPOINTMENT: 'Cita Fallida',
+  FUEL_SENSOR: 'Sensor fuel',
+  EQUIPMENT_REPLACEMENT: 'Cambio de equipo',
+} as const satisfies Record<OrderServiceType, string>;
+
+export function formatOrderServiceType(type?: string | null): string {
+  return type && Object.hasOwn(ORDER_SERVICE_LABELS, type)
+    ? ORDER_SERVICE_LABELS[type as OrderServiceType]
+    : (type ?? '');
+}
+
+export function isServiceConfigurationSupported(type: OrderServiceType): boolean {
+  switch (type) {
+    case 'INSTALLATION':
+    case 'REVIEW':
+    case 'UNINSTALLATION':
+    case 'FAILED_APPOINTMENT':
+    case 'FUEL_SENSOR':
+    case 'EQUIPMENT_REPLACEMENT':
+      return true;
+  }
+}
+
+/** Applies to additions after creation, not to the initial nested order payload. */
+export function canAddOrderItems(order: { status: string; serviceType: string }): boolean {
+  return order.status === 'DRAFT' && order.serviceType === 'INSTALLATION';
+}
+
+export const OrderPricingSnapshotSchema = v.object({
+  appliedQuantity: v.number(),
+  baseCost: v.string(),
+  currency: v.literal('MXN'),
+  departureCost: v.string(),
+  pricingVersion: v.number(),
+  serviceType: OrderServiceTypeSchema,
+  snapshotAt: v.string(),
+  technicianExternalKeySnapshot: v.optional(v.nullable(v.string())),
+  technicianId: v.pipe(v.string(), v.uuid()),
+  technicianNameSnapshot: v.string(),
+  totalAmount: v.string(),
+  travelExpenses: v.string(),
+  unitRate: v.optional(v.nullable(v.string())),
+});
+export type OrderPricingSnapshot = v.InferOutput<typeof OrderPricingSnapshotSchema>;
 
 export const OrderStatusSchema = v.picklist([
   'DRAFT',
@@ -66,7 +117,10 @@ export const CreateOrderSchema = v.object({
   scheduledAt: v.pipe(v.string(), v.isoTimestamp()),
   serviceAddress: v.optional(v.nullable(v.string())),
   serviceType: OrderServiceTypeSchema,
-  technicianId: v.optional(v.nullable(v.pipe(v.string(), v.uuid()))),
+  technicianId: v.pipe(
+    v.string('Selecciona un técnico para crear la orden'),
+    v.uuid('El técnico debe tener un identificador UUID válido'),
+  ),
   units: v.optional(v.array(CreateOrderUnitSchema)),
 });
 export type CreateOrder = v.InferOutput<typeof CreateOrderSchema>;
@@ -79,7 +133,7 @@ export const UpdateOrderSchema = v.object({
   scheduledAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
   serviceAddress: v.optional(v.nullable(v.string())),
   serviceType: v.optional(OrderServiceTypeSchema),
-  technicianId: v.optional(v.nullable(v.pipe(v.string(), v.uuid()))),
+  technicianId: v.optional(v.pipe(v.string(), v.uuid())),
   version: v.pipe(v.number(), v.integer(), v.minValue(1)),
 });
 export type UpdateOrder = v.InferOutput<typeof UpdateOrderSchema>;
@@ -105,6 +159,7 @@ export const OrderListQuerySchema = v.object({
   page: v.optional(v.pipe(v.string(), v.transform(Number))),
   pageSize: v.optional(v.pipe(v.string(), v.transform(Number))),
   search: v.optional(v.string()),
+  serviceType: v.optional(OrderServiceTypeSchema),
   sortBy: v.optional(v.picklist(['scheduledAt', 'createdAt', 'folio'])),
   sortOrder: v.optional(v.picklist(['asc', 'desc'])),
   status: v.optional(OrderStatusSchema),
