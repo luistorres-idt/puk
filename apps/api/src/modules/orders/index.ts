@@ -8,3 +8,10 @@ export {
   assertValidOrderTransition,
   canTransitionOrder,
 } from './order-state-machine.js';
+export {
+  calculateOrderPricing,
+  resolveServiceRate,
+  type CalculatedOrderPricing,
+  type CalculateOrderPricingInput,
+  type TechnicianPricingSource,
+} from './pricing.js';
