@@ -15,13 +15,18 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import {
   EquipmentVerificationStatus,
   OrderStatus,
-  type Prisma,
+  Prisma,
   UnitStatus,
   UploadStatus,
 } from '../../generated/prisma/client.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
-import { assertCanExecuteWork, assertValidOrderTransition } from '../orders/index.js';
+import {
+  assertCanExecuteWork,
+  assertValidOrderTransition,
+  calculateOrderPricing,
+} from '../orders/index.js';
+import { formatTechnicalReportRow } from '../reports/index.js';
 import { ALL_CHECKLIST_CATEGORIES, evaluateOrderCompleteness } from './order-completeness.js';
 
 export { ALL_CHECKLIST_CATEGORIES, evaluateOrderCompleteness };
@@ -586,6 +591,35 @@ export class ExecutionService {
       );
     }
 
+    const fullOrder = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        technician: true,
+        units: {
+          include: { equipment: true },
+        },
+      },
+    });
+
+    if (!fullOrder) {
+      throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
+    }
+
+    if (!fullOrder.technician) {
+      throw new AppError(400, 'MISSING_TECHNICIAN', 'La orden debe tener un técnico asignado');
+    }
+
+    const equipmentCount = (fullOrder.units ?? []).reduce((sum, u) => sum + (u.equipment?.length ?? 0), 0);
+
+    const pricing = calculateOrderPricing({
+      technician: fullOrder.technician,
+      serviceType: fullOrder.serviceType,
+      equipmentCount,
+      isHomeService: fullOrder.isHomeService,
+      pricingVersion: (fullOrder.pricingVersion ?? 0) + 1,
+      snapshotAt: new Date(),
+    });
+
     const completedOrder = await domainTransaction(this.prisma, async (tx, effects) => {
       // Mark units as completed
       await tx.orderUnit.updateMany({
@@ -609,7 +643,31 @@ export class ExecutionService {
         data: {
           status: OrderStatus.COMPLETED,
           completedAt: new Date(),
+          pricingUnitRate: pricing.unitRate,
+          pricingAppliedQuantity: pricing.appliedQuantity,
+          pricingBaseCost: pricing.baseCost,
+          pricingDepartureCost: pricing.departureCost,
+          pricingTravelExpenses: pricing.travelExpenses,
+          pricingTotal: pricing.total,
+          pricingCurrency: pricing.currency,
+          pricingSnapshotAt: pricing.snapshotAt,
+          pricingVersion: pricing.pricingVersion,
+          technicianNameSnapshot: pricing.technicianNameSnapshot,
+          technicianExternalKeySnapshot: pricing.technicianExternalKeySnapshot,
         },
+        include: {
+          units: {
+            include: { equipment: true },
+          },
+        },
+      });
+
+      const reportPayload = formatTechnicalReportRow(updated);
+      effects.enqueue({
+        idempotencyKey: `REPORT:${order.id}:${pricing.pricingVersion}`,
+        operationType: 'SHEET_TECHNICAL_REPORT',
+        orderId: order.id,
+        payload: reportPayload as unknown as Prisma.InputJsonValue,
       });
 
       effects.audit({
@@ -644,6 +702,33 @@ export class ExecutionService {
       'Solo se pueden marcar como cita fallida órdenes asignadas o en progreso',
     );
 
+    const fullOrder = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        technician: true,
+        units: {
+          include: { equipment: true },
+        },
+      },
+    });
+
+    if (!fullOrder) {
+      throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
+    }
+
+    const equipmentCount = (fullOrder.units ?? []).reduce((sum, u) => sum + (u.equipment?.length ?? 0), 0);
+
+    const pricing = fullOrder.technician
+      ? calculateOrderPricing({
+          technician: fullOrder.technician,
+          serviceType: 'FAILED_APPOINTMENT',
+          equipmentCount,
+          isHomeService: fullOrder.isHomeService,
+          pricingVersion: (fullOrder.pricingVersion ?? 0) + 1,
+          snapshotAt: new Date(),
+        })
+      : null;
+
     return domainTransaction(this.prisma, async (tx, effects) => {
       // Release equipment
       const units = await tx.orderUnit.findMany({
@@ -656,13 +741,39 @@ export class ExecutionService {
         data: { activeAssignment: false },
       });
 
+      const nextVersion = pricing?.pricingVersion ?? (order.pricingVersion ? order.pricingVersion + 1 : 1);
+
       const updated = await tx.order.update({
         where: { id: orderId },
         data: {
           status: OrderStatus.FAILED_APPOINTMENT,
           failedReason: input.failedReason,
           completedAt: new Date(),
+          pricingUnitRate: pricing?.unitRate ?? null,
+          pricingAppliedQuantity: pricing?.appliedQuantity ?? (equipmentCount > 0 ? equipmentCount : 1),
+          pricingBaseCost: pricing?.baseCost ?? new Prisma.Decimal('0.00'),
+          pricingDepartureCost: pricing?.departureCost ?? new Prisma.Decimal('0.00'),
+          pricingTravelExpenses: pricing?.travelExpenses ?? new Prisma.Decimal('0.00'),
+          pricingTotal: pricing?.total ?? new Prisma.Decimal('0.00'),
+          pricingCurrency: 'MXN',
+          pricingSnapshotAt: pricing?.snapshotAt ?? new Date(),
+          pricingVersion: nextVersion,
+          technicianNameSnapshot: pricing?.technicianNameSnapshot ?? order.technicianNameSnapshot,
+          technicianExternalKeySnapshot: pricing?.technicianExternalKeySnapshot ?? order.technicianExternalKeySnapshot,
         },
+        include: {
+          units: {
+            include: { equipment: true },
+          },
+        },
+      });
+
+      const reportPayload = formatTechnicalReportRow(updated);
+      effects.enqueue({
+        idempotencyKey: `REPORT:${order.id}:${nextVersion}`,
+        operationType: 'SHEET_TECHNICAL_REPORT',
+        orderId: order.id,
+        payload: reportPayload as unknown as Prisma.InputJsonValue,
       });
 
       effects.audit({
@@ -679,9 +790,27 @@ export class ExecutionService {
   }
 
   public async requireCorrection(adminUserId: string, orderId: string, input: RequireCorrection) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        technician: true,
+        units: {
+          include: { equipment: true },
+        },
+      },
+    });
     if (!order) {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
+    }
+
+    if (order.status === OrderStatus.COMPLETED) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: adminUserId },
+        select: { role: true },
+      });
+      if (user?.role !== 'ADMIN') {
+        throw new AppError(403, 'FORBIDDEN', 'Solo un administrador puede reabrir una orden completada');
+      }
     }
 
     assertValidOrderTransition(
@@ -690,14 +819,64 @@ export class ExecutionService {
       'Solo se puede solicitar corrección a órdenes completadas o en progreso',
     );
 
+    const equipmentCount = (order.units ?? []).reduce((sum, u) => sum + (u.equipment?.length ?? 0), 0);
+    const nextVersion = (order.pricingVersion ?? 1) + 1;
+    let pricing: ReturnType<typeof calculateOrderPricing> | null = null;
+    if (order.technician) {
+      pricing = calculateOrderPricing({
+        technician: order.technician,
+        serviceType: order.serviceType,
+        equipmentCount,
+        isHomeService: order.isHomeService,
+        pricingVersion: nextVersion,
+        snapshotAt: new Date(),
+      });
+    }
+
     return domainTransaction(this.prisma, async (tx, effects) => {
+      const notesText = input.notes?.trim();
+      const nextNotes = notesText
+        ? `${order.generalNotes ? `${order.generalNotes}\n` : ''}Corrección solicitada: ${notesText}`
+        : order.generalNotes;
+
       const updated = await tx.order.update({
         where: { id: orderId },
         data: {
           status: OrderStatus.REQUIRES_CORRECTION,
-          generalNotes: `${order.generalNotes ? `${order.generalNotes}\n` : ''}Corrección solicitada: ${input.notes}`,
+          correctionReason: notesText || null,
+          generalNotes: nextNotes,
+          ...(pricing
+            ? {
+                pricingUnitRate: pricing.unitRate,
+                pricingAppliedQuantity: pricing.appliedQuantity,
+                pricingBaseCost: pricing.baseCost,
+                pricingDepartureCost: pricing.departureCost,
+                pricingTravelExpenses: pricing.travelExpenses,
+                pricingTotal: pricing.total,
+                pricingCurrency: pricing.currency,
+                pricingSnapshotAt: pricing.snapshotAt,
+                pricingVersion: pricing.pricingVersion,
+                technicianNameSnapshot: pricing.technicianNameSnapshot,
+                technicianExternalKeySnapshot: pricing.technicianExternalKeySnapshot,
+              }
+            : {}),
+        },
+        include: {
+          units: {
+            include: { equipment: true },
+          },
         },
       });
+
+      if (pricing) {
+        const reportPayload = formatTechnicalReportRow(updated);
+        effects.enqueue({
+          idempotencyKey: `REPORT:${order.id}:${pricing.pricingVersion}`,
+          operationType: 'SHEET_TECHNICAL_REPORT',
+          orderId: order.id,
+          payload: reportPayload as unknown as Prisma.InputJsonValue,
+        });
+      }
 
       effects.audit({
         action: 'ORDER_CORRECTION_REQUESTED',

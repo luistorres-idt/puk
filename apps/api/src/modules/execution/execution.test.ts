@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { ExecutionService } from './execution.service.js';
+import { ExecutionService, ALL_CHECKLIST_CATEGORIES } from './execution.service.js';
 import { DevMockStorageClient } from '../../integrations/object-storage/dev-mock-storage.client.js';
 import {
   EquipmentVerificationStatus,
@@ -125,6 +125,9 @@ describe('ExecutionService', () => {
             ),
           },
           auditLog: {
+            createMany: vi.fn(),
+          },
+          sheetSyncOperation: {
             createMany: vi.fn(),
           },
         };
@@ -317,12 +320,18 @@ describe('ExecutionService', () => {
     );
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
+      folio: 'OS-001',
+      serviceType: 'INSTALLATION',
+      clientNameSnapshot: 'Cliente Demo',
+      scheduledAt: new Date(),
       status: OrderStatus.IN_PROGRESS,
       technicianId: 'tech-1',
+      technician: { id: 'tech-1', name: 'Tecnico Demo', installationRate: 500, departureCost: 100 },
       units: [
         {
           id: 'unit-1',
           label: 'Unidad 01',
+          serialNumber: 'SN-001',
           equipment: [{ externalKey: 'EQ-001', verificationStatus: 'MATCHED' }],
           checklist: { items: checklistItems },
         },
@@ -339,8 +348,14 @@ describe('ExecutionService', () => {
   it('marks an appointment as failed with a reason and releases equipment', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
+      folio: 'OS-001',
+      serviceType: 'FAILED_APPOINTMENT',
+      clientNameSnapshot: 'Cliente Demo',
+      scheduledAt: new Date(),
       status: OrderStatus.ASSIGNED,
       technicianId: 'tech-1',
+      technician: { id: 'tech-1', name: 'Tecnico Demo', failedAppointmentRate: 200, departureCost: 100 },
+      units: [],
     });
 
     const result = await service.failAppointment('admin-1', 'ADMIN', 'order-1', {
@@ -351,10 +366,17 @@ describe('ExecutionService', () => {
   });
 
   it('allows an administrator to request correction on a completed order', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({ id: 'admin-1', role: 'ADMIN' });
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
+      folio: 'OS-001',
+      serviceType: 'INSTALLATION',
+      clientNameSnapshot: 'Cliente Demo',
+      scheduledAt: new Date(),
       status: OrderStatus.COMPLETED,
       generalNotes: 'Notas iniciales',
+      technician: { id: 'tech-1', name: 'Tecnico Demo', installationRate: 500, departureCost: 100 },
+      units: [],
     });
 
     const result = await service.requireCorrection('admin-1', 'order-1', {
@@ -362,6 +384,68 @@ describe('ExecutionService', () => {
     });
     expect(result.status).toBe(OrderStatus.REQUIRES_CORRECTION);
     expect(result.generalNotes).toContain('Corrección solicitada');
+  });
+
+  it('rejects non-admin users attempting to reopen completed order for correction', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.COMPLETED,
+      technicianId: 'tech-1',
+    });
+    mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-tech', role: 'TECHNICIAN' });
+
+    await expect(
+      service.requireCorrection('user-tech', 'order-1', { notes: 'Reopen please' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('fails order completion if technician lacks configured rate for service', async () => {
+    const checklistItems = ALL_CHECKLIST_CATEGORIES.map((category) => ({
+      category,
+      condition: 'GOOD',
+      evidence: [{ id: 'ev-1' }],
+    }));
+
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.IN_PROGRESS,
+      serviceType: 'INSTALLATION',
+      technicianId: 'tech-1',
+      technician: { id: 'tech-1', name: 'Tecnico Demo', installationRate: null },
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Unidad 01',
+          serialNumber: 'SN-001',
+          equipment: [{ externalKey: 'EQ-001', verificationStatus: 'MATCHED' }],
+          checklist: { items: checklistItems },
+        },
+      ],
+      signature: { signerName: 'Cliente' },
+    });
+
+    await expect(
+      service.completeOrder('admin-1', 'ADMIN', 'order-1'),
+    ).rejects.toMatchObject({ code: 'MISSING_SERVICE_RATE' });
+  });
+
+  it('allows failing appointment with 0.00 pricing when technician rate is unconfigured', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      folio: 'OS-001',
+      serviceType: 'FAILED_APPOINTMENT',
+      clientNameSnapshot: 'Cliente Demo',
+      scheduledAt: new Date(),
+      status: OrderStatus.ASSIGNED,
+      technicianId: 'tech-1',
+      technician: { id: 'tech-1', name: 'Tecnico Demo', failedAppointmentRate: null },
+      units: [],
+    });
+
+    const result = await service.failAppointment('admin-1', 'ADMIN', 'order-1', {
+      failedReason: 'No se pudo contactar',
+    });
+    expect(result.status).toBe(OrderStatus.FAILED_APPOINTMENT);
   });
 
   describe('technician isolation and access restrictions', () => {
