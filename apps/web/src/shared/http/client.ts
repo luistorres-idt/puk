@@ -1,7 +1,7 @@
 import type { SessionUser } from '@puk/contracts';
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL;
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 const api = axios.create({ baseURL, withCredentials: true });
 const sessionApi = axios.create({ baseURL, withCredentials: true });
 

@@ -111,9 +111,9 @@ async function reachTechnicianStep(page: Page) {
   await page.getByPlaceholder('ej. Camión 01, T-12...').fill('Unidad E2E');
   await page.getByPlaceholder('ej. Kenworth T680').fill('Modelo E2E');
   await page.getByPlaceholder('ej. 3AKJH567...').fill('SERIE-E2E');
-  await page.getByRole('button', { name: '+ Agregar a Instalación' }).click();
-  await page.getByRole('button', { name: 'Siguiente' }).click();
-  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByRole('button', { name: '+ Agregar a Instalación' }).press('Enter');
+  await page.getByRole('button', { name: 'Siguiente' }).press('Enter');
+  await page.getByRole('button', { name: 'Siguiente' }).press('Enter');
   await expect(page.getByText('Paso 4: Técnico Asignado', { exact: true })).toBeVisible();
 }
 
@@ -134,9 +134,11 @@ test('wizard requires a technician, retries a directory failure and submits its 
   await expect(next).toBeDisabled();
   await page.getByRole('textbox').fill('Ciudad Demo');
   await page.getByText('Técnico de prueba · Taller Norte · Ciudad Demo', { exact: true }).click();
-  await next.click();
+  await next.press('Enter');
   await expect(page.getByText('Técnico de prueba', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Crear Orden de Servicio', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Crear Orden de Servicio', exact: true })
+    .press('Enter');
   await expect(page).toHaveURL(new RegExp(`/orders/${orderId}$`));
   expect(submitted).toHaveLength(1);
   expect(submitted[0]?.technicianId).toBe(technician.id);
