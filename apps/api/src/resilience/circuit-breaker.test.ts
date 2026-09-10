@@ -116,6 +116,8 @@ describe('CircuitBreaker Decorators', () => {
       listClients: vi.fn().mockRejectedValue(new Error('sheets quota exceeded')),
       listEquipment: vi.fn().mockResolvedValue([]),
       updateAssignment: vi.fn().mockResolvedValue(undefined),
+      listTechniciansDirectory: vi.fn().mockResolvedValue([]),
+      syncTechnicalReportRow: vi.fn().mockResolvedValue({ row: 2, created: true }),
     };
 
     const breaker = new CircuitBreaker({

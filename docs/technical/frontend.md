@@ -66,8 +66,18 @@ El asistente (`/orders/new`) guía al administrador en un flujo estructurado de 
    - **Instalaciones**: `EquipmentSelect` filtra exclusivamente hardware en stock/almacén (`STOCK TECNICO`, `DISPONIBLE`, etc.) y solicita los datos de la nueva unidad física.
    - **Normalización**: Las comparaciones de clientes aplican `normalizeString` (case-insensitive, diacríticos removidos vía NFD y eliminación de sufijos legales tipo `S.A. de C.V.`).
 3. **Programación**: Fecha, hora, tipo de servicio (en sitio o taller) y notas operativas.
-4. **Técnico**: Asignación inicial (opcional en borrador).
+4. **Técnico**: Selección obligatoria de un técnico activo desde `/technicians/selectable`, con búsqueda por nombre, taller o ciudad. La carga y los errores bloquean el avance; el directorio ofrece reintento y recarga.
 5. **Resumen y Creación**: Validación integral y envío atómico de la orden con sus unidades y equipos a la API.
+
+`FUEL_SENSOR` (Sensor fuel) y `EQUIPMENT_REPLACEMENT` (Cambio de equipo) se reconocen
+en contratos, filtros, detalle y PDF. Se muestran deshabilitados en la creación
+hasta definir sus flujos de unidades/equipos. El selector técnico actualmente usa
+el directorio local; la sincronización con Sheets depende del contrato pendiente.
+
+En el detalle, las acciones Agregar Unidad, Registrar Primera Unidad y Asignar
+Equipo solo aparecen para administradores en borradores de instalación. La API
+valida la misma regla. La carga inicial anidada del wizard y las acciones de
+quitar/eliminar conservan sus reglas existentes.
 
 ## Evidencias y reportes
 

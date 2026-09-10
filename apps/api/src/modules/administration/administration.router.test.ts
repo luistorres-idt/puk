@@ -33,6 +33,10 @@ describe('createAdministrationRouter', () => {
   };
 
   const mockTechniciansService = {
+    getLastSyncAt: vi.fn().mockReturnValue(null),
+    listSelectable: vi
+      .fn()
+      .mockResolvedValue([{ id: 'tech-1', name: 'Carlos', workshop: 'Norte', city: 'Ciudad' }]),
     list: vi
       .fn()
       .mockResolvedValue([{ id: 'tech-1', name: 'Carlos', active: true, workshop: 'Norte' }]),
@@ -89,5 +93,16 @@ describe('createAdministrationRouter', () => {
     const app = createTestApp();
     const response = await request(app).get('/admin/users');
     expect(response.status).toBe(401);
+  });
+
+  it('serves the dedicated technician selector', async () => {
+    const response = await request(createTestApp())
+      .get('/admin/technicians/selectable')
+      .set('Authorization', 'Bearer valid-token');
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([
+      { id: 'tech-1', name: 'Carlos', workshop: 'Norte', city: 'Ciudad' },
+    ]);
+    expect(mockTechniciansService.listSelectable).toHaveBeenCalledOnce();
   });
 });

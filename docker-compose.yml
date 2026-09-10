@@ -69,6 +69,9 @@ services:
       GOOGLE_EQUIPMENT_SHEET: ${GOOGLE_EQUIPMENT_SHEET:-SALIDAS}
       GOOGLE_PRIVATE_KEY: ${GOOGLE_PRIVATE_KEY:-development-only-replace-with-google-private-key}
       GOOGLE_SPREADSHEET_ID: ${GOOGLE_SPREADSHEET_ID:-development-only-replace-with-spreadsheet-id}
+      GOOGLE_TECHNICIANS_SPREADSHEET_ID: ${GOOGLE_TECHNICIANS_SPREADSHEET_ID:-development-only-replace-with-technicians-spreadsheet-id}
+      GOOGLE_TECHNICIANS_SHEET_NAME: ${GOOGLE_TECHNICIANS_SHEET_NAME:-DIRECTORIO TECNICO}
+      GOOGLE_TECHNICIAN_REPORT_SHEET_NAME: ${GOOGLE_TECHNICIAN_REPORT_SHEET_NAME:-2026}
       JWT_ACCESS_PRIVATE_KEY: ${JWT_ACCESS_PRIVATE_KEY:-development-only-replace-with-access-private-key}
       JWT_ACCESS_PUBLIC_KEY: ${JWT_ACCESS_PUBLIC_KEY:-development-only-replace-with-access-public-key}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}

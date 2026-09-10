@@ -68,6 +68,6 @@ export const FailAppointmentSchema = v.object({
 export type FailAppointment = v.InferOutput<typeof FailAppointmentSchema>;
 
 export const RequireCorrectionSchema = v.object({
-  notes: v.pipe(v.string(), v.nonEmpty()),
+  notes: v.optional(v.nullable(v.string())),
 });
 export type RequireCorrection = v.InferOutput<typeof RequireCorrectionSchema>;

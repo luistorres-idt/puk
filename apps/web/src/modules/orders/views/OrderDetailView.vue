@@ -11,13 +11,21 @@ import {
   NInputNumber,
   NModal,
   NPopconfirm,
+  NSelect,
   NSpin,
   NTabPane,
   NTabs,
   NTag,
   useMessage,
 } from 'naive-ui';
-import type { ExternalEquipment } from '@puk/contracts';
+import {
+  ORDER_SERVICE_LABELS,
+  OrderServiceTypeSchema,
+  canAddOrderItems,
+  isServiceConfigurationSupported,
+  type ExternalEquipment,
+  type OrderServiceType,
+} from '@puk/contracts';
 import { fetchReportDownload, type UnitItem } from '../api.js';
 import {
   CATEGORY_NAMES,
@@ -30,7 +38,11 @@ import {
 } from '../formatters.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
-import { EquipmentSelect } from '@/modules/external-catalogs';
+import {
+  EquipmentSelect,
+  extractUnitFromEquipment,
+  toEquipmentAssignment,
+} from '@/modules/external-catalogs';
 import { useSessionStore } from '@/stores/session';
 import {
   useOrderAuditQuery,
@@ -56,6 +68,9 @@ const reportQuery = useOrderReportQuery(orderId);
 const mutations = useOrderMutations(orderId);
 
 const order = computed(() => orderQuery.data.value);
+const canAddItems = computed(
+  () => session.user?.role === 'ADMIN' && !!order.value && canAddOrderItems(order.value),
+);
 const syncInfo = computed(() => syncQuery.data.value);
 const auditLogs = computed(() => auditQuery.data.value ?? []);
 const report = computed(() => reportQuery.data.value);
@@ -75,17 +90,152 @@ const cancelReason = ref('');
 const correctionNotes = ref('');
 const targetUnitId = ref<string | null>(null);
 
+const targetUnit = computed(() => order.value?.units?.find((u) => u.id === targetUnitId.value));
+
+const distinctServices = computed(() => {
+  if (!order.value) return [];
+  const fromUnits = (order.value.units ?? [])
+    .map((u) => u.serviceType ?? order.value?.serviceType)
+    .filter((type): type is OrderServiceType => type !== undefined);
+  if (fromUnits.length > 0) {
+    return Array.from(new Set(fromUnits));
+  }
+  return order.value.serviceType ? [order.value.serviceType] : [];
+});
+
+const serviceTypeOptions = OrderServiceTypeSchema.options
+  .filter((value) => value !== 'FAILED_APPOINTMENT')
+  .map((value) => ({
+    label: `${ORDER_SERVICE_LABELS[value]}${isServiceConfigurationSupported(value) ? '' : ' (próximamente)'}`,
+    value,
+    disabled: !isServiceConfigurationSupported(value),
+  }));
+
 // Unit form
 const newUnit = ref({
   label: '',
   makeModel: '',
   serialNumber: '',
-  year: 2024,
+  year: 2024 as number | null,
+  serviceType: 'INSTALLATION' as OrderServiceType,
 });
 
-// Equipment form
+// Equipment form for the separate Attach Equipment modal (showAddEqModal)
 const selectedEquipmentKey = ref<string | null>(null);
 const selectedEquipment = ref<ExternalEquipment | null>(null);
+
+// Equipment form for the Add Unit modal (showAddUnitModal)
+const unitModalEquipmentKey = ref<string | null>(null);
+const unitModalEquipment = ref<ExternalEquipment | null>(null);
+
+const isReviewOrUninstallation = computed(
+  () => newUnit.value.serviceType === 'REVIEW' || newUnit.value.serviceType === 'UNINSTALLATION',
+);
+
+const isEquipmentReplacement = computed(
+  () => newUnit.value.serviceType === 'EQUIPMENT_REPLACEMENT',
+);
+
+const replacementNewEquipmentKey = ref<string | null>(null);
+const replacementNewEquipment = ref<ExternalEquipment | null>(null);
+
+const assignedEquipmentKeys = computed<string[]>(() => {
+  const keys = new Set<string>();
+  if (!order.value?.units) return [];
+  for (const unit of order.value.units) {
+    if (unit.equipment) {
+      for (const eq of unit.equipment) {
+        if (eq.externalKey) {
+          keys.add(eq.externalKey);
+        }
+      }
+    }
+  }
+  return Array.from(keys);
+});
+
+const pricingBreakdownItems = computed(() => {
+  return order.value?.pricingBreakdown?.breakdown ?? [];
+});
+
+const pricingTravelExpenses = computed(() => {
+  return order.value?.pricingBreakdown?.travelExpenses ?? null;
+});
+
+const pricingWarnings = computed<string[]>(() => {
+  return order.value?.pricingBreakdown?.warnings ?? [];
+});
+
+const excludeKeysForModalReplacementOld = computed(() => {
+  const keys = [...assignedEquipmentKeys.value];
+  if (replacementNewEquipmentKey.value) {
+    keys.push(replacementNewEquipmentKey.value);
+  }
+  return keys;
+});
+
+const excludeKeysForModalReplacementNew = computed(() => {
+  const keys = [...assignedEquipmentKeys.value];
+  if (unitModalEquipmentKey.value) {
+    keys.push(unitModalEquipmentKey.value);
+  }
+  return keys;
+});
+
+function handleReplacementNewSelect(eq: ExternalEquipment | null) {
+  replacementNewEquipment.value = eq;
+}
+
+function handleUnitModalEquipmentSelect(eq: ExternalEquipment | null) {
+  unitModalEquipment.value = eq;
+  if (eq && (isReviewOrUninstallation.value || isEquipmentReplacement.value)) {
+    const extracted = extractUnitFromEquipment(eq);
+    newUnit.value.label = extracted.label;
+    newUnit.value.makeModel = extracted.makeModel;
+    newUnit.value.serialNumber = extracted.serialNumber;
+    newUnit.value.year = extracted.year;
+  }
+}
+
+watch(
+  () => newUnit.value.serviceType,
+  (newType) => {
+    unitModalEquipmentKey.value = null;
+    unitModalEquipment.value = null;
+    replacementNewEquipmentKey.value = null;
+    replacementNewEquipment.value = null;
+    if (
+      newType === 'REVIEW' ||
+      newType === 'UNINSTALLATION' ||
+      newType === 'EQUIPMENT_REPLACEMENT'
+    ) {
+      newUnit.value.label = '';
+      newUnit.value.makeModel = '';
+      newUnit.value.serialNumber = '';
+      newUnit.value.year = new Date().getFullYear();
+    }
+  },
+);
+
+function openAddUnitModal() {
+  if (!canAddItems.value) return;
+  const defaultService =
+    order.value?.serviceType && order.value.serviceType !== 'FAILED_APPOINTMENT'
+      ? order.value.serviceType
+      : 'INSTALLATION';
+  newUnit.value = {
+    label: '',
+    makeModel: '',
+    serialNumber: '',
+    year: new Date().getFullYear(),
+    serviceType: defaultService as OrderServiceType,
+  };
+  unitModalEquipmentKey.value = null;
+  unitModalEquipment.value = null;
+  replacementNewEquipmentKey.value = null;
+  replacementNewEquipment.value = null;
+  showAddUnitModal.value = true;
+}
 
 function getErrorMessage(err: unknown, defaultMsg: string): string {
   return extractApiErrorMessage(err, defaultMsg);
@@ -93,22 +243,62 @@ function getErrorMessage(err: unknown, defaultMsg: string): string {
 
 // Actions
 async function handleAddUnit() {
+  if (!canAddItems.value) return;
   if (!newUnit.value.label || !newUnit.value.makeModel || !newUnit.value.serialNumber) {
-    message.warning('Por favor completa los campos obligatorios de la unidad.');
+    message.warning(
+      isReviewOrUninstallation.value || isEquipmentReplacement.value
+        ? 'Por favor selecciona un equipo instalado del cliente para autocompletar la unidad.'
+        : 'Por favor completa los campos obligatorios de la unidad.',
+    );
     return;
   }
+
+  if (
+    isReviewOrUninstallation.value &&
+    (!unitModalEquipment.value || !unitModalEquipment.value.hasValidIdentity)
+  ) {
+    message.warning('Debes seleccionar un equipo válido instalado del cliente.');
+    return;
+  }
+
+  if (isEquipmentReplacement.value) {
+    if (!unitModalEquipment.value || !unitModalEquipment.value.hasValidIdentity) {
+      message.warning('Debes seleccionar el equipo actualmente instalado con el cliente.');
+      return;
+    }
+    if (!replacementNewEquipment.value || !replacementNewEquipment.value.hasValidIdentity) {
+      message.warning('Debes seleccionar el equipo nuevo de reemplazo (sin instalar de almacén).');
+      return;
+    }
+  }
+
   try {
     await mutations.insertUnit.mutateAsync({
       id: orderId,
       data: {
-        label: newUnit.value.label,
-        makeModel: newUnit.value.makeModel,
-        serialNumber: newUnit.value.serialNumber,
+        label: newUnit.value.label.trim(),
+        makeModel: newUnit.value.makeModel.trim(),
+        serialNumber: newUnit.value.serialNumber.trim(),
         year: newUnit.value.year,
+        serviceType: newUnit.value.serviceType,
+        equipment: [unitModalEquipment.value, replacementNewEquipment.value]
+          .filter((equipment): equipment is ExternalEquipment => Boolean(equipment))
+          .map(toEquipmentAssignment),
       },
     });
+
     showAddUnitModal.value = false;
-    newUnit.value = { label: '', makeModel: '', serialNumber: '', year: 2024 };
+    unitModalEquipmentKey.value = null;
+    unitModalEquipment.value = null;
+    replacementNewEquipmentKey.value = null;
+    replacementNewEquipment.value = null;
+    newUnit.value = {
+      label: '',
+      makeModel: '',
+      serialNumber: '',
+      year: new Date().getFullYear(),
+      serviceType: 'INSTALLATION',
+    };
     message.success('Unidad agregada correctamente.');
   } catch (err) {
     message.error(getErrorMessage(err, 'Error al agregar unidad'));
@@ -125,6 +315,7 @@ async function handleDeleteUnit(unitId: string) {
 }
 
 function openAddEquipment(unitId: string) {
+  if (!canAddItems.value) return;
   targetUnitId.value = unitId;
   selectedEquipmentKey.value = null;
   selectedEquipment.value = null;
@@ -136,6 +327,7 @@ function handleEquipmentSelect(eq: ExternalEquipment | null) {
 }
 
 async function handleAddEquipment() {
+  if (!canAddItems.value) return;
   if (!targetUnitId.value || !selectedEquipment.value || !selectedEquipmentKey.value) return;
   try {
     await mutations.attachEquipment.mutateAsync({
@@ -532,10 +724,15 @@ const statusColor = orderStatusTagType;
             </div>
             <div>
               <span class="text-xs text-slate-500 block">Tipo de Servicio</span>
-              <span class="font-semibold text-slate-800">{{
-                formatServiceType(order.serviceType)
-              }}</span>
-              <span class="text-xs text-slate-500 block">
+              <div class="flex flex-wrap gap-1 mt-1">
+                <n-tag v-for="svc in distinctServices" :key="svc" size="small" type="info" round>
+                  {{ formatServiceType(svc) }}
+                </n-tag>
+                <span v-if="distinctServices.length === 0" class="text-slate-400 italic">
+                  Sin servicios definidos
+                </span>
+              </div>
+              <span class="text-xs text-slate-500 block mt-1">
                 {{ order.isHomeService ? 'A domicilio' : 'En taller' }}
                 {{ order.serviceAddress ? `(${order.serviceAddress})` : '' }}
               </span>
@@ -548,6 +745,72 @@ const statusColor = orderStatusTagType;
               <span class="text-xs text-slate-400 block">
                 Cita: {{ new Date(order.scheduledAt).toLocaleString() }}
               </span>
+            </div>
+          </div>
+          <div
+            v-if="order.pricingBreakdown"
+            class="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600"
+          >
+            <!-- Warning banner if any tariff was $0 / missing -->
+            <div
+              v-if="pricingWarnings.length > 0"
+              class="mb-3 p-2.5 bg-amber-50 border border-amber-300 rounded text-amber-900 text-xs"
+            >
+              <div class="font-bold flex items-center gap-1.5 text-amber-800 mb-1">
+                <span>⚠️</span>
+                <span>Aviso de tarifas no configuradas para el técnico:</span>
+              </div>
+              <ul class="list-disc list-inside space-y-0.5 pl-1">
+                <li v-for="(warn, wIdx) in pricingWarnings" :key="wIdx">
+                  {{ warn }}
+                </li>
+              </ul>
+            </div>
+
+            <div class="flex justify-between items-center mb-1">
+              <strong class="text-slate-700">Desglose de Liquidación Técnica:</strong>
+              <span class="font-bold text-slate-800 text-sm">
+                Total: ${{ Number(order.pricingTotal ?? 0).toFixed(2) }} MXN
+              </span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+              <div
+                v-for="(item, idx) in pricingBreakdownItems"
+                :key="idx"
+                class="bg-slate-50 p-2 rounded border border-slate-200"
+                :class="{
+                  'border-amber-300 bg-amber-50/50': Number(item.rate) === 0,
+                }"
+              >
+                <div class="font-medium text-slate-700 flex justify-between items-center">
+                  <span>{{ formatServiceType(item.serviceType) }}</span>
+                  <span
+                    v-if="Number(item.rate) === 0"
+                    class="text-[10px] text-amber-700 font-semibold bg-amber-100 px-1 py-0.5 rounded"
+                  >
+                    Tarifa $0.00
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-500">
+                  {{ item.quantity }} unidad(es) @ ${{ Number(item.rate).toFixed(2) }}
+                  =
+                  <span class="font-semibold text-slate-800"
+                    >${{ Number(item.subtotal).toFixed(2) }}</span
+                  >
+                </div>
+              </div>
+              <div
+                v-if="Number(pricingTravelExpenses) > 0"
+                class="bg-slate-50 p-2 rounded border border-slate-200"
+              >
+                <div class="font-medium text-slate-700">Viático / Salida</div>
+                <div class="text-[11px] text-slate-500">
+                  Costo de salida =
+                  <span class="font-semibold text-slate-800">
+                    ${{ Number(pricingTravelExpenses).toFixed(2) }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
           <div
@@ -569,11 +832,11 @@ const statusColor = orderStatusTagType;
                 </h2>
 
                 <n-button
-                  v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
+                  v-if="canAddItems"
                   size="small"
                   type="primary"
                   secondary
-                  @click="showAddUnitModal = true"
+                  @click="openAddUnitModal"
                 >
                   + Agregar Unidad
                 </n-button>
@@ -585,11 +848,11 @@ const statusColor = orderStatusTagType;
               >
                 <p class="text-sm text-slate-500">No hay unidades registradas en esta orden.</p>
                 <n-button
-                  v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
+                  v-if="canAddItems"
                   size="small"
                   type="primary"
                   class="mt-3"
-                  @click="showAddUnitModal = true"
+                  @click="openAddUnitModal"
                 >
                   Registrar Primera Unidad
                 </n-button>
@@ -603,6 +866,9 @@ const statusColor = orderStatusTagType;
                         <span class="font-bold text-base text-slate-800">{{ unit.label }}</span>
                         <n-tag size="small" :type="unitStatusTagType(unit.status)">
                           {{ formatUnitStatus(unit.status) }}
+                        </n-tag>
+                        <n-tag size="small" type="info" secondary round>
+                          {{ formatServiceType(unit.serviceType ?? order.serviceType) }}
                         </n-tag>
                       </div>
                       <p class="text-xs text-slate-500 mt-1">
@@ -619,6 +885,7 @@ const statusColor = orderStatusTagType;
                       class="flex gap-2"
                     >
                       <n-button
+                        v-if="canAddItems"
                         size="tiny"
                         type="primary"
                         secondary
@@ -692,20 +959,17 @@ const statusColor = orderStatusTagType;
               <!-- Signature Section -->
               <n-card class="shadow-sm" title="Firma de Conformidad" size="small">
                 <div
-                  v-if="(order as any).signature"
+                  v-if="order.signature"
                   class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                 >
                   <div class="space-y-1">
                     <p class="text-sm font-semibold text-slate-800">
                       Firmado por:
-                      {{
-                        (order as any).signature.signerName ||
-                        (order as any).signature.signerNameSnapshot
-                      }}
+                      {{ order.signature.signerName }}
                     </p>
                     <p class="text-xs text-slate-500">
                       Fecha de firma:
-                      {{ new Date((order as any).signature.signedAt).toLocaleString() }}
+                      {{ new Date(order.signature.signedAt).toLocaleString() }}
                     </p>
                   </div>
                   <div class="flex items-center gap-3">
@@ -734,7 +998,7 @@ const statusColor = orderStatusTagType;
                   Checklist y Evidencias por Unidad
                 </h3>
 
-                <div v-for="unit in (order as any).units || []" :key="unit.id" class="space-y-2">
+                <div v-for="unit in order.units ?? []" :key="unit.id" class="space-y-2">
                   <n-card class="shadow-sm" size="small">
                     <div class="space-y-4">
                       <!-- Unit Header -->
@@ -979,31 +1243,27 @@ const statusColor = orderStatusTagType;
                       <n-tag
                         size="tiny"
                         :type="
-                          (op as any).status === 'COMPLETED'
+                          op.status === 'SYNCED'
                             ? 'success'
-                            : (op as any).status === 'FAILED'
+                            : op.status === 'FAILED'
                               ? 'error'
                               : 'warning'
                         "
                       >
-                        {{ (op as any).status }}
+                        {{ op.status }}
                       </n-tag>
                       <span class="font-semibold text-slate-700"
-                        >Fila Sheets: {{ (op as any).sheetRowNumber || 'N/A' }}</span
+                        >Fila Sheets: {{ op.payload?.row ?? 'N/A' }}</span
                       >
-                      <span class="text-slate-400 text-[11px]"
-                        >Intentos: {{ (op as any).attempts || 0 }}</span
-                      >
+                      <span class="text-slate-400 text-[11px]">Intentos: {{ op.attempts }}</span>
                     </div>
-                    <p v-if="(op as any).lastError" class="text-red-500 font-mono text-[11px] mt-1">
-                      Error: {{ (op as any).lastError }}
+                    <p v-if="op.lastErrorMessage" class="text-red-500 font-mono text-[11px] mt-1">
+                      Error: {{ op.lastErrorMessage }}
                     </p>
                   </div>
 
                   <span class="text-slate-400 text-[11px] font-mono">
-                    {{
-                      (op as any).createdAt ? new Date((op as any).createdAt).toLocaleString() : ''
-                    }}
+                    {{ op.createdAt ? new Date(op.createdAt).toLocaleString() : '' }}
                   </span>
                 </div>
               </div>
@@ -1022,42 +1282,247 @@ const statusColor = orderStatusTagType;
         v-model:show="showAddUnitModal"
         preset="card"
         title="Agregar Unidad a la Orden"
-        class="max-w-md"
+        class="max-w-lg"
       >
         <div class="space-y-4">
           <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1"
-              >Identificador / Etiqueta</label
+            <label class="block text-xs font-medium text-slate-600 mb-1">Tipo de Servicio</label>
+            <n-select
+              v-model:value="newUnit.serviceType"
+              :options="serviceTypeOptions"
+              placeholder="Seleccionar tipo de servicio"
+            />
+          </div>
+
+          <!-- Case A: Equipment Replacement -->
+          <div v-if="isEquipmentReplacement" class="space-y-4 pt-2 border-t border-slate-100">
+            <div
+              class="p-2.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 space-y-1"
             >
-            <n-input
-              v-model:value="newUnit.label"
-              placeholder="Ej: Camión 01, T-12, Unidad Norte..."
+              <p class="font-semibold">Cambio de Equipo</p>
+              <p>
+                1. Selecciona el <strong>equipo actualmente instalado</strong> con el cliente (los
+                datos del vehículo se vinculan automáticamente sin capturarlos).<br />
+                2. Selecciona el <strong>equipo nuevo de almacén</strong> (sin instalar).
+              </p>
+            </div>
+
+            <!-- 1. Equipo instalado con el cliente -->
+            <div class="space-y-2">
+              <label class="block text-xs font-bold text-slate-700">
+                1. Equipo Actualmente Instalado (a retirar / cliente:
+                {{ order?.clientNameSnapshot }}):
+              </label>
+              <equipment-select
+                v-model="unitModalEquipmentKey"
+                service-type="UNINSTALLATION"
+                :client-name="order?.clientNameSnapshot"
+                :exclude-keys="excludeKeysForModalReplacementOld"
+                @select="handleUnitModalEquipmentSelect"
+              />
+
+              <div
+                v-if="unitModalEquipment"
+                class="p-3 bg-slate-50 rounded border text-xs space-y-1"
+              >
+                <p>
+                  <strong>Equipo actual:</strong> {{ unitModalEquipment.brand }}
+                  {{ unitModalEquipment.model }} | <strong>IMEI:</strong>
+                  {{ unitModalEquipment.imei || 'N/A' }}
+                </p>
+                <p class="text-indigo-700 font-medium">
+                  <strong>Vehículo vinculado en Sheets:</strong>
+                  {{ unitModalEquipment.unit || 'Sin registrar' }}
+                  ({{ unitModalEquipment.unitMakeModel || 'Sin modelo' }}
+                  {{ unitModalEquipment.unitYear || '' }}) | <strong>Serie:</strong>
+                  {{ unitModalEquipment.unitSerialNumber || 'Sin serie' }}
+                </p>
+              </div>
+            </div>
+
+            <!-- 2. Equipo nuevo de almacén -->
+            <div class="space-y-2 pt-2 border-t border-slate-200">
+              <label class="block text-xs font-bold text-slate-700">
+                2. Equipo de Reemplazo (nuevo / sin instalar de almacén):
+              </label>
+              <equipment-select
+                v-model="replacementNewEquipmentKey"
+                service-type="INSTALLATION"
+                :client-name="order?.clientNameSnapshot"
+                :exclude-keys="excludeKeysForModalReplacementNew"
+                @select="handleReplacementNewSelect"
+              />
+
+              <div
+                v-if="replacementNewEquipment"
+                class="p-3 bg-slate-50 rounded border text-xs space-y-1"
+              >
+                <p>
+                  <strong>Equipo a colocar:</strong> {{ replacementNewEquipment.brand }}
+                  {{ replacementNewEquipment.model }} | <strong>IMEI:</strong>
+                  {{ replacementNewEquipment.imei || 'N/A' }}
+                </p>
+                <p class="text-slate-500">
+                  Estado: {{ replacementNewEquipment.condition || 'N/A' }} &bull; Servicio:
+                  {{ replacementNewEquipment.serviceStatus || 'DISPONIBLE' }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Case B: Review or Uninstallation (Select from client's installed equipment) -->
+          <div
+            v-else-if="isReviewOrUninstallation"
+            class="space-y-3 pt-2 border-t border-slate-100"
+          >
+            <div class="p-2.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+              <p class="font-semibold mb-0.5">
+                {{
+                  newUnit.serviceType === 'REVIEW'
+                    ? 'Revisión de Equipos'
+                    : 'Desinstalación de Equipos'
+                }}
+              </p>
+              <p>
+                Selecciona el equipo actualmente instalado para
+                <strong>{{ order?.clientNameSnapshot }}</strong
+                >. Los datos de la unidad se autocompletarán desde Google Sheets.
+              </p>
+            </div>
+
+            <equipment-select
+              v-model="unitModalEquipmentKey"
+              :service-type="newUnit.serviceType"
+              :client-name="order?.clientNameSnapshot"
+              :exclude-keys="assignedEquipmentKeys"
+              @select="handleUnitModalEquipmentSelect"
             />
+
+            <div v-if="unitModalEquipment" class="p-3 bg-slate-50 rounded border text-xs space-y-1">
+              <p>
+                <strong>Equipo:</strong> {{ unitModalEquipment.brand }}
+                {{ unitModalEquipment.model }} | <strong>IMEI:</strong>
+                {{ unitModalEquipment.imei || 'N/A' }}
+              </p>
+              <p>
+                <strong>Unidad en Sheets:</strong>
+                {{ unitModalEquipment.unit || 'Sin registrar' }} ({{
+                  unitModalEquipment.unitMakeModel || 'Sin modelo'
+                }}
+                {{ unitModalEquipment.unitYear || '' }}) | <strong>Serie:</strong>
+                {{ unitModalEquipment.unitSerialNumber || 'Sin serie' }}
+              </p>
+            </div>
+
+            <div v-if="unitModalEquipment" class="space-y-3 pt-2 border-t border-slate-200">
+              <span class="text-xs font-semibold text-slate-700 block"
+                >Datos de la unidad (verificados / editables):</span
+              >
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1"
+                    >Etiqueta / Económico *</label
+                  >
+                  <n-input v-model:value="newUnit.label" placeholder="Ej: Camión 01" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1"
+                    >Marca y Modelo *</label
+                  >
+                  <n-input v-model:value="newUnit.makeModel" placeholder="Ej: Kenworth T680" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Año</label>
+                  <n-input-number
+                    v-model:value="newUnit.year"
+                    :min="1980"
+                    :max="2030"
+                    class="w-full"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1"
+                    >Número de Serie / VIN *</label
+                  >
+                  <n-input v-model:value="newUnit.serialNumber" placeholder="Número de serie..." />
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">Marca y Modelo</label>
-            <n-input
-              v-model:value="newUnit.makeModel"
-              placeholder="Ej: Kenworth T680, Ford F-150..."
-            />
+
+          <!-- Case C: Installation / Fuel Sensor / Other services -->
+          <div v-else class="space-y-4 pt-2 border-t border-slate-100">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1"
+                >Identificador / Etiqueta *</label
+              >
+              <n-input
+                v-model:value="newUnit.label"
+                placeholder="Ej: Camión 01, T-12, Unidad Norte..."
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Marca y Modelo *</label>
+              <n-input
+                v-model:value="newUnit.makeModel"
+                placeholder="Ej: Kenworth T680, Ford F-150..."
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1"
+                >Número de Serie / VIN *</label
+              >
+              <n-input
+                v-model:value="newUnit.serialNumber"
+                placeholder="Número de serie único de la unidad..."
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Año</label>
+              <n-input-number v-model:value="newUnit.year" :min="1980" :max="2030" class="w-full" />
+            </div>
+
+            <!-- Optional Equipment from Stock -->
+            <div class="pt-2 border-t border-slate-100">
+              <label class="block text-xs font-medium text-slate-600 mb-1">
+                Equipo de Almacén (Opcional)
+              </label>
+              <p class="text-[11px] text-slate-400 mb-2">
+                Puedes seleccionar un equipo ahora o asignarlo más tarde desde la orden.
+              </p>
+              <equipment-select
+                v-model="unitModalEquipmentKey"
+                :service-type="newUnit.serviceType"
+                :client-name="order?.clientNameSnapshot"
+                :exclude-keys="assignedEquipmentKeys"
+                @select="handleUnitModalEquipmentSelect"
+              />
+            </div>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1"
-              >Número de Serie / VIN</label
-            >
-            <n-input
-              v-model:value="newUnit.serialNumber"
-              placeholder="Número de serie único de la unidad..."
-            />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">Año</label>
-            <n-input-number v-model:value="newUnit.year" :min="1980" :max="2030" class="w-full" />
-          </div>
-          <div class="flex justify-end gap-2 pt-2">
+
+          <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
             <n-button @click="showAddUnitModal = false">Cancelar</n-button>
             <n-button
               type="primary"
+              :disabled="
+                isEquipmentReplacement
+                  ? !unitModalEquipment ||
+                    !unitModalEquipment.hasValidIdentity ||
+                    !replacementNewEquipment ||
+                    !replacementNewEquipment.hasValidIdentity
+                  : isReviewOrUninstallation
+                    ? !unitModalEquipment ||
+                      !unitModalEquipment.hasValidIdentity ||
+                      !newUnit.label.trim() ||
+                      !newUnit.serialNumber.trim()
+                    : !newUnit.label.trim() ||
+                      !newUnit.makeModel.trim() ||
+                      !newUnit.serialNumber.trim() ||
+                      Boolean(
+                        unitModalEquipmentKey &&
+                        (!unitModalEquipment || !unitModalEquipment.hasValidIdentity),
+                      )
+              "
               :loading="mutations.insertUnit.isPending.value"
               @click="handleAddUnit"
             >
@@ -1077,8 +1542,9 @@ const statusColor = orderStatusTagType;
         <div class="space-y-4">
           <equipment-select
             v-model="selectedEquipmentKey"
-            :service-type="order?.serviceType"
+            :service-type="targetUnit?.serviceType ?? order?.serviceType"
             :client-name="order?.clientNameSnapshot"
+            :exclude-keys="assignedEquipmentKeys"
             @select="handleEquipmentSelect"
           />
 

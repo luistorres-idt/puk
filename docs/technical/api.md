@@ -50,6 +50,18 @@ El access token se envía como `Authorization: Bearer <token>`. El refresh token
 
 ### Órdenes, unidades y equipos
 
+`POST /api/v1/orders` requiere `technicianId` con UUID de un técnico activo.
+`PATCH` permite sustituirlo por otro técnico activo, pero no enviarlo como `null`.
+`GET /api/v1/technicians/selectable` devuelve solo UUID, nombre, taller y ciudad de
+técnicos activos locales; la integración del directorio de Sheets está pendiente.
+
+Las altas posteriores de unidades/equipos solo admiten borradores de instalación;
+los demás servicios reciben `ORDER_ADDITIONS_NOT_ALLOWED`. La configuración inicial
+de revisión y desinstalación se envía anidada en `POST /orders`.
+El listado acepta `serviceType` para los seis valores del dominio. La creación y
+asignación de `FUEL_SENSOR` y `EQUIPMENT_REPLACEMENT` se rechazan temporalmente con
+`SERVICE_CONFIGURATION_UNAVAILABLE` hasta aprobar su flujo funcional.
+
 | Método       | Ruta                                                      | Acceso / propósito                             |
 | ------------ | --------------------------------------------------------- | ---------------------------------------------- |
 | GET/POST     | `/api/v1/orders`                                          | listar propias/todas; crear como administrador |

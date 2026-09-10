@@ -5,6 +5,9 @@ import type {
   CreateOrder,
   CreateUnit,
   OrderListQuery,
+  OrderServiceType,
+  OrderStatus,
+  PricingBreakdown,
   UpdateOrder,
   UpdateUnit,
 } from '@puk/contracts';
@@ -53,9 +56,21 @@ export interface UnitItem {
   makeModel: string;
   serialNumber: string;
   year?: number | null;
+  serviceType: OrderServiceType;
   status: string;
   equipment?: EquipmentItem[];
   checklist?: UnitChecklist | null;
+}
+
+export interface TechnicianPricing {
+  id: string;
+  name: string;
+  installationRate?: number | string | null;
+  reviewRate?: number | string | null;
+  uninstallationRate?: number | string | null;
+  replacementRate?: number | string | null;
+  failedAppointmentRate?: number | string | null;
+  fuelSensorRate?: number | string | null;
 }
 
 export interface SignatureItem {
@@ -72,28 +87,42 @@ export interface SignatureItem {
 export interface OrderDetail {
   id: string;
   folio: string;
-  status: string;
-  serviceType: string;
+  status: OrderStatus;
+  serviceType: OrderServiceType;
   clientNameSnapshot: string;
   clientSheetId: string;
   scheduledAt: string;
   isHomeService: boolean;
   serviceAddress?: string | null;
   generalNotes?: string | null;
-  technician?: { id: string; name: string } | null;
+  technician?: TechnicianPricing | null;
   units?: UnitItem[];
   signature?: SignatureItem | null;
+  pricingBaseCost?: number | string | null;
+  pricingTravelExpenses?: number | string | null;
+  pricingTotal?: number | string | null;
+  pricingBreakdown?: PricingBreakdown | null;
 }
 
 export interface OrderSummary {
   id: string;
   folio: string;
-  status: string;
-  serviceType: string;
+  status: OrderStatus;
+  serviceType: OrderServiceType;
   clientNameSnapshot: string;
   scheduledAt: string;
   technician?: { id: string; name: string } | null;
   _count?: { units: number };
+}
+
+export interface SheetSyncOperation {
+  id: string;
+  operationType: string;
+  status: 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED';
+  attempts: number;
+  payload?: { row?: number } | null;
+  lastErrorMessage?: string | null;
+  createdAt: string;
 }
 
 export async function fetchOrders(
@@ -186,7 +215,7 @@ export async function fetchSyncStatus(orderId: string): Promise<{
   synced: number;
   failed: number;
   pending: number;
-  operations: Array<Record<string, unknown>>;
+  operations: SheetSyncOperation[];
 }> {
   const response = await api.get<
     ApiResponse<{
@@ -195,7 +224,7 @@ export async function fetchSyncStatus(orderId: string): Promise<{
       synced: number;
       failed: number;
       pending: number;
-      operations: Array<Record<string, unknown>>;
+      operations: SheetSyncOperation[];
     }>
   >(`/orders/${orderId}/sync`);
   return response.data.data;

@@ -34,3 +34,14 @@ export const CreateTechnicianSchema = v.object({
 export const UpdateTechnicianSchema = v.partial(
   v.object({ active: v.boolean(), ...CreateTechnicianSchema.entries }),
 );
+
+export const TechnicianOptionSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  name: v.string(),
+  workshop: v.nullable(v.string()),
+  city: v.nullable(v.string()),
+  state: v.optional(v.nullable(v.string())),
+  phone: v.optional(v.nullable(v.string())),
+  externalKey: v.optional(v.nullable(v.string())),
+});
+export type TechnicianOption = v.InferOutput<typeof TechnicianOptionSchema>;

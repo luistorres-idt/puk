@@ -4,6 +4,11 @@ import {
   LoginRequestSchema,
   CreateOrderSchema,
   CreateTechnicianSchema,
+  TechnicianOptionSchema,
+  OrderServiceTypeSchema,
+  AssignEquipmentSchema,
+  CreateUnitSchema,
+  UpdateOrderSchema,
 } from '@puk/contracts';
 
 const schemaConfig = { errorMode: 'ignore' as const };
@@ -11,6 +16,13 @@ const standardHealthResponse = toJsonSchema(HealthResponseSchema, schemaConfig);
 const loginRequestSchema = toJsonSchema(LoginRequestSchema, schemaConfig);
 const createOrderSchema = toJsonSchema(CreateOrderSchema, schemaConfig);
 const createTechnicianSchema = toJsonSchema(CreateTechnicianSchema, schemaConfig);
+const technicianOptionSchema = toJsonSchema(TechnicianOptionSchema, schemaConfig);
+const orderIdParameter = {
+  in: 'path',
+  name: 'id',
+  required: true,
+  schema: { type: 'string', format: 'uuid' },
+};
 
 export const openApiDocument = {
   info: {
@@ -135,10 +147,40 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/v1/technicians/selectable': {
+      get: {
+        operationId: 'listSelectableTechnicians',
+        summary: 'Active technicians for order creation without contact or billing data',
+        responses: {
+          '200': {
+            description: 'Selectable local technicians',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: { type: 'array', items: technicianOptionSchema } },
+                  required: ['data'],
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+        },
+      },
+    },
     '/api/v1/orders': {
       get: {
         operationId: 'listOrders',
         summary: 'Paginated list of service orders',
+        parameters: [
+          {
+            in: 'query',
+            name: 'serviceType',
+            required: false,
+            schema: toJsonSchema(OrderServiceTypeSchema, schemaConfig),
+          },
+        ],
         responses: {
           '200': { description: 'List of orders with pagination metadata' },
           '401': { description: 'Unauthorized' },
@@ -146,16 +188,97 @@ export const openApiDocument = {
       },
       post: {
         operationId: 'createOrder',
-        summary: 'Create draft service order',
+        summary: 'Create draft service order with a required active technician',
+        description:
+          'Initial units and equipment are provided in this request. Later additions are allowed only for installation drafts. FUEL_SENSOR and EQUIPMENT_REPLACEMENT are recognized domain values whose creation is unavailable until their workflows are defined.',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: createOrderSchema } },
         },
         responses: {
-          '201': { description: 'Draft order created' },
-          '400': { description: 'Validation error' },
+          '201': { description: 'Draft order created with the selected technician' },
+          '400': {
+            description: 'Validation error, inactive technician, or unavailable service workflow',
+          },
+          '404': { description: 'Selected technician does not exist' },
           '401': { description: 'Unauthorized' },
           '403': { description: 'Forbidden' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}': {
+      patch: {
+        operationId: 'updateOrder',
+        summary: 'Update an editable order; technician selection cannot be cleared',
+        parameters: [orderIdParameter],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: toJsonSchema(UpdateOrderSchema, schemaConfig) },
+          },
+        },
+        responses: {
+          '200': { description: 'Order updated' },
+          '400': {
+            description:
+              'Validation error, invalid state, inactive technician, or unavailable service workflow',
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Order or technician not found' },
+          '409': { description: 'Order version conflict' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/units': {
+      post: {
+        operationId: 'addOrderUnit',
+        summary: 'Add a unit to an INSTALLATION draft after creation',
+        parameters: [orderIdParameter],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: toJsonSchema(CreateUnitSchema, schemaConfig) } },
+        },
+        responses: {
+          '201': { description: 'Unit added' },
+          '400': {
+            description: 'Validation error, INVALID_ORDER_STATE, or ORDER_ADDITIONS_NOT_ALLOWED',
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Order not found' },
+          '409': { description: 'Duplicate unit serial number' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/units/{unitId}/equipment': {
+      post: {
+        operationId: 'addOrderEquipment',
+        summary: 'Add equipment to an INSTALLATION draft after creation',
+        parameters: [
+          orderIdParameter,
+          {
+            in: 'path',
+            name: 'unitId',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: toJsonSchema(AssignEquipmentSchema, schemaConfig) },
+          },
+        },
+        responses: {
+          '201': { description: 'Equipment added' },
+          '400': {
+            description: 'Validation error, INVALID_ORDER_STATE, or ORDER_ADDITIONS_NOT_ALLOWED',
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden' },
+          '404': { description: 'Order or unit not found' },
+          '409': { description: 'Equipment already assigned' },
         },
       },
     },

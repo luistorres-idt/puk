@@ -13,6 +13,10 @@ import { api, type ApiResponse } from '../../shared/http/client.js';
 
 export type { ApiResponse };
 
+export interface CompleteOrderResult extends Record<string, unknown> {
+  warnings?: string[];
+}
+
 export async function startOrder(orderId: string) {
   const response = await api.post<ApiResponse<Record<string, unknown>>>(`/orders/${orderId}/start`);
   return response.data.data;
@@ -129,9 +133,7 @@ export async function checkCompleteness(orderId: string) {
 }
 
 export async function completeOrder(orderId: string) {
-  const response = await api.post<ApiResponse<Record<string, unknown>>>(
-    `/orders/${orderId}/complete`,
-  );
+  const response = await api.post<ApiResponse<CompleteOrderResult>>(`/orders/${orderId}/complete`);
   return response.data.data;
 }
 

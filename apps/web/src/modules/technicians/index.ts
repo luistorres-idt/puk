@@ -10,3 +10,5 @@ export const technicianRoutes: RouteRecordRaw[] = [
 ];
 
 export * from './api.js';
+export * from './technician-filter.js';
+export { default as TechnicianSelect } from './components/TechnicianSelect.vue';

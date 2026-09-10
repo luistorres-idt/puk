@@ -17,6 +17,8 @@ enum OrderServiceType {
   REVIEW
   UNINSTALLATION
   FAILED_APPOINTMENT
+  FUEL_SENSOR
+  EQUIPMENT_REPLACEMENT
 }
 
 enum OrderStatus {
@@ -101,49 +103,77 @@ model User {
 }
 
 model Technician {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  workshop  String?
-  address   String?
-  city      String?
-  state     String?
-  phone     String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
-  user      User?
-  orders    Order[]
+  id                    String   @id @default(uuid()) @db.Uuid
+  externalKey           String?  @unique
+  name                  String
+  workshop              String?
+  legalName             String?
+  phone                 String?
+  email                 String?
+  address               String?
+  city                  String?
+  state                 String?
+  invoice               String?
+  taxData               String?
+  taxAddress            String?
+  departureCost         Decimal? @db.Decimal(10, 2)
+  replacementRate       Decimal? @db.Decimal(10, 2)
+  installationRate      Decimal? @db.Decimal(10, 2)
+  reviewRate            Decimal? @db.Decimal(10, 2)
+  uninstallationRate    Decimal? @db.Decimal(10, 2)
+  failedAppointmentRate Decimal? @db.Decimal(10, 2)
+  fuelSensorRate        Decimal? @db.Decimal(10, 2)
+  notes                 String?
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+  user                  User?
+  orders                Order[]
 
   @@index([active, name])
+  @@index([externalKey])
 }
 
 model Order {
-  id                 String               @id @default(uuid()) @db.Uuid
-  folio              String               @unique
-  serviceType        OrderServiceType
-  status             OrderStatus          @default(DRAFT)
-  clientSheetId      String
-  clientNameSnapshot String
-  technicianId       String?              @db.Uuid
-  scheduledAt        DateTime             @db.Timestamptz(3)
-  isHomeService      Boolean              @default(false)
-  serviceAddress     String?
-  generalNotes       String?
-  failedReason       String?
-  version            Int                  @default(1)
-  createdById        String               @db.Uuid
-  startedAt          DateTime?            @db.Timestamptz(3)
-  completedAt        DateTime?            @db.Timestamptz(3)
-  cancelledAt        DateTime?            @db.Timestamptz(3)
-  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
-  technician         Technician?          @relation(fields: [technicianId], references: [id], onDelete: Restrict)
-  createdBy          User                 @relation("OrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  units              OrderUnit[]
-  signature          Signature?
-  discrepancies      Discrepancy[]
-  syncOperations     SheetSyncOperation[]
-  reports            ServiceOrderReport[]
+  id                            String               @id @default(uuid()) @db.Uuid
+  folio                         String               @unique
+  serviceType                   OrderServiceType
+  status                        OrderStatus          @default(DRAFT)
+  clientSheetId                 String
+  clientNameSnapshot            String
+  technicianId                  String?              @db.Uuid
+  technicianNameSnapshot        String?
+  technicianExternalKeySnapshot String?
+  pricingUnitRate               Decimal?             @db.Decimal(10, 2)
+  pricingAppliedQuantity        Int?
+  pricingBaseCost               Decimal?             @db.Decimal(10, 2)
+  pricingDepartureCost          Decimal?             @db.Decimal(10, 2)
+  pricingTravelExpenses         Decimal?             @db.Decimal(10, 2)
+  pricingTotal                  Decimal?             @db.Decimal(10, 2)
+  pricingCurrency               String?              @default("MXN")
+  pricingSnapshotAt             DateTime?            @db.Timestamptz(3)
+  pricingVersion                Int?                 @default(1)
+  pricingBreakdown              Json?                @db.JsonB
+  scheduledAt                   DateTime             @db.Timestamptz(3)
+  isHomeService                 Boolean              @default(false)
+  serviceAddress                String?
+  generalNotes                  String?
+  failedReason                  String?
+  correctionReason              String?
+  version                       Int                  @default(1)
+  createdById                   String               @db.Uuid
+  startedAt                     DateTime?            @db.Timestamptz(3)
+  completedAt                   DateTime?            @db.Timestamptz(3)
+  cancelledAt                   DateTime?            @db.Timestamptz(3)
+  createdAt                     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime             @updatedAt @db.Timestamptz(3)
+  technician                    Technician?          @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  createdBy                     User                 @relation("OrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  units                         OrderUnit[]
+  signature                     Signature?
+  discrepancies                 Discrepancy[]
+  syncOperations                SheetSyncOperation[]
+  reports                       ServiceOrderReport[]
 
   @@index([technicianId, status, scheduledAt])
   @@index([clientSheetId, createdAt])
@@ -177,6 +207,7 @@ model OrderUnit {
   makeModel     String
   year          Int?
   serialNumber  String
+  serviceType   OrderServiceType @default(INSTALLATION)
   status        UnitStatus       @default(PENDING)
   createdAt     DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
@@ -187,6 +218,7 @@ model OrderUnit {
 
   @@unique([orderId, serialNumber])
   @@index([orderId, status])
+  @@index([orderId, serviceType])
 }
 
 model OrderEquipment {

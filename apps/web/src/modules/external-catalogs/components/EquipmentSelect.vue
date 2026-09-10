@@ -10,6 +10,7 @@ const props = defineProps<{
   disabled?: boolean | undefined;
   serviceType?: OrderServiceType | string | null | undefined;
   clientName?: string | null | undefined;
+  excludeKeys?: readonly string[] | Set<string> | null | undefined;
 }>();
 
 const emit = defineEmits<{
@@ -23,9 +24,25 @@ const error = ref<string | null>(null);
 const fetchedAt = ref<string | null>(null);
 
 const filteredEquipment = computed(() => {
+  let effectiveExcludeKeys = props.excludeKeys;
+  if (props.modelValue && props.excludeKeys) {
+    if (props.excludeKeys instanceof Set) {
+      if (props.excludeKeys.has(props.modelValue)) {
+        const nextSet = new Set(props.excludeKeys);
+        nextSet.delete(props.modelValue);
+        effectiveExcludeKeys = nextSet;
+      }
+    } else if (Array.isArray(props.excludeKeys)) {
+      if (props.excludeKeys.includes(props.modelValue)) {
+        effectiveExcludeKeys = props.excludeKeys.filter((k) => k !== props.modelValue);
+      }
+    }
+  }
+
   return filterEquipmentByServiceType(equipmentList.value, {
     serviceType: props.serviceType,
     clientName: props.clientName,
+    excludeKeys: effectiveExcludeKeys,
   });
 });
 

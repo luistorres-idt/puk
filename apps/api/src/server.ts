@@ -10,11 +10,13 @@ import { ExecutionService } from './modules/execution/index.js';
 import { S3StorageClient } from './integrations/object-storage/s3.client.js';
 import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
 import { ReportsService } from './modules/reports/index.js';
+import { TechniciansService } from './modules/technicians/index.js';
 import {
   CircuitBreaker,
   CircuitBreakerSheetsPort,
   CircuitBreakerStoragePort,
 } from './resilience/index.js';
+import { logger } from './observability/logger.js';
 
 const environment = loadEnvironment();
 const prisma = createPrismaClient(environment.DATABASE_URL);
@@ -55,8 +57,12 @@ const rawSheetsPort = usesPlaceholderSheets
   ? new DevMockSheetsClient()
   : new GoogleSheetsClient({
       spreadsheetId: environment.GOOGLE_SPREADSHEET_ID,
+      techniciansSpreadsheetId:
+        environment.GOOGLE_TECHNICIANS_SPREADSHEET_ID ?? environment.GOOGLE_SPREADSHEET_ID,
       clientsSheetName: environment.GOOGLE_CLIENTS_SHEET,
       equipmentSheetName: environment.GOOGLE_EQUIPMENT_SHEET,
+      techniciansSheetName: environment.GOOGLE_TECHNICIANS_SHEET_NAME,
+      reportsSheetName: environment.GOOGLE_TECHNICIAN_REPORT_SHEET_NAME,
       clientEmail: environment.GOOGLE_CLIENT_EMAIL,
       privateKey: normalizePem(environment.GOOGLE_PRIVATE_KEY),
       timeoutMs: environment.SHEETS_TIMEOUT_MS,
@@ -74,13 +80,16 @@ const catalogsService = new GoogleSheetsCatalogService(
   environment.CATALOG_CACHE_TTL_SECONDS,
 );
 
+const techniciansService = new TechniciansService(prisma, sheetsPort);
 const ordersService = new OrdersService(prisma, catalogsService);
 const syncService = new SyncService(prisma, sheetsPort, {
   maxRetries: environment.SHEETS_RETRY_LIMIT,
 });
 
 const syncInterval = setInterval(() => {
-  syncService.processPendingOperations().catch(() => {});
+  syncService.processPendingOperations().catch((error) => {
+    logger.error('Falló la ejecución programada del outbox de Google Sheets', { error });
+  });
 }, environment.OUTBOX_POLL_INTERVAL_MS);
 syncInterval.unref();
 
@@ -117,7 +126,9 @@ const reportsService = new ReportsService(
 );
 
 const reportsInterval = setInterval(() => {
-  reportsService.processPendingReports().catch(() => {});
+  reportsService.processPendingReports().catch((error) => {
+    logger.error('Falló la ejecución programada del generador de reportes', { error });
+  });
 }, environment.OUTBOX_POLL_INTERVAL_MS);
 reportsInterval.unref();
 
@@ -129,6 +140,12 @@ const executionService = new ExecutionService(prisma, storagePort, {
 });
 
 const server = createApp({
+  administration: {
+    prisma,
+    tokens,
+    techniciansService,
+    minimumPasswordLength: environment.MIN_PASSWORD_LENGTH,
+  },
   allowedOrigins: [environment.APP_ORIGIN],
   auth: {
     cookie: {

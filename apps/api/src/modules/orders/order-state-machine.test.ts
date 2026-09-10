@@ -5,6 +5,7 @@ import {
   assertCanEditOrder,
   assertCanExecuteWork,
   assertCanModifyUnits,
+  assertCanAddOrderItems,
   assertValidOrderTransition,
   canTransitionOrder,
 } from './order-state-machine.js';
@@ -101,6 +102,25 @@ describe('Order State Machine', () => {
       expect(() => assertCanExecuteWork(OrderStatus.IN_PROGRESS)).not.toThrow();
       expect(() => assertCanExecuteWork(OrderStatus.DRAFT)).toThrow(AppError);
       expect(() => assertCanExecuteWork(OrderStatus.ASSIGNED)).toThrow(AppError);
+    });
+  });
+
+  describe('assertCanAddOrderItems', () => {
+    it('allows adding items to any draft order', () => {
+      expect(() =>
+        assertCanAddOrderItems({ status: OrderStatus.DRAFT, serviceType: 'INSTALLATION' }),
+      ).not.toThrow();
+      expect(() =>
+        assertCanAddOrderItems({ status: OrderStatus.DRAFT, serviceType: 'REVIEW' }),
+      ).not.toThrow();
+      expect(() => assertCanAddOrderItems({ status: OrderStatus.DRAFT })).not.toThrow();
+    });
+
+    it('rejects adding items to non-draft orders', () => {
+      expect(() =>
+        assertCanAddOrderItems({ status: OrderStatus.ASSIGNED, serviceType: 'INSTALLATION' }),
+      ).toThrow(AppError);
+      expect(() => assertCanAddOrderItems({ status: OrderStatus.IN_PROGRESS })).toThrow(AppError);
     });
   });
 });

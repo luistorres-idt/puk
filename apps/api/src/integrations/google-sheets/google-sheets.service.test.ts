@@ -80,12 +80,20 @@ class MockSheetsPort implements SheetsPort {
 
   public async updateAssignment(input: {
     row: number;
-    values: Readonly<Partial<Record<'J' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
+    values: Readonly<Partial<Record<'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P', string>>>;
   }): Promise<void> {
     const item = this.equipment.find((e) => e.row === input.row);
     if (item) {
       item.values = { ...item.values, ...input.values };
     }
+  }
+
+  public async listTechniciansDirectory(): Promise<readonly (readonly string[])[]> {
+    return [];
+  }
+
+  public async syncTechnicalReportRow(): Promise<{ row: number; created: boolean }> {
+    return { row: 2, created: true };
   }
 }
 
@@ -137,5 +145,209 @@ describe('GoogleSheetsCatalogService', () => {
 
     const moved = await service.findEquipmentByKey('EQ-101');
     expect(moved.equipment?.rowNumber).toBe(15);
+  });
+});
+
+describe('DevMockSheetsClient Directory and Report Sync', () => {
+  it('reads technicians directory from mock', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const client = new DevMockSheetsClient();
+    const rows = await client.listTechniciansDirectory();
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    expect(rows[0]?.[0]).toBe('TECNICO');
+    expect(rows[0]?.[22]).toBe('ID_TECNICO');
+  });
+
+  it('inserts and updates technical report row preserving D, E, O', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const client = new DevMockSheetsClient();
+
+    // 1. Insert first row
+    const insertRes = await client.syncTechnicalReportRow({
+      folio: 'OS-TEST-001',
+      sem: '37',
+      tecnico: 'Juan Perez',
+      economico: 'ECO-10',
+      serie: 'SER-10',
+      imeiId: '861234567890123',
+      cliente: 'Flotillas SA',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '700.00',
+      viaticos: '350.00',
+      total: '1050.00',
+      notas: 'Prueba',
+    });
+
+    expect(insertRes.created).toBe(true);
+    expect(insertRes.row).toBe(2);
+
+    // Simulate manual entry into D, E, O (which are manual columns!)
+    // In DevMockSheetsClient private array:
+    const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
+    mockRows[1]![3] = 'Juan Perez Manual'; // D: nombre
+    mockRows[1]![4] = 'PEPJ800101XXX'; // E: rfc
+    mockRows[1]![14] = 'DHL-TRACK-123'; // O: envio dhl
+
+    // 2. Update existing row with same folio (e.g. correction)
+    const updateRes = await client.syncTechnicalReportRow({
+      folio: 'OS-TEST-001',
+      sem: '37',
+      tecnico: 'Juan Perez',
+      economico: 'ECO-10-CORREGIDO',
+      serie: 'SER-10',
+      imeiId: '861234567890123',
+      cliente: 'Flotillas SA',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '700.00',
+      viaticos: '350.00',
+      total: '1050.00',
+      notas: 'Actualizado tras corrección',
+    });
+
+    expect(updateRes.created).toBe(false);
+    expect(updateRes.row).toBe(2);
+
+    // Verify D, E, O were PRESERVED intact!
+    expect(mockRows[1]![3]).toBe('Juan Perez Manual');
+    expect(mockRows[1]![4]).toBe('PEPJ800101XXX');
+    expect(mockRows[1]![14]).toBe('DHL-TRACK-123');
+    // Verify managed columns updated
+    expect(mockRows[1]![5]).toBe('ECO-10-CORREGIDO');
+    expect(mockRows[1]![15]).toBe('Actualizado tras corrección');
+  });
+
+  it('rejects update if duplicate folio exists in sheet', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const { AppError } = await import('../../shared/errors.js');
+    const client = new DevMockSheetsClient();
+
+    const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
+    mockRows.push(
+      [
+        '37',
+        'OS-DUP-001',
+        'Tech 1',
+        '',
+        '',
+        'E1',
+        'S1',
+        'I1',
+        'C1',
+        '2026-09-09',
+        'Instalación',
+        '100',
+        '0',
+        '100',
+        '',
+        '',
+      ],
+      [
+        '37',
+        'OS-DUP-001',
+        'Tech 2',
+        '',
+        '',
+        'E2',
+        'S2',
+        'I2',
+        'C2',
+        '2026-09-09',
+        'Instalación',
+        '100',
+        '0',
+        '100',
+        '',
+        '',
+      ],
+    );
+
+    await expect(
+      client.syncTechnicalReportRow({
+        folio: 'OS-DUP-001',
+        sem: '37',
+        tecnico: 'Tech 1',
+        economico: 'E1',
+        serie: 'S1',
+        imeiId: 'I1',
+        cliente: 'C1',
+        fecha: '2026-09-09',
+        servicio: 'Instalación',
+        costo: '100.00',
+        viaticos: '0.00',
+        total: '100.00',
+        notas: '',
+      }),
+    ).rejects.toThrow(AppError);
+  });
+
+  it('inserts each new order at row 2 and shifts previous rows down', async () => {
+    const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
+    const client = new DevMockSheetsClient();
+    const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
+
+    // First insert
+    const res1 = await client.syncTechnicalReportRow({
+      folio: 'OS-FIRST',
+      sem: '37',
+      tecnico: 'Tech A',
+      economico: 'ECO-A',
+      serie: 'SER-A',
+      imeiId: 'IMEI-A',
+      cliente: 'Client A',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '500.00',
+      viaticos: '0.00',
+      total: '500.00',
+      notas: 'First order',
+    });
+    expect(res1.created).toBe(true);
+    expect(res1.row).toBe(2);
+    expect(mockRows[1]![1]).toBe('OS-FIRST');
+
+    // Second insert: must be inserted at row 2, pushing OS-FIRST to row 3
+    const res2 = await client.syncTechnicalReportRow({
+      folio: 'OS-SECOND',
+      sem: '37',
+      tecnico: 'Tech B',
+      economico: 'ECO-B',
+      serie: 'SER-B',
+      imeiId: 'IMEI-B',
+      cliente: 'Client B',
+      fecha: '2026-09-09',
+      servicio: 'Revisión',
+      costo: '300.00',
+      viaticos: '100.00',
+      total: '400.00',
+      notas: 'Second order',
+    });
+    expect(res2.created).toBe(true);
+    expect(res2.row).toBe(2);
+    expect(mockRows[1]![1]).toBe('OS-SECOND'); // at row 2 (index 1)
+    expect(mockRows[2]![1]).toBe('OS-FIRST'); // shifted to row 3 (index 2)
+
+    // Updating OS-FIRST should update row 3 in-place, NOT row 2
+    const updateRes = await client.syncTechnicalReportRow({
+      folio: 'OS-FIRST',
+      sem: '37',
+      tecnico: 'Tech A',
+      economico: 'ECO-A-UPDATED',
+      serie: 'SER-A',
+      imeiId: 'IMEI-A',
+      cliente: 'Client A',
+      fecha: '2026-09-09',
+      servicio: 'Instalación',
+      costo: '500.00',
+      viaticos: '0.00',
+      total: '500.00',
+      notas: 'First order updated',
+    });
+    expect(updateRes.created).toBe(false);
+    expect(updateRes.row).toBe(3);
+    expect(mockRows[2]![1]).toBe('OS-FIRST');
+    expect(mockRows[2]![5]).toBe('ECO-A-UPDATED');
+    expect(mockRows[1]![1]).toBe('OS-SECOND'); // row 2 remains OS-SECOND
   });
 });

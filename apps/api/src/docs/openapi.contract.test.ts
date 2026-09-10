@@ -53,4 +53,15 @@ describe('OpenAPI Contract Tests', () => {
     // Route handler contract
     expect([401, 404]).toContain(response.status);
   });
+
+  it('documents mandatory UUID technician selection and both new domain service values', () => {
+    const schema =
+      openApiDocument.paths['/api/v1/orders'].post.requestBody.content['application/json'].schema;
+    expect(schema.required).toContain('technicianId');
+    expect(schema.properties?.technicianId).toMatchObject({ type: 'string', format: 'uuid' });
+    expect(schema.properties?.serviceType).toMatchObject({
+      enum: expect.arrayContaining(['FUEL_SENSOR', 'EQUIPMENT_REPLACEMENT']),
+    });
+    expect(openApiDocument.paths['/api/v1/technicians/selectable']).toBeDefined();
+  });
 });
