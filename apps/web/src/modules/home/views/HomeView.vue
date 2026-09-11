@@ -37,7 +37,9 @@ const correctionCount = computed(
 );
 const completedCount = computed(() => orders.value.filter((o) => o.status === 'COMPLETED').length);
 const failedCount = computed(
-  () => orders.value.filter((o) => o.status === 'FAILED_APPOINTMENT').length,
+  () =>
+    orders.value.filter((o) => o.status === 'FAILED_APPOINTMENT' && !o.failedAppointmentResolution)
+      .length,
 );
 
 const recentOrders = computed(() => orders.value.slice(0, 5));
