@@ -43,6 +43,8 @@ El access token se envía como `Authorization: Bearer <token>`. El refresh token
 | PATCH    | `/api/v1/users/:id`                       | Administrador |
 | GET/POST | `/api/v1/technicians`                     | Administrador |
 | PATCH    | `/api/v1/technicians/:id`                 | Administrador |
+| GET      | `/api/v1/technicians/selectable`          | Administrador |
+| POST     | `/api/v1/technicians/sync`                | Administrador |
 | GET      | `/api/v1/external/clients`                | Autenticado   |
 | GET      | `/api/v1/external/equipment`              | Autenticado   |
 | GET      | `/api/v1/external/equipment/:externalKey` | Autenticado   |
@@ -52,21 +54,21 @@ El access token se envía como `Authorization: Bearer <token>`. El refresh token
 
 `POST /api/v1/orders` requiere `technicianId` con UUID de un técnico activo.
 `PATCH` permite sustituirlo por otro técnico activo, pero no enviarlo como `null`.
-`GET /api/v1/technicians/selectable` devuelve solo UUID, nombre, taller y ciudad de
-técnicos activos locales; la integración del directorio de Sheets está pendiente.
+`GET /api/v1/technicians/selectable` sincroniza periódicamente `DIRECTORIO TECNICO`,
+devuelve técnicos activos con UUID, clave externa, nombre, taller, ciudad, estado y teléfono,
+y acepta `?fresh=true` para forzar una recarga. Si Sheets falla, utiliza el último directorio
+local disponible. `POST /api/v1/technicians/sync` permite la sincronización administrativa.
 
-Las altas posteriores de unidades/equipos solo admiten borradores de instalación;
-los demás servicios reciben `ORDER_ADDITIONS_NOT_ALLOWED`. La configuración inicial
-de revisión y desinstalación se envía anidada en `POST /orders`.
-El listado acepta `serviceType` para los seis valores del dominio. La creación y
-asignación de `FUEL_SENSOR` y `EQUIPMENT_REPLACEMENT` se rechazan temporalmente con
-`SERVICE_CONFIGURATION_UNAVAILABLE` hasta aprobar su flujo funcional.
+Las altas de unidades y equipos se permiten en cualquier orden `DRAFT`. Cada unidad puede declarar
+su propio `serviceType`, por lo que una orden puede combinar instalación, revisión, desinstalación,
+sensor fuel y cambio de equipo. `FAILED_APPOINTMENT` es un resultado de ejecución y no un bloque
+configurable en el asistente. El listado acepta los seis valores del dominio como filtro.
 
 | Método       | Ruta                                                      | Acceso / propósito                             |
 | ------------ | --------------------------------------------------------- | ---------------------------------------------- |
 | GET/POST     | `/api/v1/orders`                                          | listar propias/todas; crear como administrador |
 | GET/PATCH    | `/api/v1/orders/:id`                                      | consultar; editar como administrador           |
-| POST         | `/api/v1/orders/:id/assign`                               | asignar y encolar sincronización               |
+| POST         | `/api/v1/orders/:id/assign`                               | asignar y encolar sincronización inicial       |
 | POST         | `/api/v1/orders/:id/cancel`                               | cancelar                                       |
 | GET          | `/api/v1/orders/:id/audit`                                | auditoría administrativa                       |
 | POST         | `/api/v1/orders/:id/units`                                | agregar unidad                                 |
@@ -95,6 +97,10 @@ asignación de `FUEL_SENSOR` y `EQUIPMENT_REPLACEMENT` se rechazan temporalmente
 | POST   | `/api/v1/orders/:id/complete`                                           | completar orden           |
 | POST   | `/api/v1/orders/:id/fail-appointment`                                   | registrar cita fallida    |
 | POST   | `/api/v1/orders/:id/require-correction`                                 | solicitar corrección      |
+
+Al completar una orden se congelan el precio y su desglose por servicio, se encola nuevamente el
+estado final de cada equipo en `SALIDAS` y se publica el renglón del reporte técnico. Estas tareas
+remotas son idempotentes y no revierten el cierre si Google Sheets está temporalmente indisponible.
 
 ### Reportes
 

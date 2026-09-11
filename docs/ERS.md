@@ -101,7 +101,7 @@ flowchart TD
 ### 2.3 Restricciones Generales
 
 1. **Autoridad de Catálogos:** La creación y edición de clientes y equipos no se realiza en la aplicación; residen y se administran en Google Sheets.
-2. **Columnas Protegidas en Sheets:** El sistema tiene prohibido modificar las columnas `Fecha de salida`, `Estado` y `Estado del servicio` en Google Sheets.
+2. **Columnas Protegidas en Sheets:** El sistema tiene prohibido modificar `Fecha de salida` y `Estado` del equipo. Puede actualizar `Cliente`, `Estado del servicio` y los datos del vehículo conforme al servicio ejecutado.
 3. **Almacenamiento Seguro:** No se almacenan imágenes en base de datos; únicamente claves S3 de objetos privados. El acceso se realiza mediante URLs firmadas con expiración de 15 minutos.
 4. **Modo Conectado:** El MVP asume conectividad a Internet para sincronización; no contempla soporte offline completo ni colas persistentes en IndexedDB.
 
@@ -126,7 +126,7 @@ flowchart TD
 #### Módulo 3: Gestión de Órdenes de Servicio
 
 - **RF-07 (Creación de Órdenes Multilote):** El administrador debe poder crear una orden en estado `DRAFT`, asociarla a un cliente, registrar una o múltiples unidades vehiculares, y asignar uno o varios equipos por unidad.
-- **RF-08 (Tipos de Servicio):** El sistema debe soportar tipos de servicio: `INSTALLATION`, `REVIEW`, `UNINSTALLATION` y `FAILED_APPOINTMENT`.
+- **RF-08 (Tipos de Servicio):** El sistema debe soportar `INSTALLATION`, `REVIEW`, `UNINSTALLATION`, `FAILED_APPOINTMENT`, `FUEL_SENSOR` y `EQUIPMENT_REPLACEMENT`, permitiendo varios servicios por orden mediante el tipo de cada unidad.
 - **RF-09 (Asignación y Reasignación):** El administrador debe poder asignar y reasignar una orden a un técnico activo, transicionando su estado a `ASSIGNED`.
 - **RF-10 (Ciclo de Vida de la Orden):** El sistema debe hacer cumplir la máquina de estados: `DRAFT` $\to$ `ASSIGNED` $\to$ `IN_PROGRESS` $\to$ `COMPLETED` / `REQUIRES_CORRECTION` / `FAILED_APPOINTMENT` / `CANCELLED`.
 
@@ -143,7 +143,7 @@ flowchart TD
   5. Carrocería (`BODYWORK`)
   - Estados permitidos: `GOOD` (Bien), `BAD` (Mal) o `NOT_APPLICABLE` (No aplica).
   - Si el estado es `BAD`, el campo de observación explicativa es **obligatorio**.
-- **RF-15 (Evidencias Fotográficas Obligatorias):** Cada categoría del checklist requiere al menos una fotografía capturada y subida a S3 mediante URL prefirmada, independientemente de si se seleccionó `GOOD`, `BAD` o `NOT_APPLICABLE`.
+- **RF-15 (Evidencias Fotográficas Obligatorias):** Cada unidad requiere al menos tres fotografías completadas, distribuidas entre las categorías del checklist y subidas a S3 mediante URL prefirmada.
 - **RF-16 (Captura de Firma del Cliente):** La orden finalizada exige la captura digital de una única firma del cliente en pantalla, junto con el nombre completo y documento de la persona firmante.
 - **RF-17 (Cierre de Cita Fallida):** Si la unidad no está disponible o el cliente no se presenta, el técnico puede registrar un cierre como `FAILED_APPOINTMENT` indicando obligatoriamente el motivo, omitiendo fotos, checklist y firma.
 
@@ -288,6 +288,7 @@ graph TD
 - **Google Sheets API v4:**
   - Lectura de hoja de `Clientes` (Nombres, identificadores, contratos).
   - Lectura y actualización selectiva de hoja `SALIDAS` (catálogo de equipos, series e IMEIs).
+  - Lectura de `DIRECTORIO TECNICO` y publicación idempotente del cobro en la pestaña anual configurada del libro de técnicos.
 - **Amazon S3 Compatible Storage:**
   - Generación de URLs prefirmadas (`PUT`) para carga directa desde cliente.
   - Generación de URLs prefirmadas (`GET`) para visualización y ensamblado de reportes PDF.
@@ -329,7 +330,13 @@ graph TD
 // Estructura de payload para generación del Reporte RF-REP-01 (Acta de Servicio PDF)
 interface ServiceOrderReportData {
   folio: string;
-  serviceType: 'INSTALLATION' | 'REVIEW' | 'UNINSTALLATION' | 'FAILED_APPOINTMENT';
+  serviceType:
+    | 'INSTALLATION'
+    | 'REVIEW'
+    | 'UNINSTALLATION'
+    | 'FAILED_APPOINTMENT'
+    | 'FUEL_SENSOR'
+    | 'EQUIPMENT_REPLACEMENT';
   completedAt: string;
   client: {
     id: string;
@@ -342,6 +349,7 @@ interface ServiceOrderReportData {
   };
   units: Array<{
     id: string;
+    serviceType: ServiceOrderReportData['serviceType'];
     identifier: string;
     plate?: string;
     vin?: string;

@@ -1,14 +1,18 @@
 # Especificación técnica — Sistema de órdenes de servicio
 
-**Organización:** Bull Dog Solution  
-**Documento:** Especificación técnica del MVP  
-**Fecha:** 2026-09-01  
-**Versión:** 0.2  
-**Estado:** Borrador técnico aprobado para iniciar implementación
+**Organización:** Bull Dog Solution
+
+**Documento:** Especificación técnica del MVP
+
+**Fecha:** 2026-09-10
+
+**Versión:** 0.3
+
+**Estado:** Implementado y actualizado
 
 ## 1. Objetivo
 
-Construir un sistema web responsivo que sustituya el flujo operativo actual en AppSheet para administrar órdenes de instalación, revisión y desinstalación de equipos en unidades vehiculares.
+Construir un sistema web responsivo que sustituya el flujo operativo actual en AppSheet para administrar órdenes multiservicio de equipos en unidades vehiculares.
 
 El sistema debe permitir que un administrador prepare completamente una orden, asigne un técnico, seleccione el cliente, registre las unidades y asigne uno o varios equipos a cada unidad. El técnico debe consultar sus órdenes, verificar la información, documentar el estado de cada unidad mediante checklist y fotografías, reportar discrepancias, obtener una firma final del cliente y cerrar el servicio.
 
@@ -26,15 +30,18 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 - Creación, edición, asignación y seguimiento de órdenes.
 - Varias unidades por orden.
 - Varios equipos por unidad.
-- Servicios de instalación, revisión, desinstalación y cita fallida.
+- Servicios de instalación, revisión, desinstalación, sensor fuel, cambio de equipo y cita fallida.
+- Combinación de varios servicios en una misma orden mediante el tipo de cada unidad.
 - Checklist por unidad.
-- Fotografías obligatorias por categoría del checklist.
+- Mínimo de tres fotografías por unidad.
 - Reporte de discrepancias sin bloquear el trabajo del técnico.
 - Una firma del cliente por orden.
 - Reporte PDF de la orden de servicio completada, conforme a [docs/service-order-report-spec.md](./docs/service-order-report-spec.md).
 - Almacenamiento privado compatible con S3.
 - Auditoría de acciones relevantes.
 - Registro y reintento de sincronizaciones con Google Sheets.
+- Directorio técnico sincronizado y tarifas por servicio congeladas al cierre.
+- Publicación del cobro en el libro de técnicos.
 - Interfaz web responsiva y PWA básica.
 
 ### 2.2 Fuera del MVP
@@ -45,8 +52,8 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 - Alta o edición de equipos dentro de la aplicación.
 - Facturación.
 - Administración de cuentas bancarias.
-- Cálculo o pago de tarifas a técnicos.
-- Modificación automática de `Fecha de salida`, `Estado` o `Estado del servicio` en Google Sheets.
+- Pago o dispersión de tarifas a técnicos.
+- Modificación automática de `Fecha de salida` o `Estado` del equipo en Google Sheets.
 - Microservicios.
 
 ## 3. Reglas de negocio confirmadas
@@ -64,18 +71,18 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
    - Molduras.
    - Carrocería.
 8. Cada categoría admite `Bien`, `Mal` o `No aplica`.
-9. Cada categoría requiere al menos una fotografía, incluso cuando se marque `No aplica`, hasta que el negocio decida lo contrario.
+9. Cada unidad requiere al menos tres fotografías completadas, distribuidas entre las categorías del checklist.
 10. Cuando una categoría se marque `Mal`, la observación es obligatoria.
 11. Para finalizar un servicio normal, todas las unidades deben tener:
     - Equipos verificados.
     - Checklist completo.
-    - Al menos una fotografía por categoría.
+    - Al menos tres fotografías por unidad.
 12. Se requiere una sola firma del cliente por toda la orden.
 13. La firma requiere el nombre de la persona que firma.
 14. Si el IMEI, ID, serie o unidad no coincide, el técnico reporta una discrepancia y continúa.
 15. Una cita fallida exige solamente un motivo y no requiere checklist, fotografías ni firma.
 16. Google Sheets conserva la autoridad sobre los catálogos de clientes y equipos.
-17. La aplicación no modifica las columnas `Fecha de salida`, `Estado` ni `Estado del servicio`.
+17. La aplicación no modifica `Fecha de salida` ni `Estado` del equipo; administra `Cliente`, `Estado del servicio` y los datos del vehículo conforme al resultado.
 
 ## 4. Stack tecnológico
 
@@ -344,16 +351,17 @@ SyncStatus:
 #### Technician
 
 - `id: UUID`.
+- `externalKey: string?`, clave durable `TEC-XXXX` del directorio.
 - `name: string`.
 - `workshop: string?`.
+- `legalName: string?`.
 - `address: string?`.
 - `city: string?`.
 - `state: string?`.
 - `phone: string?`.
+- Datos administrativos del directorio y tarifas decimales para salida, instalación, revisión, desinstalación, cita fallida, sensor fuel y cambio de equipo.
 - `active: boolean`.
 - `createdAt`, `updatedAt`.
-
-Los datos fiscales, bancarios y tarifas quedan fuera del MVP.
 
 #### Order
 
@@ -364,6 +372,8 @@ Los datos fiscales, bancarios y tarifas quedan fuera del MVP.
 - `clientSheetId: string`.
 - `clientNameSnapshot: string`.
 - `technicianId: UUID`.
+- Snapshots del técnico, precio unitario, cantidades, costos, viáticos, total, moneda, fecha y versión del cálculo.
+- `pricingBreakdown: jsonb?`, desglose por servicio de las órdenes mixtas.
 - `scheduledAt: timestamptz`.
 - `isHomeService: boolean`.
 - `serviceAddress: string?`.
@@ -380,6 +390,7 @@ El número de semana se deriva de `scheduledAt` y no se almacena como dato edita
 
 - `id: UUID`.
 - `orderId: UUID`.
+- `serviceType: OrderServiceType`.
 - `label: string`.
 - `makeModel: string`.
 - `year: integer?`.
@@ -578,15 +589,20 @@ La pestaña será de solo lectura. La orden guardará `IDCliente` y un snapshot 
 | G       | ICCID                     | Solo lectura                                             |
 | H       | Compañía                  | Solo lectura                                             |
 | I       | Estado                    | Solo lectura; valores `NUEVO` o `USADO`                  |
-| J       | Cliente                   | Escritura al asignar                                     |
-| K       | Estado del Servicio       | Solo lectura; por ejemplo `INSTALADO` o `STOCK TECNICO`  |
-| L       | UNIDAD                    | Escritura al asignar                                     |
-| M       | MARCA/MODELO DE LA UNIDAD | Escritura al asignar                                     |
-| N       | AÑO                       | Escritura al asignar                                     |
-| O       | NUMERO DE SERIE           | Escritura al asignar                                     |
+| J       | Cliente                   | Escritura al asignar/completar; se limpia al retirar     |
+| K       | Estado del Servicio       | Escritura controlada: `INSTALADO` o `STOCK TECNICO`      |
+| L       | UNIDAD                    | Escritura al asignar/completar; se limpia al retirar     |
+| M       | MARCA/MODELO DE LA UNIDAD | Escritura al asignar/completar; se limpia al retirar     |
+| N       | AÑO                       | Escritura al asignar/completar; se limpia al retirar     |
+| O       | NUMERO DE SERIE           | Escritura al asignar/completar; se limpia al retirar     |
 | P       | Tipo de servicio          | Escritura solo si forma parte explícita de la asignación |
 
-La aplicación nunca escribirá rangos completos de una fila. Solo actualizará `J`, `L`, `M`, `N`, `O` y, cuando corresponda, `P`.
+La aplicación nunca escribirá rangos completos de una fila. Solo actualizará `J`, `K`, `L`, `M`, `N`, `O` y, cuando corresponda, `P`.
+
+La asignación crea la sincronización inicial y el cierre vuelve a encolar el estado final de cada
+equipo. Instalación, revisión y sensor fuel escriben `INSTALADO` con cliente y vehículo;
+desinstalación limpia `J` y `L:O` y escribe `STOCK TECNICO`; cambio de equipo aplica la salida al
+anterior y la instalación al nuevo. Una cita fallida no altera `SALIDAS`.
 
 El valor de P no se derivará automáticamente del enum `OrderServiceType` hasta definir su catálogo real. En la hoja se observaron valores como `ESTANDAR` y `OBD/SCAN`, que representan un concepto diferente a instalación, revisión, desinstalación o cita fallida.
 
@@ -1152,10 +1168,13 @@ S3_SECRET_ACCESS_KEY
 S3_FORCE_PATH_STYLE
 
 GOOGLE_SPREADSHEET_ID
+GOOGLE_TECHNICIANS_SPREADSHEET_ID
 GOOGLE_CLIENT_EMAIL
 GOOGLE_PRIVATE_KEY
 GOOGLE_CLIENTS_SHEET=Clientes
 GOOGLE_EQUIPMENT_SHEET=SALIDAS
+GOOGLE_TECHNICIANS_SHEET_NAME="DIRECTORIO TECNICO"
+GOOGLE_TECHNICIAN_REPORT_SHEET_NAME=2026
 
 MAX_EVIDENCE_BYTES
 MAX_SIGNATURE_BYTES
@@ -1294,7 +1313,7 @@ Las migraciones se ejecutan una vez por despliegue, antes de activar la nueva ve
 - Un administrador puede crear una orden con varias unidades y varios equipos por unidad.
 - Los clientes se obtienen de `Clientes` y los equipos de `SALIDAS`.
 - La asignación solo modifica las columnas permitidas del Sheet.
-- La aplicación nunca modifica A, I o K.
+- La aplicación nunca modifica A o I; K solo cambia entre los estados de servicio autorizados.
 - Una fila cambiada externamente produce un conflicto visible y no se sobrescribe silenciosamente.
 - Un técnico solo ve sus órdenes.
 - Cada categoría acepta `Bien`, `Mal` o `No aplica`.
@@ -1314,13 +1333,11 @@ Las migraciones se ejecutan una vez por despliegue, antes de activar la nueva ve
 1. Definir qué ocurre en Google Sheets al cancelar una orden ya sincronizada.
 2. Definir qué ocurre cuando un administrador cambia una unidad después de asignarla.
 3. Confirmar si la columna P debe escribirse y proporcionar su catálogo válido.
-4. Confirmar la política de disponibilidad cuando K permanece sin cambios.
-5. Confirmar límites definitivos de cantidad y tamaño de fotografías.
-6. Definir retención legal u operativa de evidencias y firmas.
-7. Seleccionar proveedor de PostgreSQL y almacenamiento S3 compatible.
-8. Definir dominio, ambiente y estrategia de despliegue.
-9. Definir recuperación de contraseña y canal de notificación.
-10. Revisar duplicados o valores incompletos de ID e IMEI.
+4. Definir retención legal u operativa de evidencias y firmas.
+5. Seleccionar proveedor de PostgreSQL y almacenamiento S3 para producción.
+6. Definir dominio, ambiente y estrategia de despliegue de producción.
+7. Definir recuperación de contraseña y canal de notificación.
+8. Revisar duplicados o valores incompletos de ID e IMEI.
 
 ## 30. Orden sugerido de implementación
 

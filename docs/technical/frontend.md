@@ -60,24 +60,22 @@ La guarda de navegación inicializa la sesión, redirige al login y aplica `requ
 
 El asistente (`/orders/new`) guía al administrador en un flujo estructurado de 5 pasos:
 
-1. **Cliente y Tipo de Servicio**: Selección del cliente desde Sheets y definición del servicio (`INSTALLATION`, `REVIEW`, `UNINSTALLATION`, `FAILED_APPOINTMENT`).
+1. **Cliente**: Selección del cliente desde Sheets. Los servicios se agregan por bloque en el paso siguiente.
 2. **Unidades y Equipos**:
    - **Revisiones y Desinstalaciones**: El componente `EquipmentSelect` filtra automáticamente los equipos con estatus `INSTALADO` del cliente. Al seleccionar un hardware, la función `extractUnitFromEquipment` autocompleta la unidad (`unit`, `unitMakeModel`, `unitYear`, `unitSerialNumber`) reduciendo la captura manual.
-   - **Instalaciones**: `EquipmentSelect` filtra exclusivamente hardware en stock/almacén (`STOCK TECNICO`, `DISPONIBLE`, etc.) y solicita los datos de la nueva unidad física.
+   - **Instalaciones y Sensor fuel**: `EquipmentSelect` filtra exclusivamente hardware en stock/almacén (`STOCK TECNICO`, `DISPONIBLE`, etc.) y solicita los datos de la nueva unidad física.
+   - **Cambio de equipo**: exige seleccionar el equipo instalado que se retira y uno disponible de almacén; ambos quedan asociados a la misma unidad.
+   - **Órdenes mixtas**: cada unidad conserva su propio `serviceType` y el resumen agrupa unidades por servicio.
    - **Normalización**: Las comparaciones de clientes aplican `normalizeString` (case-insensitive, diacríticos removidos vía NFD y eliminación de sufijos legales tipo `S.A. de C.V.`).
 3. **Programación**: Fecha, hora, tipo de servicio (en sitio o taller) y notas operativas.
-4. **Técnico**: Selección obligatoria de un técnico activo desde `/technicians/selectable`, con búsqueda por nombre, taller o ciudad. La carga y los errores bloquean el avance; el directorio ofrece reintento y recarga.
+4. **Técnico**: Selección obligatoria desde `DIRECTORIO TECNICO`, con filtros de ciudad y taller, búsqueda, ficha de contacto, marca de última sincronización y recarga explícita. La carga, el catálogo vacío y los errores bloquean el avance.
 5. **Resumen y Creación**: Validación integral y envío atómico de la orden con sus unidades y equipos a la API.
 
-`FUEL_SENSOR` (Sensor fuel) y `EQUIPMENT_REPLACEMENT` (Cambio de equipo) se reconocen
-en contratos, filtros, detalle y PDF. Se muestran deshabilitados en la creación
-hasta definir sus flujos de unidades/equipos. El selector técnico actualmente usa
-el directorio local; la sincronización con Sheets depende del contrato pendiente.
-
 En el detalle, las acciones Agregar Unidad, Registrar Primera Unidad y Asignar
-Equipo solo aparecen para administradores en borradores de instalación. La API
-valida la misma regla. La carga inicial anidada del wizard y las acciones de
-quitar/eliminar conservan sus reglas existentes.
+Equipo aparecen para administradores mientras la orden está en borrador y respetan el servicio
+seleccionado. La API valida la misma regla. La carga inicial anidada del wizard y las acciones de
+quitar/eliminar conservan sus reglas existentes. Los botones interactivos personalizados responden
+tanto a clic como a teclado.
 
 ## Evidencias y reportes
 

@@ -146,7 +146,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
   <div class="flow-card admin"><span class="step-num">3</span><br>Asigna Técnico Responsable</div>
   <div class="flow-card tech"><span class="step-num">4</span><br><b>Técnico</b> inicia Servicio</div>
   <div class="flow-card tech"><span class="step-num">5</span><br>Valida Hardware e IMEI</div>
-  <div class="flow-card tech"><span class="step-num">6</span><br>Checklist + 5 Fotos</div>
+  <div class="flow-card tech"><span class="step-num">6</span><br>Checklist + mínimo 3 fotos por unidad</div>
   <div class="flow-card tech"><span class="step-num">7</span><br>Firma Digital Cliente</div>
   <div class="flow-card final"><span class="step-num">8</span><br>Cierre y Reporte PDF</div>
 </div>
@@ -156,7 +156,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
   <span class="badge badge-error">Cierre como Cita Fallida (con motivo)</span>
 </div>
 
-> **Regla de oro:** El técnico no puede cerrar un servicio normal si falta alguna fotografía, si alguna unidad no tiene su checklist completo o si falta la firma con nombre del cliente.
+> **Regla de oro:** El técnico no puede cerrar un servicio normal si una unidad tiene menos de tres fotografías, si alguna unidad no tiene su checklist completo o si falta la firma con nombre del cliente.
 
 ---
 
@@ -164,30 +164,35 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
 
 1. Inicia sesión con tus credenciales de Administrador en el portal web.
 2. Dirígete a la sección **Órdenes de Servicio** y haz clic en **`+ Nueva Orden`**.
-3. **Paso 1: Cliente y Servicio**:
+3. **Paso 1: Cliente**:
    - Selecciona el **Cliente** (catálogo oficial de Google Sheets).
-   - Elige el **Tipo de Servicio**:
+4. **Paso 2: Servicios, Unidades y Equipos (Asignación Inteligente)**:
+   - Agrega uno o varios bloques de servicio; una misma orden puede combinar:
      - `Instalación`: Colocación de nuevos equipos en vehículos.
      - `Revisión`: Diagnóstico, mantenimiento o inspección técnica de equipos ya instalados.
      - `Desinstalación`: Retiro de hardware instalado en la unidad.
-     - `Cita Fallida`: Registro de cita no completada.
-4. **Paso 2: Unidades y Equipos (Asignación Inteligente)**:
+     - `Sensor fuel`: Instalación de un equipo disponible en una unidad.
+     - `Cambio de equipo`: Retiro del equipo instalado y colocación de uno nuevo.
    - **En Revisiones y Desinstalaciones**:
      - El selector de equipos solo muestra los GPS con estatus **`INSTALADO`** que pertenecen al cliente seleccionado.
      - Al elegir un equipo, el sistema **autocompleta automáticamente** los datos de la unidad desde Google Sheets (`Económico`, `Marca/Modelo`, `Año` y `Número de Serie`), evitando capturas manuales innecesarias. El administrador puede revisar o afinar estos datos en pantalla.
-   - **En Instalaciones**:
+   - **En Instalaciones y Sensor fuel**:
      - El selector filtra **únicamente equipos en almacén/stock disponible**.
      - Se capturan los datos del vehículo donde se montará el nuevo equipo (Económico, Marca/Modelo, Año y Número de Serie/VIN).
+   - **En Cambios de equipo**:
+     - Selecciona primero el equipo `INSTALADO` del cliente que será retirado.
+     - Selecciona después el equipo disponible de almacén que lo reemplazará. La unidad se autocompleta a partir del equipo anterior.
    - Permite agregar una o varias unidades/equipos según la flotilla a atender en la cita.
 5. **Paso 3: Programación**:
    - Fecha y hora programada para la cita.
    - Indicador de servicio a domicilio / en sitio con captura de dirección física.
    - Notas generales e instrucciones para el técnico.
 6. **Paso 4: Técnico Asignado**:
-   - Selecciona obligatoriamente un técnico activo; puedes buscar por nombre, taller o ciudad.
+   - Selecciona obligatoriamente un técnico activo sincronizado desde `DIRECTORIO TECNICO`.
+   - Puedes filtrar por ciudad o taller y buscar por nombre, taller o ciudad. La ficha muestra clave externa, ubicación y teléfono cuando están disponibles.
    - Si el directorio falla, pulsa **Reintentar**. Si está vacío, usa **Recargar directorio**. No podrás continuar hasta elegir un técnico disponible.
 7. **Paso 5: Resumen y Confirmación**:
-   - Revisa el resumen integral con cliente, servicio, vehículos y hardware asignado.
+   - Revisa el resumen integral agrupado por servicio, con cliente, vehículos y hardware asignado.
    - Al pulsar **`Crear Orden de Servicio`**, el sistema genera un **Folio único**, crea las unidades y vincula los equipos atómicamente en estado **`DRAFT` (Borrador)**.
 
 ---
@@ -197,7 +202,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
 Si requieres agregar o ajustar unidades y equipos posteriormente, puedes hacerlo desde el detalle de la orden:
 
 1. Dentro de la orden en borrador, puedes agregar unidades adicionales o asociarles equipo mediante el selector [`EquipmentSelect`].
-2. El selector mantiene las mismas reglas de negocio: solo muestra equipos disponibles para instalaciones, o equipos instalados del cliente para revisiones y desinstalaciones.
+2. El selector mantiene las mismas reglas de negocio: muestra equipos disponibles para instalaciones y sensor fuel; instalados del cliente para revisiones y desinstalaciones; y ambos grupos para un cambio de equipo.
 3. Las comparaciones de cliente aplican **normalización inteligente**: ignoran mayúsculas/minúsculas, acentos, espacios múltiples y variaciones de sufijos legales (ej. `"Transportes Bull Dog"` vs `"TRANSPORTES BULL DOG S.A. DE C.V."`), previniendo falsos conflictos.
 
 ---
@@ -209,7 +214,7 @@ Si requieres agregar o ajustar unidades y equipos posteriormente, puedes hacerlo
    - El sistema realiza una revalidación fresca contra Google Sheets.
    - Si el equipo ya pertenece al cliente (incluso con diferencias de mayúsculas o sufijos), la verificación es exitosa.
    - La orden cambia a estado **`ASSIGNED`**.
-   - El worker en segundo plano encola la actualización de las columnas de asignación (`J`, `L`, `M`, `N`, `O`) en Google Sheets vía Outbox.
+   - La transacción crea operaciones Outbox y el worker actualiza en segundo plano las columnas autorizadas (`J`, `K`, `L`, `M`, `N`, `O`) en Google Sheets.
    - La orden aparece de inmediato en la bandeja de trabajo del técnico en su dispositivo móvil.
 
 ---
@@ -274,13 +279,13 @@ Al terminar los trabajos mecánicos/eléctricos, debes realizar la inspección d
 ## 6. Reglas de Evidencias Fotográficas
 
 > ⚠️ **REGLA ESTRICTA DE CALIDAD:**  
-> **Cada una de las 5 categorías requiere al menos una fotografía obligatoria**, incluso si se marcó como `No aplica`.
+> **Cada unidad requiere al menos tres fotografías completadas**, distribuidas entre las categorías del checklist.
 
 1. Pulsa sobre el icono de cámara en la categoría correspondiente.
 2. Toma una foto clara y bien iluminada desde tu teléfono.
 3. La foto se sube automáticamente a almacenamiento privado seguro (S3).
 4. El sistema mostrará una miniatura con confirmación verde.
-5. Si alguna unidad no tiene las 5 fotos requeridas, el botón de finalizar orden permanecerá inactivo.
+5. Si alguna unidad no tiene las tres fotos requeridas, la aplicación indicará el requisito pendiente y no permitirá finalizar.
 
 ---
 
@@ -296,6 +301,7 @@ Cuando todas las unidades tengan sus equipos verificados y sus checklists comple
    - La orden pasa a **`COMPLETED`**.
    - Se sella la fecha y hora final.
    - El sistema genera el acta técnica digital con validez de entrega.
+   - Se encolan el reporte técnico y el estado final de cada equipo en `SALIDAS`. En desinstalaciones y equipos retirados se limpian cliente y vehículo; en instalaciones se registra el nuevo vínculo.
 
 ---
 
@@ -360,7 +366,7 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 - **¿Puedo cambiar de técnico una orden ya asignada?**  
   Sí, el administrador puede reasignarla desde el panel web mientras la orden no haya sido finalizada.
 - **¿Por qué no se habilita el botón de finalizar orden?**  
-  Verifica que: (1) Todas las unidades tengan checklist completo, (2) Todas las categorías tengan al menos 1 foto, (3) Todos los equipos estén verificados o con discrepancia reportada, y (4) Se haya ingresado el nombre y firma del cliente.
+  Verifica que: (1) Todas las unidades tengan checklist completo, (2) Cada unidad tenga al menos tres fotos, (3) Todos los equipos estén verificados o con discrepancia reportada, y (4) Se haya ingresado el nombre y firma del cliente.
 
 ---
 
@@ -368,12 +374,12 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 
 > _Utiliza esta sección para registrar los cambios que se agreguen a la aplicación en fases posteriores._
 
-| Fecha          | Versión  | Tipo        | Descripción del Cambio / Nueva Feature                                                                                | Responsable |
-| :------------- | :------- | :---------- | :-------------------------------------------------------------------------------------------------------------------- | :---------- |
-| **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets. | Equipo Core |
-| _Próximamente_ | `v1.1.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                  | Por definir |
-| _Próximamente_ | `v1.2.0` | Feature     | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar.                                  | Por definir |
-| _Próximamente_ | `v1.3.0` | Feature     | Módulo de tarifas y cálculo de liquidación a técnicos.                                                                | Por definir |
+| Fecha          | Versión  | Tipo        | Descripción del Cambio / Nueva Feature                                                                                              | Responsable |
+| :------------- | :------- | :---------- | :---------------------------------------------------------------------------------------------------------------------------------- | :---------- |
+| **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets.               | Equipo Core |
+| **2026-09-10** | `v1.1.0` | Feature     | Órdenes multiservicio, directorio técnico sincronizado, tarifas por servicio, reporte de cobro y actualización final de inventario. | Equipo Core |
+| _Próximamente_ | `v1.2.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                                | Por definir |
+| _Próximamente_ | `v1.3.0` | Feature     | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar.                                                | Por definir |
 
 ---
 

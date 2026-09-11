@@ -54,6 +54,7 @@ erDiagram
         boolean isHomeService
         string serviceAddress
         string generalNotes
+        json pricingBreakdown
         int version
         timestamp startedAt
         timestamp completedAt
@@ -61,6 +62,7 @@ erDiagram
     ORDER_UNIT {
         uuid id PK
         uuid orderId FK
+        OrderServiceType serviceType
         string label
         string makeModel
         int year
@@ -159,7 +161,12 @@ erDiagram
 
 ## Agregado principal
 
-`Order` es la raíz del agregado operativo. Conserva el cliente como snapshot y contiene unidades. La API exige un técnico activo desde la creación; la relación en base de datos permanece nullable para conservar órdenes históricas sin técnico. Cada unidad agrupa equipos, checklist, fotografías y discrepancias. La firma se captura una vez por orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
+`Order` es la raíz del agregado operativo. Conserva el cliente como snapshot y contiene unidades.
+La API exige un técnico activo desde la creación; la relación en base de datos permanece nullable
+para conservar órdenes históricas sin técnico. Cada unidad tiene su propio tipo de servicio y agrupa
+equipos, checklist, fotografías y discrepancias, lo que permite órdenes multiservicio. La orden
+conserva el precio congelado y un desglose por servicio en `pricingBreakdown`. La firma se captura
+una vez por orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
 
 ## Enumeraciones de estado
 
