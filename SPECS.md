@@ -778,10 +778,19 @@ Respuesta de error:
 
 ### 11.9 Sincronización
 
-| Método | Ruta                     | Descripción              |
-| ------ | ------------------------ | ------------------------ |
-| GET    | `/orders/:id/sync`       | Estado de sincronización |
-| POST   | `/orders/:id/sync/retry` | Reintentar; admin        |
+| Método | Ruta                     | Descripción                            |
+| ------ | ------------------------ | -------------------------------------- |
+| GET    | `/orders/:id/sync`       | Estado de sincronización de una orden  |
+| POST   | `/orders/:id/sync/retry` | Reintentar fallos de la orden; admin   |
+| GET    | `/sync`                  | Monitor global paginado; admin         |
+| GET    | `/sync/schedule`         | Consultar corte y próximo envío; admin |
+| PUT    | `/sync/schedule`         | Actualizar programación semanal; admin |
+| POST   | `/sync/:id/retry`        | Sincronizar una operación ahora; admin |
+
+El reporte técnico se programa a partir de la fecha real de cierre. Los valores iniciales son corte
+el martes al finalizar el día, envío el miércoles a las 17:00 y zona `America/Hermosillo`. El día
+de corte, el día y hora de envío y la zona son configurables. Un cierre posterior al corte pertenece
+al lote de la semana siguiente. Las actualizaciones de equipos permanecen inmediatas.
 
 ### 11.10 OpenAPI y Swagger UI
 
@@ -982,7 +991,7 @@ No se mantendrá una segunda copia completa de datos remotos en Pinia. Las funci
 - Asignación de técnico.
 - Detalle, evidencias, firma y auditoría de orden.
 - Directorio de técnicos.
-- Estado y reintento de sincronización.
+- Tablero global de sincronización con configuración semanal, filtros y reintento inmediato.
 
 ### 16.3 Vistas del técnico
 
@@ -1187,6 +1196,10 @@ SHEETS_RETRY_LIMIT
 CIRCUIT_BREAKER_ERROR_THRESHOLD
 CIRCUIT_BREAKER_RESET_TIMEOUT_MS
 OUTBOX_POLL_INTERVAL_MS
+TECHNICAL_REPORT_CUTOFF_WEEKDAY=2
+TECHNICAL_REPORT_SYNC_WEEKDAY=3
+TECHNICAL_REPORT_SYNC_TIME=17:00
+TECHNICAL_REPORT_SYNC_TIMEZONE=America/Hermosillo
 ```
 
 En producción se preferirán identidades del proveedor y gestores de secretos sobre claves estáticas cuando estén disponibles.

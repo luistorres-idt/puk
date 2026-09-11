@@ -68,12 +68,23 @@ sequenceDiagram
 
 Las operaciones fallidas almacenan intentos, código/mensaje y siguiente fecha. El administrador puede devolverlas a `PENDING`. Google Sheets no se consulta para reconstruir órdenes cerradas: los equipos conservan snapshots.
 
-Al completar una orden, el backend vuelve a encolar el estado final de cada equipo antes del
-reporte técnico. Esta segunda sincronización es idempotente y corrige una asignación inicial
+Al completar una orden, el backend vuelve a encolar el estado final de cada equipo de forma
+inmediata. El reporte técnico queda programado en el outbox para la ventana semanal configurada.
+Por defecto, el corte es el martes al final del día y la publicación ocurre el miércoles a las
+17:00 en `America/Hermosillo`. Una orden cerrada después del corte pasa a la ventana de la semana
+siguiente. El administrador puede modificar corte, día, hora y zona horaria desde el tablero de
+sincronización; las operaciones todavía no intentadas se recalculan al guardar.
+
+La sincronización final de equipos es idempotente y corrige una asignación inicial
 omitida o desactualizada: instalación, revisión y sensor fuel conservan cliente y vehículo con
 estado `INSTALADO`; desinstalación devuelve el equipo a `STOCK TECNICO` y limpia cliente y
 vehículo; y cambio de equipo hace lo mismo con el anterior antes de instalar el nuevo. Una cita
 fallida no modifica el inventario.
+
+Los fallos posteriores al inicio de una ventana usan el backoff normal del outbox y no esperan otra
+semana. Una ejecución manual establece la operación como disponible inmediatamente. Cuando una
+corrección genera una versión nueva del reporte, las versiones pendientes anteriores se marcan
+como `SUPERSEDED` para no escribir dos veces el mismo folio.
 
 ### Creación atómica y validación de conflictos
 

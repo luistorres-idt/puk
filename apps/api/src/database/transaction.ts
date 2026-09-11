@@ -13,9 +13,11 @@ export interface AuditEntry {
 
 export interface OutboxEntry {
   idempotencyKey: string;
+  nextAttemptAt?: Date;
   operationType: string;
   orderId?: string;
   payload: Prisma.InputJsonValue;
+  scheduledFor?: Date;
 }
 
 interface TransactionEffects {

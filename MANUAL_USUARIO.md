@@ -355,7 +355,13 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 - **Reintentos Automáticos:**  
   Si Google Sheets no responde, el sistema reintenta periódicamente sin perder información.
 - **Monitor de Sincronización:**  
-  Los administradores cuentan con un panel donde pueden ver si hay operaciones pendientes (`PENDING`) o con error (`FAILED`) y forzar su reintento con un solo clic.
+  Los administradores cuentan con la sección **Sincronización**, donde pueden ver reportes programados, procesando, sincronizados o fallidos y ejecutar **Sincronizar ahora** cuando corresponda.
+- **Corte semanal del reporte técnico:**
+  La configuración inicial acepta órdenes cerradas hasta el martes a las 23:59:59 y publica el lote el miércoles a las 17:00, usando `America/Hermosillo`. El administrador puede cambiar el día de corte, el día de envío, la hora y la zona horaria. Las órdenes cerradas después del corte se publican en la ventana de la semana siguiente.
+- **Diferencia entre órdenes y operaciones:**
+  El resumen muestra por defecto solo el reporte técnico. El filtro **Equipos** muestra las actualizaciones internas de `SALIDAS`; una orden con varios equipos genera varias operaciones, pero no varias filas del reporte técnico. Los intentos se muestran dentro de cada operación y no se cuentan como órdenes nuevas.
+- **Correcciones:**
+  Si una corrección crea una versión nueva antes de la publicación, la versión pendiente anterior queda como `SUSTITUIDA`. Los fallos ocurridos al publicar se reintentan con backoff sin esperar hasta la siguiente semana.
 
 ---
 
@@ -377,6 +383,7 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 | Fecha          | Versión  | Tipo        | Descripción del Cambio / Nueva Feature                                                                                              | Responsable |
 | :------------- | :------- | :---------- | :---------------------------------------------------------------------------------------------------------------------------------- | :---------- |
 | **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets.               | Equipo Core |
+| **2026-09-11** | `v1.1.0` | Mejora      | Corte y envío semanal configurables para el reporte técnico, tablero global y reintento inmediato por operación.                    | Equipo Core |
 | **2026-09-10** | `v1.1.0` | Feature     | Órdenes multiservicio, directorio técnico sincronizado, tarifas por servicio, reporte de cobro y actualización final de inventario. | Equipo Core |
 | _Próximamente_ | `v1.2.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                                | Por definir |
 | _Próximamente_ | `v1.3.0` | Feature     | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar.                                                | Por definir |

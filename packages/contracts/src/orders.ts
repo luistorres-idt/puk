@@ -96,7 +96,13 @@ export const EquipmentVerificationStatusSchema = v.picklist([
 ]);
 export type EquipmentVerificationStatus = v.InferOutput<typeof EquipmentVerificationStatusSchema>;
 
-export const SyncStatusSchema = v.picklist(['PENDING', 'PROCESSING', 'SYNCED', 'FAILED']);
+export const SyncStatusSchema = v.picklist([
+  'PENDING',
+  'PROCESSING',
+  'SYNCED',
+  'FAILED',
+  'SUPERSEDED',
+]);
 export type SyncStatus = v.InferOutput<typeof SyncStatusSchema>;
 
 export const AssignEquipmentSchema = v.object({

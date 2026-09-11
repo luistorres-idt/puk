@@ -240,6 +240,10 @@ export class PukStagingApplicationStack extends Stack {
         S3_REGION: this.region,
         SHEETS_RETRY_LIMIT: '3',
         SHEETS_TIMEOUT_MS: '5000',
+        TECHNICAL_REPORT_CUTOFF_WEEKDAY: '2',
+        TECHNICAL_REPORT_SYNC_TIME: '17:00',
+        TECHNICAL_REPORT_SYNC_TIMEZONE: 'America/Hermosillo',
+        TECHNICAL_REPORT_SYNC_WEEKDAY: '3',
         TRUST_PROXY: 'true',
       },
       healthCheck: {

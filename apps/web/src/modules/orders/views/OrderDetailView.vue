@@ -1217,14 +1217,14 @@ const statusColor = orderStatusTagType;
               <div class="flex items-center justify-between">
                 <h3 class="text-base font-bold text-slate-800">Operaciones de Sincronización</h3>
                 <n-button
-                  v-if="session.user?.role === 'ADMIN'"
+                  v-if="session.user?.role === 'ADMIN' && (syncInfo?.failed ?? 0) > 0"
                   size="small"
                   type="primary"
                   secondary
                   :loading="mutations.retry.isPending.value"
                   @click="handleRetrySync"
                 >
-                  Forzar Sincronización
+                  Reintentar fallidas
                 </n-button>
               </div>
 
@@ -1257,6 +1257,12 @@ const statusColor = orderStatusTagType;
                       >
                       <span class="text-slate-400 text-[11px]">Intentos: {{ op.attempts }}</span>
                     </div>
+                    <p
+                      v-if="op.operationType === 'SHEET_TECHNICAL_REPORT' && op.scheduledFor"
+                      class="mt-1 text-slate-500"
+                    >
+                      Programada: {{ new Date(op.scheduledFor).toLocaleString() }}
+                    </p>
                     <p v-if="op.lastErrorMessage" class="text-red-500 font-mono text-[11px] mt-1">
                       Error: {{ op.lastErrorMessage }}
                     </p>

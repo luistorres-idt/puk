@@ -1,5 +1,6 @@
 import type { PrismaClient } from '../../generated/prisma/client.js';
-import { SyncStatus } from '../../generated/prisma/client.js';
+import { Prisma, SyncStatus } from '../../generated/prisma/client.js';
+import type { SyncOperationsQuery } from '@puk/contracts';
 import type { SheetsPort, TechnicalReportRowInput } from '../../integrations/ports.js';
 import { metrics } from '../../observability/metrics.js';
 import { redact } from '../../observability/redaction.js';
@@ -30,17 +31,20 @@ export class SyncService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const total = operations.length;
-    const synced = operations.filter((op) => op.status === SyncStatus.SYNCED).length;
-    const failed = operations.filter((op) => op.status === SyncStatus.FAILED).length;
-    const pending = operations.filter(
+    const activeOperations = operations.filter((op) => op.status !== SyncStatus.SUPERSEDED);
+    const total = activeOperations.length;
+    const synced = activeOperations.filter((op) => op.status === SyncStatus.SYNCED).length;
+    const failed = activeOperations.filter((op) => op.status === SyncStatus.FAILED).length;
+    const pending = activeOperations.filter(
       (op) => op.status === SyncStatus.PENDING || op.status === SyncStatus.PROCESSING,
     ).length;
 
-    const equipmentOps = operations.filter(
+    const equipmentOps = activeOperations.filter(
       (op) => op.operationType === 'SHEET_EQUIPMENT_ASSIGNMENT',
     );
-    const reportOps = operations.filter((op) => op.operationType === 'SHEET_TECHNICAL_REPORT');
+    const reportOps = activeOperations.filter(
+      (op) => op.operationType === 'SHEET_TECHNICAL_REPORT',
+    );
 
     const summarize = (list: typeof operations) => ({
       total: list.length,
@@ -62,6 +66,118 @@ export class SyncService {
       reportSync: summarize(reportOps),
       operations,
     };
+  }
+
+  public async listOperations(input: SyncOperationsQuery) {
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 25;
+    const date = (value: string | undefined, endOfDay = false) => {
+      if (!value) return undefined;
+      const parsed = new Date(
+        endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T23:59:59.999Z` : value,
+      );
+      if (Number.isNaN(parsed.getTime())) {
+        throw new AppError(400, 'INVALID_DATE_FILTER', 'El filtro de fecha no es válido');
+      }
+      return parsed;
+    };
+    const from = date(input.from);
+    const to = date(input.to, true);
+    const baseWhere: Prisma.SheetSyncOperationWhereInput = {
+      ...(input.operationType ? { operationType: input.operationType } : {}),
+      ...(from || to
+        ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
+        : {}),
+      ...(input.search?.trim()
+        ? {
+            order: {
+              is: {
+                OR: [
+                  { folio: { contains: input.search.trim(), mode: 'insensitive' } },
+                  { clientNameSnapshot: { contains: input.search.trim(), mode: 'insensitive' } },
+                  {
+                    technicianNameSnapshot: { contains: input.search.trim(), mode: 'insensitive' },
+                  },
+                ],
+              },
+            },
+          }
+        : {}),
+    };
+    const where: Prisma.SheetSyncOperationWhereInput = {
+      ...baseWhere,
+      ...(input.status ? { status: input.status } : {}),
+    };
+    const [operations, total] = await this.prisma.$transaction([
+      this.prisma.sheetSyncOperation.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          attempts: true,
+          createdAt: true,
+          id: true,
+          lastAttemptAt: true,
+          lastErrorCode: true,
+          lastErrorMessage: true,
+          nextAttemptAt: true,
+          operationType: true,
+          orderId: true,
+          scheduledFor: true,
+          status: true,
+          syncedAt: true,
+          updatedAt: true,
+          order: {
+            select: {
+              clientNameSnapshot: true,
+              folio: true,
+              technicianNameSnapshot: true,
+            },
+          },
+        },
+      }),
+      this.prisma.sheetSyncOperation.count({ where }),
+    ]);
+    const grouped = await this.prisma.sheetSyncOperation.groupBy({
+      by: ['status'],
+      where: baseWhere,
+      orderBy: { status: 'asc' },
+      _count: { _all: true },
+    });
+    const summary = Object.fromEntries(grouped.map((item) => [item.status, item._count._all]));
+    return {
+      operations,
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      summary,
+    };
+  }
+
+  public async retryOperation(operationId: string) {
+    const operation = await this.prisma.sheetSyncOperation.findUnique({
+      where: { id: operationId },
+    });
+    if (!operation) {
+      throw new AppError(404, 'SYNC_OPERATION_NOT_FOUND', 'Operación no encontrada');
+    }
+    if (operation.status === SyncStatus.SYNCED || operation.status === SyncStatus.SUPERSEDED) {
+      throw new AppError(
+        409,
+        'SYNC_OPERATION_NOT_RETRYABLE',
+        'La operación ya no puede reintentarse',
+      );
+    }
+    return this.prisma.sheetSyncOperation.update({
+      where: { id: operationId },
+      data: {
+        attempts: 0,
+        lastAttemptAt: new Date(),
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        nextAttemptAt: new Date(),
+        status: SyncStatus.PENDING,
+      },
+    });
   }
 
   public async retryFailedOperations(orderId: string) {
@@ -125,7 +241,7 @@ export class SyncService {
     for (const op of pendingOps) {
       const claim = await this.prisma.sheetSyncOperation.updateMany({
         where: { id: op.id, status: op.status },
-        data: { status: SyncStatus.PROCESSING },
+        data: { lastAttemptAt: new Date(), status: SyncStatus.PROCESSING },
       });
       if (claim.count === 0) {
         continue;

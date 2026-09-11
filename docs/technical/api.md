@@ -111,6 +111,17 @@ remotas son idempotentes y no revierten el cierre si Google Sheets está tempora
 | POST   | `/api/v1/orders/:id/report/generate` | generar/reintentar como administrador |
 | GET    | `/api/v1/orders/:id/report/download` | URL privada temporal                  |
 
+### Monitoreo de sincronización
+
+Los siguientes endpoints requieren rol administrador:
+
+| Método | Ruta                     | Propósito                                      |
+| ------ | ------------------------ | ---------------------------------------------- |
+| GET    | `/api/v1/sync`           | Listar y filtrar operaciones globales          |
+| GET    | `/api/v1/sync/schedule`  | Consultar corte, horario y siguiente ejecución |
+| PUT    | `/api/v1/sync/schedule`  | Actualizar la programación semanal             |
+| POST   | `/api/v1/sync/:id/retry` | Sincronizar inmediatamente una operación       |
+
 ## Contrato y compatibilidad
 
 Los DTOs de escritura deben añadirse primero a `packages/contracts`. Los cambios incompatibles requieren una nueva versión de ruta o una migración coordinada de web y API. OpenAPI se genera/valida con `pnpm docs:build` y `pnpm docs:validate`; actualmente documenta la superficie principal, pero los routers son la lista exhaustiva.
