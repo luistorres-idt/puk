@@ -83,12 +83,12 @@ Fuente: <https://github.com/luistorres-idt/puk/issues/8>.
 - Agregar `FUEL_SENSOR` y `EQUIPMENT_REPLACEMENT` mediante migración aditiva.
 - Centralizar etiquetas y opciones tipadas de los seis servicios para frontend,
   filtros, PDF y contratos. Mantener exhaustividad comprobada por TypeScript.
-- Compartir la política de altas posteriores: únicamente `DRAFT + INSTALLATION`.
-  Aplicarla a los tres botones y a los dos endpoints de alta.
+- Compartir la política de altas posteriores: cualquier servicio configurado mientras la orden
+  permanezca en `DRAFT`. Aplicarla a los botones y endpoints de alta.
 - Conservar lectura, edición y eliminación existentes. La carga inicial del wizard
   sigue entrando por `POST /orders` con unidades/equipos anidados.
-- No equiparar los servicios nuevos con instalación o cita fallida: habilitar su
-  creación y ejecución específica después de aprobar su flujo con el negocio.
+- Implementar los flujos aprobados: sensor fuel usa equipo de stock y datos manuales de unidad;
+  cambio de equipo vincula un equipo instalado y su reemplazo de stock.
 
 Verificación: matriz por servicio/estado, endpoints de alta, creación inicial de
 revisión/desinstalación, visibilidad de componentes, etiquetas, OpenAPI y migración
@@ -102,8 +102,8 @@ Fuente: <https://github.com/luistorres-idt/puk/issues/5>.
 - Usar aritmética decimal y persistencia `Decimal`, moneda y redondeo documentados.
 - Persistir identidad/nombre del técnico, servicio, costo base, salida del taller,
   viáticos aplicados, total, fecha de captura y versión del origen.
-- Calcular/recalcular dentro de la transacción del cambio permitido de la orden;
-  auditar el cambio. Congelar al pasar a `ASSIGNED`, sujeto a confirmación de #7.
+- Calcular/recalcular dentro de la transacción del cierre permitido y auditar el cambio. Congelar
+  al pasar a `COMPLETED`; una corrección genera una versión nueva.
 - Distinguir tarifa ausente de formato inválido y cero explícito. Emitir errores
   accionables y métricas sin datos personales ni payloads fiscales.
 - Tratar correcciones mediante un flujo explícito con versión y auditoría; jamás
@@ -116,8 +116,8 @@ reintentos concurrentes y cambios posteriores en Sheets. Depende de #7, #6 y #8.
 
 Fuente: <https://github.com/luistorres-idt/puk/issues/9>.
 
-- Ampliar el outbox existente con una unión discriminada por `operationType` y
-  payloads validados. Reutilizar worker, circuit breaker, reintentos y métricas.
+- Ampliar el outbox existente con una unión discriminada por `operationType` y payloads validados.
+  Reutilizar worker, circuit breaker, reintentos y métricas.
 - Encolar en la misma transacción del cierre cobrable, con clave única por orden
   y versión. La publicación remota nunca revierte el cierre confirmado.
 - Serializar escrituras al reporte por libro/folio, incluyendo exclusión entre
@@ -150,32 +150,32 @@ Fuente: <https://github.com/luistorres-idt/puk/issues/10>.
 
 ## Límites de implementación
 
-No hay aprobación de las reglas contables abiertas en los comentarios de #7, #8 o
-#10 consultados al preparar este plan. Los nombres y mapas propuestos aún no se
-han contrastado con un libro real. No se deben activar escrituras ni cobros basados
-en esa información hasta completar la definición pendiente.
+Las reglas contables y los mapas de las issues #7 y #8 ya fueron confirmados e implementados. La
+validación automatizada usa datos ficticios; cualquier prueba manual adicional debe realizarse en
+el libro de staging, nunca en producción. Permanecen fuera de alcance los pagos a técnicos y la
+escritura de las columnas manuales `D`, `E` y `O` del reporte de cobro.
 
 ## Estado de esta entrega
 
-Actualización del 2026-09-09: se implementaron y verificaron las issues #4, #5, #6, #7, #8, #9 y #10
+Actualización del 2026-09-10: se implementaron y verificaron las issues #4, #5, #6, #7, #8, #9 y #10
 conforme a los contratos y decisiones acordadas.
 
-| Issue | Implementado y verificado localmente                                                                  | Estado en GitHub |
-| ----- | ----------------------------------------------------------------------------------------------------- | ---------------- |
-| #7    | Contrato del libro v1.0 en `technician-workbook-contract.md`, 88 identidades `TEC-0001` a `TEC-0088` verificadas en staging, reglas de tarifas, cálculo y exclusión de columnas D, E y O | Sin modificar status en GitHub (pendiente de autorización explícita) |
-| #6    | Directorio técnico: parser de encabezados A1:W1, asignador durable no reciclable (`TEC-XXXX`), sincronización transaccional `POST /technicians/sync`, persistencia de tarifas y desactivación de retirados, selector proyectado `{ id, name, workshop, city }` | Sin modificar status en GitHub (pendiente de autorización explícita) |
-| #4    | Técnico obligatorio: validado en creación (`POST /orders`) y actualización (`PATCH /orders/:id`), wizard con loading/error/reintento, columna en Postgres nullable para compatibilidad histórica, snapshots de técnico persistidos | Sin modificar status en GitHub (pendiente de autorización explícita) |
-| #8    | Seis servicios habilitados (`INSTALLATION`, `REVIEW`, `UNINSTALLATION`, `FAILED_APPOINTMENT`, `FUEL_SENSOR`, `EQUIPMENT_REPLACEMENT`), política de altas exclusivas en `DRAFT + INSTALLATION`, flujos específicos de asignación en `SALIDAS` para desinstalación y cambio de equipo | Sin modificar status en GitHub (pendiente de autorización explícita) |
-| #5    | Snapshot de tarifas: módulo puro `pricing.ts`, aritmética `Prisma.Decimal`, redondeo half-up a 2 decimales en MXN, base por equipo (1 para reemplazo), viáticos únicos en servicio a domicilio, fallback a 0.00 en cita fallida sin tarifa y congelación al completar | Sin modificar status en GitHub (pendiente de autorización explícita) |
+| Issue | Implementado y verificado localmente                                                                                                                                                                                                                                                                                                  | Estado en GitHub                                                     |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| #7    | Contrato del libro v1.0 en `technician-workbook-contract.md`, 88 identidades `TEC-0001` a `TEC-0088` verificadas en staging, reglas de tarifas, cálculo y exclusión de columnas D, E y O                                                                                                                                              | Sin modificar status en GitHub (pendiente de autorización explícita) |
+| #6    | Directorio técnico: parser A1:W1, IDs `TEC-XXXX`, sincronización transaccional y automática con TTL/fallback, tarifas, desactivación de retirados y selector con filtros de ciudad/taller                                                                                                                                             | Sin modificar status en GitHub (pendiente de autorización explícita) |
+| #4    | Técnico obligatorio: validado en creación (`POST /orders`) y actualización (`PATCH /orders/:id`), wizard con loading/error/reintento, columna en Postgres nullable para compatibilidad histórica, snapshots de técnico persistidos                                                                                                    | Sin modificar status en GitHub (pendiente de autorización explícita) |
+| #8    | Seis servicios habilitados, varios servicios por orden mediante `OrderUnit.serviceType`, altas en cualquier borrador y flujos finales de `SALIDAS` para instalación, revisión, sensor fuel, desinstalación y cambio de equipo                                                                                                         | Sin modificar status en GitHub (pendiente de autorización explícita) |
+| #5    | Snapshot de tarifas: módulo puro `pricing.ts`, aritmética `Prisma.Decimal`, redondeo half-up a 2 decimales en MXN, base por equipo (1 para reemplazo), viáticos únicos en servicio a domicilio, fallback a 0.00 en cita fallida sin tarifa y congelación al completar                                                                 | Sin modificar status en GitHub (pendiente de autorización explícita) |
 | #9    | Reporte técnico: formateador `technical-report-formatter.ts` con fecha/semana en `America/Hermosillo` y multilíneas en F, G, H; outbox discriminado `SHEET_TECHNICAL_REPORT`, reintentos, cliente Google Sheets escribiendo estrictamente A:C, F:N y P (preservando D, E y O intactas), reabierto y recálculo en corrección por ADMIN | Sin modificar status en GitHub (pendiente de autorización explícita) |
-| #10   | Épico integrado: outbox unificado con métricas por `operationType`, circuit breaker decorando nuevos métodos, auditoría completa de transacciones, validación OpenAPI sin errores y suite de pruebas unitarias/integración | Sin modificar status en GitHub (pendiente de autorización explícita) |
+| #10   | Épico integrado: outbox unificado con métricas por `operationType`, circuit breaker decorando nuevos métodos, auditoría completa de transacciones, validación OpenAPI sin errores y suite de pruebas unitarias/integración                                                                                                            | Sin modificar status en GitHub (pendiente de autorización explícita) |
 
 No se modificó el estado de las issues en GitHub, conforme a las instrucciones del usuario.
 
 ### Evidencia de validación
 
 - `pnpm typecheck`: 6 proyectos de workspace verificados exitosamente (`@puk/contracts`, `@puk/api`, `@puk/web`, `infra/cdk`, etc.) con 0 errores.
-- `pnpm test`: 178 pruebas pasando en `@puk/api` (26 archivos), 20 pruebas pasando en `@puk/contracts`, 27 pruebas pasando en `@puk/web`.
+- `pnpm test`: 202 pruebas pasando en `@puk/api` (28 archivos, más 2 archivos de integración omitidos), 22 en `@puk/contracts` y 40 en `@puk/web`.
 - `pnpm docs:validate`: Documento OpenAPI generado y validado contra especificaciones sin discrepancias.
-- Migraciones Prisma: Migración `20260909140000_technician_directory_and_pricing_snapshots` validada y cliente Prisma generado. Nullabilidad histórica preservada en Postgres.
+- Migraciones Prisma: además del directorio y snapshots, `20260909174050_multi_service_orders_and_unit_service_type` agrega el desglose de precios y el tipo por unidad con backfill desde la orden.
 - Reglas de secreto y seguridad: Redacción activa en métricas y logs para datos sensibles, fiscales y bancarios; nunca se toca producción ni se exponen credenciales.

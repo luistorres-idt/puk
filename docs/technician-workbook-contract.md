@@ -1,6 +1,6 @@
 # Contrato del libro de técnicos y cobro
 
-Versión: `1.0-implemented`, 2026-09-09. Estado: directorio, tarifas, cálculo de snapshots,
+Versión: `1.1-implemented`, 2026-09-10. Estado: directorio, tarifas, cálculo de snapshots,
 persistencia y sincronización del reporte técnico implementados y verificados en desarrollo/staging.
 
 ## Identidad y configuración
@@ -45,10 +45,10 @@ conservan identidad; las retiradas se desactivan sin
 eliminar historia; las claves duplicadas abortan la importación completa. Una fila
 sin clave o nombre no es seleccionable. No se deriva identidad del número de fila.
 
-Variables previstas para la integración (pendientes de implementar al aprobar el
-contrato): `GOOGLE_TECHNICIANS_SPREADSHEET_ID`, `GOOGLE_TECHNICIANS_SHEET_NAME`,
-`GOOGLE_TECHNICIAN_REPORT_SHEET_NAME`. Ejemplos de prueba deben utilizar identificadores
-ficticios como `development-workbook` y `TECH-DEMO-001`.
+La integración usa `GOOGLE_TECHNICIANS_SPREADSHEET_ID`,
+`GOOGLE_TECHNICIANS_SHEET_NAME` y `GOOGLE_TECHNICIAN_REPORT_SHEET_NAME`, separadas del
+libro de clientes e inventario. Los ejemplos de prueba utilizan identificadores ficticios como
+`development-workbook` y `TECH-DEMO-001`.
 
 ## Directorio: campos requeridos por la issue #7
 

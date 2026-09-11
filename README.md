@@ -1,6 +1,6 @@
 # Bull Dog Solution — Órdenes de servicio
 
-Sistema web responsivo para preparar, asignar, ejecutar y auditar órdenes de instalación, revisión y desinstalación de equipos en unidades vehiculares.
+Sistema web responsivo para preparar, asignar, ejecutar y auditar órdenes multiservicio de equipos en unidades vehiculares.
 
 > Este README describe el estado objetivo del producto una vez concluido el MVP. La implementación se encuentra organizada en [ROADMAP.md](./ROADMAP.md) y su definición técnica completa está en [SPECS.md](./SPECS.md).
 
@@ -21,7 +21,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 ### Administración
 
 - Autenticación segura y administración local de usuarios y técnicos.
-- Creación de órdenes con varias unidades y varios equipos por unidad.
+- Creación de órdenes con varias unidades, varios equipos por unidad y distintos tipos de servicio en una misma orden.
 - Consulta de clientes y equipos directamente desde Google Sheets.
 - Asignación y reasignación de técnicos.
 - Seguimiento del estado y progreso de cada servicio.
@@ -37,7 +37,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Reporte de diferencias de ID, IMEI, serie o unidad sin bloquear el trabajo.
 - Checklist posterior al servicio para tablero, cristales, accesorios, molduras y carrocería.
 - Estados `Bien`, `Mal` y `No aplica`, con observación obligatoria para elementos en mal estado.
-- Captura de al menos una fotografía por categoría.
+- Captura de al menos tres fotografías por unidad, distribuidas entre las categorías del checklist.
 - Firma única del cliente y registro del nombre de la persona firmante.
 - Cierre normal con validación integral o cierre simplificado como cita fallida.
 
@@ -62,7 +62,7 @@ flowchart LR
     E --> F[Verifica equipos]
     F --> G[Completa checklist y fotos]
     G --> H[Captura nombre y firma]
-    H --> I[Finaliza orden]
+    H --> I[Finaliza orden y sincroniza estado final]
     E --> J[Registra cita fallida]
 ```
 
@@ -155,13 +155,18 @@ La aplicación solo puede escribir las columnas autorizadas:
 | Columna | Contenido                                       |
 | ------- | ----------------------------------------------- |
 | `J`     | Cliente                                         |
+| `K`     | Estado del servicio                             |
 | `L`     | Unidad                                          |
 | `M`     | Marca/modelo de la unidad                       |
 | `N`     | Año                                             |
 | `O`     | Número de serie                                 |
 | `P`     | Tipo de servicio, cuando el negocio lo habilite |
 
-Las columnas `A`, `I` y `K` nunca son modificadas. Antes de cada escritura, la API vuelve a localizar el equipo por ID e IMEI, compara el snapshot conocido y detiene la operación con un conflicto HTTP `409` si detecta cambios externos.
+Las columnas `A` e `I` nunca son modificadas. Al asignar y al completar, la API vuelve a localizar
+el equipo por ID o IMEI y escribe únicamente las celdas necesarias. Instalación, revisión y sensor
+fuel dejan el equipo como `INSTALADO`; desinstalación y el equipo anterior de un cambio lo devuelven
+a `STOCK TECNICO`, limpian el cliente (`J`) y los datos del vehículo (`L:O`). El equipo nuevo de un
+cambio hereda el cliente y el vehículo. Una cita fallida no modifica el inventario.
 
 ## Requisitos
 
@@ -293,7 +298,7 @@ Staging está implementado en AWS `us-east-2` con CloudFront, ALB, ECS Fargate, 
 
 ## Alcance del MVP
 
-El MVP no incluye operación offline completa, aplicaciones móviles nativas, edición de los catálogos externos, facturación, cuentas bancarias, tarifas de técnicos ni microservicios. Tampoco modifica automáticamente `Fecha de salida`, `Estado` o `Estado del servicio` en Google Sheets.
+El MVP no incluye operación offline completa, aplicaciones móviles nativas, edición de los catálogos externos, facturación, cuentas bancarias ni microservicios. No modifica automáticamente `Fecha de salida` ni `Estado` del equipo en Google Sheets; sí administra `Estado del servicio` conforme al resultado de la orden.
 
 ## Documentación del proyecto
 
