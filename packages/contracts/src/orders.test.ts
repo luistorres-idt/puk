@@ -4,6 +4,7 @@ import {
   CreateOrderSchema,
   OrderListQuerySchema,
   OrderServiceTypeSchema,
+  RescheduleFailedAppointmentSchema,
   UpdateOrderSchema,
   canAddOrderItems,
   formatOrderServiceType,
@@ -30,6 +31,21 @@ describe('order contracts', () => {
     expect(v.parse(CreateOrderSchema, { ...order, technicianId }).technicianId).toBe(technicianId);
     expect(v.safeParse(UpdateOrderSchema, { version: 1, technicianId: null }).success).toBe(false);
     expect(v.safeParse(UpdateOrderSchema, { version: 1, generalNotes: 'Nota' }).success).toBe(true);
+  });
+
+  it('validates failed appointment rescheduling input', () => {
+    expect(
+      v.parse(RescheduleFailedAppointmentSchema, {
+        scheduledAt: '2099-09-15T18:00:00.000Z',
+        version: 4,
+      }),
+    ).toEqual({ scheduledAt: '2099-09-15T18:00:00.000Z', version: 4 });
+    expect(
+      v.safeParse(RescheduleFailedAppointmentSchema, {
+        scheduledAt: 'not-a-date',
+        version: 0,
+      }).success,
+    ).toBe(false);
   });
 
   it.each(OrderServiceTypeSchema.options)('recognizes and filters %s', (serviceType) => {

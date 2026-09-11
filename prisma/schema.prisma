@@ -31,6 +31,11 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum FailedAppointmentResolution {
+  CANCELLED
+  RESCHEDULED
+}
+
 enum UnitStatus {
   PENDING
   IN_PROGRESS
@@ -80,25 +85,26 @@ enum ReportStatus {
 }
 
 model User {
-  id                    String           @id @default(uuid()) @db.Uuid
-  email                 String           @unique
-  passwordHash          String
-  name                  String
-  role                  UserRole
-  technicianId          String?          @unique @db.Uuid
-  active                Boolean          @default(true)
-  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
-  technician            Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
-  createdOrders         Order[]          @relation("OrderCreator")
-  verifiedEquipment     OrderEquipment[] @relation("EquipmentVerifier")
-  completedChecks       Checklist[]      @relation("ChecklistCompleter")
-  uploadedEvidence      Evidence[]       @relation("EvidenceUploader")
-  capturedSignatures    Signature[]      @relation("SignatureCapturer")
-  reportedDiscrepancies Discrepancy[]    @relation("DiscrepancyReporter")
-  resolvedDiscrepancies Discrepancy[]    @relation("DiscrepancyResolver")
-  refreshSessions       RefreshSession[]
-  auditLogs             AuditLog[]       @relation("AuditActor")
+  id                         String           @id @default(uuid()) @db.Uuid
+  email                      String           @unique
+  passwordHash               String
+  name                       String
+  role                       UserRole
+  technicianId               String?          @unique @db.Uuid
+  active                     Boolean          @default(true)
+  createdAt                  DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime         @updatedAt @db.Timestamptz(3)
+  technician                 Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  createdOrders              Order[]          @relation("OrderCreator")
+  verifiedEquipment          OrderEquipment[] @relation("EquipmentVerifier")
+  completedChecks            Checklist[]      @relation("ChecklistCompleter")
+  uploadedEvidence           Evidence[]       @relation("EvidenceUploader")
+  capturedSignatures         Signature[]      @relation("SignatureCapturer")
+  reportedDiscrepancies      Discrepancy[]    @relation("DiscrepancyReporter")
+  resolvedDiscrepancies      Discrepancy[]    @relation("DiscrepancyResolver")
+  refreshSessions            RefreshSession[]
+  auditLogs                  AuditLog[]       @relation("AuditActor")
+  resolvedFailedAppointments Order[]          @relation("FailedAppointmentResolver")
 
   @@index([role, active])
 }
@@ -136,49 +142,59 @@ model Technician {
 }
 
 model Order {
-  id                            String               @id @default(uuid()) @db.Uuid
-  folio                         String               @unique
-  serviceType                   OrderServiceType
-  status                        OrderStatus          @default(DRAFT)
-  clientSheetId                 String
-  clientNameSnapshot            String
-  technicianId                  String?              @db.Uuid
-  technicianNameSnapshot        String?
-  technicianExternalKeySnapshot String?
-  pricingUnitRate               Decimal?             @db.Decimal(10, 2)
-  pricingAppliedQuantity        Int?
-  pricingBaseCost               Decimal?             @db.Decimal(10, 2)
-  pricingDepartureCost          Decimal?             @db.Decimal(10, 2)
-  pricingTravelExpenses         Decimal?             @db.Decimal(10, 2)
-  pricingTotal                  Decimal?             @db.Decimal(10, 2)
-  pricingCurrency               String?              @default("MXN")
-  pricingSnapshotAt             DateTime?            @db.Timestamptz(3)
-  pricingVersion                Int?                 @default(1)
-  pricingBreakdown              Json?                @db.JsonB
-  scheduledAt                   DateTime             @db.Timestamptz(3)
-  isHomeService                 Boolean              @default(false)
-  serviceAddress                String?
-  generalNotes                  String?
-  failedReason                  String?
-  correctionReason              String?
-  version                       Int                  @default(1)
-  createdById                   String               @db.Uuid
-  startedAt                     DateTime?            @db.Timestamptz(3)
-  completedAt                   DateTime?            @db.Timestamptz(3)
-  cancelledAt                   DateTime?            @db.Timestamptz(3)
-  createdAt                     DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt                     DateTime             @updatedAt @db.Timestamptz(3)
-  technician                    Technician?          @relation(fields: [technicianId], references: [id], onDelete: Restrict)
-  createdBy                     User                 @relation("OrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  units                         OrderUnit[]
-  signature                     Signature?
-  discrepancies                 Discrepancy[]
-  syncOperations                SheetSyncOperation[]
-  reports                       ServiceOrderReport[]
+  id                                String                       @id @default(uuid()) @db.Uuid
+  folio                             String                       @unique
+  serviceType                       OrderServiceType
+  status                            OrderStatus                  @default(DRAFT)
+  clientSheetId                     String
+  clientNameSnapshot                String
+  technicianId                      String?                      @db.Uuid
+  technicianNameSnapshot            String?
+  technicianExternalKeySnapshot     String?
+  pricingUnitRate                   Decimal?                     @db.Decimal(10, 2)
+  pricingAppliedQuantity            Int?
+  pricingBaseCost                   Decimal?                     @db.Decimal(10, 2)
+  pricingDepartureCost              Decimal?                     @db.Decimal(10, 2)
+  pricingTravelExpenses             Decimal?                     @db.Decimal(10, 2)
+  pricingTotal                      Decimal?                     @db.Decimal(10, 2)
+  pricingCurrency                   String?                      @default("MXN")
+  pricingSnapshotAt                 DateTime?                    @db.Timestamptz(3)
+  pricingVersion                    Int?                         @default(1)
+  pricingBreakdown                  Json?                        @db.JsonB
+  scheduledAt                       DateTime                     @db.Timestamptz(3)
+  isHomeService                     Boolean                      @default(false)
+  serviceAddress                    String?
+  generalNotes                      String?
+  failedReason                      String?
+  failedAppointmentResolution       FailedAppointmentResolution?
+  failedAppointmentResolvedAt       DateTime?                    @db.Timestamptz(3)
+  failedAppointmentResolvedById     String?                      @db.Uuid
+  failedAppointmentResolutionReason String?
+  rescheduledFromOrderId            String?                      @unique @db.Uuid
+  correctionReason                  String?
+  version                           Int                          @default(1)
+  createdById                       String                       @db.Uuid
+  startedAt                         DateTime?                    @db.Timestamptz(3)
+  completedAt                       DateTime?                    @db.Timestamptz(3)
+  cancelledAt                       DateTime?                    @db.Timestamptz(3)
+  createdAt                         DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                         DateTime                     @updatedAt @db.Timestamptz(3)
+  technician                        Technician?                  @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  createdBy                         User                         @relation("OrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  failedAppointmentResolvedBy       User?                        @relation("FailedAppointmentResolver", fields: [failedAppointmentResolvedById], references: [id], onDelete: SetNull)
+  rescheduledFrom                   Order?                       @relation("OrderReschedule", fields: [rescheduledFromOrderId], references: [id], onDelete: Restrict)
+  rescheduledOrder                  Order?                       @relation("OrderReschedule")
+  units                             OrderUnit[]
+  signature                         Signature?
+  discrepancies                     Discrepancy[]
+  syncOperations                    SheetSyncOperation[]
+  reports                           ServiceOrderReport[]
 
   @@index([technicianId, status, scheduledAt])
   @@index([clientSheetId, createdAt])
   @@index([status, scheduledAt])
+  @@index([status, failedAppointmentResolution])
+  @@index([failedAppointmentResolvedById])
 }
 
 model ServiceOrderReport {
