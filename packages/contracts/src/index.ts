@@ -88,3 +88,11 @@ export {
   type SaveChecklist,
   type SaveChecklistItem,
 } from './execution.js';
+export {
+  SyncOperationsQuerySchema,
+  SyncOperationTypeSchema,
+  UpdateTechnicalReportSyncScheduleSchema,
+  type SyncOperationsQuery,
+  type SyncOperationType,
+  type UpdateTechnicalReportSyncSchedule,
+} from './sync.js';

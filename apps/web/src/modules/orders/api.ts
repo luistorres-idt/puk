@@ -118,11 +118,12 @@ export interface OrderSummary {
 export interface SheetSyncOperation {
   id: string;
   operationType: string;
-  status: 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED';
+  status: 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED' | 'SUPERSEDED';
   attempts: number;
   payload?: { row?: number } | null;
   lastErrorMessage?: string | null;
   createdAt: string;
+  scheduledFor?: string | null;
 }
 
 export async function fetchOrders(

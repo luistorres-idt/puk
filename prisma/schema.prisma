@@ -69,6 +69,7 @@ enum SyncStatus {
   PROCESSING
   SYNCED
   FAILED
+  SUPERSEDED
 }
 
 enum ReportStatus {
@@ -391,7 +392,9 @@ model SheetSyncOperation {
   attempts         Int        @default(0)
   lastErrorCode    String?
   lastErrorMessage String?
+  scheduledFor     DateTime?  @db.Timestamptz(3)
   nextAttemptAt    DateTime?  @db.Timestamptz(3)
+  lastAttemptAt    DateTime?  @db.Timestamptz(3)
   createdAt        DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
   syncedAt         DateTime?  @db.Timestamptz(3)
@@ -399,4 +402,15 @@ model SheetSyncOperation {
 
   @@index([orderId, status])
   @@index([status, nextAttemptAt, createdAt])
+  @@index([operationType, status, scheduledFor])
+}
+
+model TechnicalReportSyncSchedule {
+  id            String   @id
+  syncWeekday   Int      @default(3)
+  syncTime      String   @default("17:00")
+  cutoffWeekday Int      @default(2)
+  timeZone      String   @default("America/Hermosillo")
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 }

@@ -5,6 +5,7 @@ import { homeRoutes } from '@/modules/home';
 import { orderRoutes } from '@/modules/orders';
 import { serviceExecutionRoutes } from '@/modules/service-execution';
 import { technicianRoutes } from '@/modules/technicians';
+import { syncRoutes } from '@/modules/sync';
 import { useSessionStore } from '@/stores/session';
 
 export const router = createRouter({
@@ -13,6 +14,7 @@ export const router = createRouter({
     ...authRoutes,
     ...homeRoutes,
     ...technicianRoutes,
+    ...syncRoutes,
     ...orderRoutes,
     ...serviceExecutionRoutes,
   ],

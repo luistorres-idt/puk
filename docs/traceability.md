@@ -11,7 +11,8 @@ La columna de pruebas identifica el nivel mínimo que debe existir antes de cerr
 | Borradores, unidades y equipos      | `/orders`, `/orders/:id/units`, `/units/:id/equipment`        | Integración: varias unidades/equipos, serie única y propiedad         |
 | Concurrencia optimista              | `PATCH /orders/:id`                                           | Dos ediciones con la misma versión; la segunda recibe `409`           |
 | Asignación y Sheets                 | `POST /orders/:id/assign`                                     | Contrato: revalidación, columnas permitidas, conflicto e idempotencia |
-| Outbox y reintento                  | `/orders/:id/sync-operations`                                 | Integración: fallo visible, backoff y ausencia de duplicados          |
+| Outbox y reintento                  | `/orders/:id/sync`, `/sync`, `/sync/:id/retry`                | Integración: fallo visible, backoff y ausencia de duplicados          |
+| Corte semanal del reporte técnico   | `/sync/schedule`                                              | Unidad: corte, siguiente semana, zona horaria y reprogramación        |
 | Trabajo del técnico                 | `/me/orders`, `/orders/:id/start`                             | Autorización entre dos técnicos y transiciones inválidas              |
 | Verificación y discrepancias        | `/order-equipment/:id/verify`, `/orders/:id/discrepancies`    | Discrepancia no bloquea cierre; usuario ajeno recibe denegación       |
 | Checklist por unidad                | `/units/:id/checklist`                                        | Cinco categorías; observación obligatoria en `BAD`                    |

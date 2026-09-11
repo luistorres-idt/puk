@@ -41,6 +41,9 @@ export interface ExecutionServiceOptions {
   reportGeneration?: {
     requestGeneration(orderId: string, actorUserId?: string): Promise<unknown>;
   };
+  technicalReportScheduling?: {
+    getNextScheduledAt(reference?: Date): Promise<Date>;
+  };
 }
 
 export class ExecutionService {
@@ -48,6 +51,7 @@ export class ExecutionService {
   private readonly maxSignatureBytes: number;
   private readonly presignedUrlTtlSeconds: number;
   private readonly reportGeneration: ExecutionServiceOptions['reportGeneration'];
+  private readonly technicalReportScheduling: ExecutionServiceOptions['technicalReportScheduling'];
 
   public constructor(
     private readonly prisma: PrismaClient,
@@ -58,6 +62,7 @@ export class ExecutionService {
     this.maxSignatureBytes = options.maxSignatureBytes ?? 1024 * 1024; // 1MB
     this.presignedUrlTtlSeconds = options.presignedUrlTtlSeconds ?? 300;
     this.reportGeneration = options.reportGeneration;
+    this.technicalReportScheduling = options.technicalReportScheduling;
   }
 
   private async assertOrderAccess(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
@@ -640,6 +645,9 @@ export class ExecutionService {
       });
     }
 
+    const completionTime = new Date();
+    const technicalReportScheduledFor =
+      await this.technicalReportScheduling?.getNextScheduledAt(completionTime);
     const completedOrder = await domainTransaction(this.prisma, async (tx, effects) => {
       // Mark units as completed
       await tx.orderUnit.updateMany({
@@ -662,7 +670,7 @@ export class ExecutionService {
         where: { id: orderId },
         data: {
           status: OrderStatus.COMPLETED,
-          completedAt: new Date(),
+          completedAt: completionTime,
           pricingUnitRate: pricing.unitRate,
           pricingAppliedQuantity: pricing.appliedQuantity,
           pricingBaseCost: pricing.baseCost,
@@ -711,8 +719,22 @@ export class ExecutionService {
       }
 
       const reportPayload = formatTechnicalReportRow(updated);
+      await tx.sheetSyncOperation.updateMany({
+        where: {
+          operationType: 'SHEET_TECHNICAL_REPORT',
+          orderId: order.id,
+          status: 'PENDING',
+        },
+        data: { status: 'SUPERSEDED' },
+      });
       effects.enqueue({
         idempotencyKey: `REPORT:${order.id}:${pricing.pricingVersion}`,
+        ...(technicalReportScheduledFor
+          ? {
+              nextAttemptAt: technicalReportScheduledFor,
+              scheduledFor: technicalReportScheduledFor,
+            }
+          : {}),
         operationType: 'SHEET_TECHNICAL_REPORT',
         orderId: order.id,
         payload: reportPayload as unknown as Prisma.InputJsonValue,
@@ -788,6 +810,9 @@ export class ExecutionService {
         })
       : null;
 
+    const completionTime = new Date();
+    const technicalReportScheduledFor =
+      await this.technicalReportScheduling?.getNextScheduledAt(completionTime);
     return domainTransaction(this.prisma, async (tx, effects) => {
       // Release equipment
       const units = await tx.orderUnit.findMany({
@@ -808,7 +833,7 @@ export class ExecutionService {
         data: {
           status: OrderStatus.FAILED_APPOINTMENT,
           failedReason: input.failedReason,
-          completedAt: new Date(),
+          completedAt: completionTime,
           pricingUnitRate: pricing?.unitRate ?? null,
           pricingAppliedQuantity:
             pricing?.appliedQuantity ?? (equipmentCount > 0 ? equipmentCount : 1),
@@ -834,8 +859,22 @@ export class ExecutionService {
       });
 
       const reportPayload = formatTechnicalReportRow(updated);
+      await tx.sheetSyncOperation.updateMany({
+        where: {
+          operationType: 'SHEET_TECHNICAL_REPORT',
+          orderId: order.id,
+          status: 'PENDING',
+        },
+        data: { status: 'SUPERSEDED' },
+      });
       effects.enqueue({
         idempotencyKey: `REPORT:${order.id}:${nextVersion}`,
+        ...(technicalReportScheduledFor
+          ? {
+              nextAttemptAt: technicalReportScheduledFor,
+              scheduledFor: technicalReportScheduledFor,
+            }
+          : {}),
         operationType: 'SHEET_TECHNICAL_REPORT',
         orderId: order.id,
         payload: reportPayload as unknown as Prisma.InputJsonValue,
@@ -910,6 +949,10 @@ export class ExecutionService {
       });
     }
 
+    const correctionTime = new Date();
+    const technicalReportScheduledFor = pricing
+      ? await this.technicalReportScheduling?.getNextScheduledAt(correctionTime)
+      : undefined;
     return domainTransaction(this.prisma, async (tx, effects) => {
       const notesText = input.notes?.trim();
       const nextNotes = notesText
@@ -950,8 +993,22 @@ export class ExecutionService {
 
       if (pricing) {
         const reportPayload = formatTechnicalReportRow(updated);
+        await tx.sheetSyncOperation.updateMany({
+          where: {
+            operationType: 'SHEET_TECHNICAL_REPORT',
+            orderId: order.id,
+            status: 'PENDING',
+          },
+          data: { status: 'SUPERSEDED' },
+        });
         effects.enqueue({
           idempotencyKey: `REPORT:${order.id}:${pricing.pricingVersion}`,
+          ...(technicalReportScheduledFor
+            ? {
+                nextAttemptAt: technicalReportScheduledFor,
+                scheduledFor: technicalReportScheduledFor,
+              }
+            : {}),
           operationType: 'SHEET_TECHNICAL_REPORT',
           orderId: order.id,
           payload: reportPayload as unknown as Prisma.InputJsonValue,

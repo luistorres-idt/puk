@@ -5,7 +5,11 @@ import { createPrismaClient } from './database/client.js';
 import { DevMockSheetsClient } from './integrations/google-sheets/dev-mock-sheets.client.js';
 import { GoogleSheetsClient } from './integrations/google-sheets/google-sheets.client.js';
 import { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
-import { OrdersService, SyncService } from './modules/orders/index.js';
+import {
+  OrdersService,
+  SyncService,
+  TechnicalReportSyncScheduleService,
+} from './modules/orders/index.js';
 import { ExecutionService } from './modules/execution/index.js';
 import { S3StorageClient } from './integrations/object-storage/s3.client.js';
 import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
@@ -85,6 +89,13 @@ const ordersService = new OrdersService(prisma, catalogsService);
 const syncService = new SyncService(prisma, sheetsPort, {
   maxRetries: environment.SHEETS_RETRY_LIMIT,
 });
+const technicalReportSyncSchedule = new TechnicalReportSyncScheduleService(prisma, {
+  cutoffWeekday: environment.TECHNICAL_REPORT_CUTOFF_WEEKDAY,
+  syncTime: environment.TECHNICAL_REPORT_SYNC_TIME,
+  syncWeekday: environment.TECHNICAL_REPORT_SYNC_WEEKDAY,
+  timeZone: environment.TECHNICAL_REPORT_SYNC_TIMEZONE,
+});
+await technicalReportSyncSchedule.scheduleUnplannedOperations();
 
 const syncInterval = setInterval(() => {
   syncService.processPendingOperations().catch((error) => {
@@ -137,6 +148,7 @@ const executionService = new ExecutionService(prisma, storagePort, {
   maxSignatureBytes: environment.MAX_SIGNATURE_BYTES,
   presignedUrlTtlSeconds: environment.PRESIGNED_URL_TTL_SECONDS,
   reportGeneration: reportsService,
+  technicalReportScheduling: technicalReportSyncSchedule,
 });
 
 const server = createApp({
@@ -144,6 +156,8 @@ const server = createApp({
     prisma,
     tokens,
     techniciansService,
+    syncService,
+    technicalReportSyncSchedule,
     minimumPasswordLength: environment.MIN_PASSWORD_LENGTH,
   },
   allowedOrigins: [environment.APP_ORIGIN],

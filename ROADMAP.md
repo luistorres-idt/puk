@@ -145,6 +145,10 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Implementar worker con bloqueo seguro, backoff exponencial, jitter y máximo de intentos.
 - [x] Verificar el estado remoto antes de reintentar escrituras con resultado ambiguo.
 - [x] Añadir estado visible de sincronización y reintento manual para administradores.
+- [x] Programar el reporte técnico con corte semanal, día/hora y zona horaria configurables.
+- [x] Mantener inmediatas las operaciones de equipos y separar sus conteos de los reportes técnicos.
+- [x] Añadir tablero global con filtros, estados, errores, intentos y reintento inmediato.
+- [x] Sustituir versiones pendientes del reporte cuando una corrección genera una versión nueva.
 - [x] Registrar métricas y logs del worker, cola y circuit breaker.
 
 ### Criterio de salida
@@ -152,6 +156,7 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Una asignación correcta modifica exclusivamente las celdas autorizadas.
 - [x] Una operación fallida permanece visible, se puede reintentar y no se duplica.
 - [x] La orden no aparece como completamente sincronizada mientras existan operaciones fallidas.
+- [x] El resumen principal cuenta reportes técnicos y no confunde operaciones de equipos con órdenes.
 
 ## 8. Flujo de trabajo del técnico
 

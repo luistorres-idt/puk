@@ -54,6 +54,10 @@ describe('parseEnvironment', () => {
     expect(environment.COOKIE_DOMAIN).toBeUndefined();
     expect(environment.S3_FORCE_PATH_STYLE).toBe(true);
     expect(environment.GOOGLE_TECHNICIANS_SPREADSHEET_ID).toBe('development-only-technicians');
+    expect(environment.TECHNICAL_REPORT_CUTOFF_WEEKDAY).toBe(2);
+    expect(environment.TECHNICAL_REPORT_SYNC_TIME).toBe('17:00');
+    expect(environment.TECHNICAL_REPORT_SYNC_WEEKDAY).toBe(3);
+    expect(environment.TECHNICAL_REPORT_SYNC_TIMEZONE).toBe('America/Hermosillo');
   });
 
   it('reports invalid field names without exposing their values', () => {

@@ -133,6 +133,7 @@ describe('ExecutionService', () => {
             createMany: vi.fn(({ data }: { data: Array<Record<string, unknown>> }) => {
               enqueuedOperations.push(...data);
             }),
+            updateMany: vi.fn().mockResolvedValue({ count: 0 }),
           },
         };
         return callback(tx);
@@ -312,8 +313,12 @@ describe('ExecutionService', () => {
 
   it('requests the PDF report after completing an order', async () => {
     const requestGeneration = vi.fn().mockResolvedValue({ id: 'report-1' });
+    const scheduledFor = new Date('2026-09-10T00:00:00.000Z');
     const reportService = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort, {
       reportGeneration: { requestGeneration },
+      technicalReportScheduling: {
+        getNextScheduledAt: vi.fn().mockResolvedValue(scheduledFor),
+      },
     });
     const checklistItems = ['DASHBOARD', 'WINDOWS', 'ACCESSORIES', 'TRIMS', 'BODYWORK'].map(
       (category, index) => ({
@@ -376,7 +381,11 @@ describe('ExecutionService', () => {
             },
           },
         }),
-        expect.objectContaining({ operationType: 'SHEET_TECHNICAL_REPORT' }),
+        expect.objectContaining({
+          nextAttemptAt: scheduledFor,
+          operationType: 'SHEET_TECHNICAL_REPORT',
+          scheduledFor,
+        }),
       ]),
     );
   });

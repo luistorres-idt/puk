@@ -2,6 +2,8 @@ import {
   CreateTechnicianSchema,
   CreateUserSchema,
   IdParamsSchema,
+  SyncOperationsQuerySchema,
+  UpdateTechnicalReportSyncScheduleSchema,
   UpdateTechnicianSchema,
   UpdateUserSchema,
 } from '@puk/contracts';
@@ -14,6 +16,7 @@ import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import { TechniciansService } from '../technicians/index.js';
 import { UsersService } from '../users/index.js';
+import type { SyncService, TechnicalReportSyncScheduleService } from '../orders/index.js';
 
 export interface AdministrationRouterOptions {
   minimumPasswordLength?: number;
@@ -21,6 +24,8 @@ export interface AdministrationRouterOptions {
   tokens: TokenService;
   usersService?: UsersService;
   techniciansService?: TechniciansService;
+  syncService?: SyncService;
+  technicalReportSyncSchedule?: TechnicalReportSyncScheduleService;
 }
 
 export function createAdministrationRouter(options: AdministrationRouterOptions): Router {
@@ -85,6 +90,42 @@ export function createAdministrationRouter(options: AdministrationRouterOptions)
         await technicians.update(request.auth!.userId, String(request.params.id), request.body),
       ),
   );
+
+  if (options.syncService && options.technicalReportSyncSchedule) {
+    router.get(
+      '/sync',
+      authorize('sync:retry'),
+      validate({ query: SyncOperationsQuerySchema }),
+      async (request, response) =>
+        sendSuccess(response, await options.syncService!.listOperations(request.query)),
+    );
+    router.get('/sync/schedule', authorize('sync:retry'), async (_request, response) =>
+      sendSuccess(response, await options.technicalReportSyncSchedule!.getConfig()),
+    );
+    router.put(
+      '/sync/schedule',
+      authorize('sync:retry'),
+      validate({ body: UpdateTechnicalReportSyncScheduleSchema }),
+      async (request, response) =>
+        sendSuccess(
+          response,
+          await options.technicalReportSyncSchedule!.updateConfig(
+            request.auth!.userId,
+            request.body,
+          ),
+        ),
+    );
+    router.post(
+      '/sync/:id/retry',
+      authorize('sync:retry'),
+      validate({ params: IdParamsSchema }),
+      async (request, response) => {
+        const operation = await options.syncService!.retryOperation(String(request.params.id));
+        options.syncService!.processPendingOperations().catch(() => {});
+        sendSuccess(response, operation);
+      },
+    );
+  }
 
   return router;
 }

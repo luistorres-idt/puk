@@ -70,6 +70,16 @@ export const EnvironmentSchema = v.object({
   S3_SECRET_ACCESS_KEY: optionalString,
   SHEETS_RETRY_LIMIT: integerFromString(0, 10),
   SHEETS_TIMEOUT_MS: integerFromString(100, 120_000),
+  TECHNICAL_REPORT_CUTOFF_WEEKDAY: v.optional(integerFromString(0, 6), '2'),
+  TECHNICAL_REPORT_SYNC_TIME: v.optional(
+    v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):[0-5]\d$/)),
+    '17:00',
+  ),
+  TECHNICAL_REPORT_SYNC_TIMEZONE: v.optional(
+    v.pipe(v.string(), v.nonEmpty()),
+    'America/Hermosillo',
+  ),
+  TECHNICAL_REPORT_SYNC_WEEKDAY: v.optional(integerFromString(0, 6), '3'),
   TRUST_PROXY: booleanFromString,
 });
 

@@ -74,6 +74,13 @@ async function logout(): Promise<void> {
           >
             Técnicos
           </router-link>
+          <router-link
+            v-if="session.user.role === 'ADMIN'"
+            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+            to="/sync"
+          >
+            Sincronización
+          </router-link>
 
           <span class="hidden text-xs text-slate-500 md:inline">
             {{ session.user.name }}

@@ -168,6 +168,13 @@ fuel dejan el equipo como `INSTALADO`; desinstalación y el equipo anterior de u
 a `STOCK TECNICO`, limpian el cliente (`J`) y los datos del vehículo (`L:O`). El equipo nuevo de un
 cambio hereda el cliente y el vehículo. Una cita fallida no modifica el inventario.
 
+Las actualizaciones de equipos se procesan inmediatamente. La publicación en el reporte técnico
+usa una ventana semanal configurable desde **Sincronización**: por defecto, acepta órdenes cerradas
+hasta el martes al finalizar el día y las publica el miércoles a las 17:00 en
+`America/Hermosillo`. Las órdenes cerradas después del corte pasan a la semana siguiente. El panel
+muestra por defecto operaciones del reporte técnico; las operaciones internas de equipos se pueden
+consultar con el filtro de tipo y no deben interpretarse como órdenes adicionales.
+
 ## Requisitos
 
 - Node.js 24.20.0 LTS, fijado en `.nvmrc` y `.node-version`.
@@ -237,6 +244,7 @@ La aplicación valida su configuración al iniciar y se detiene si falta una var
 | Google Sheets | IDs de catálogos y técnicos, cuenta de servicio y pestañas    |
 | Límites       | Tamaños de evidencia/firma, TTL de URLs y caché de catálogos  |
 | Resiliencia   | Timeouts, reintentos, circuit breaker y frecuencia del outbox |
+| Programación  | Día de corte, día/hora de envío y zona del reporte técnico    |
 | Logs          | `LOG_LEVEL`                                                   |
 
 Los secretos no deben guardarse en el repositorio. En producción se utilizan identidades administradas o un gestor de secretos cuando el proveedor lo permita.
