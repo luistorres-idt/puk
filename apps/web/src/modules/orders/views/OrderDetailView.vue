@@ -69,8 +69,33 @@ const reportQuery = useOrderReportQuery(orderId);
 const mutations = useOrderMutations(orderId);
 
 const order = computed(() => orderQuery.data.value);
-const canAddItems = computed(
-  () => session.user?.role === 'ADMIN' && !!order.value && canAddOrderItems(order.value),
+const isAdmin = computed(() => session.user?.role === 'ADMIN');
+const isFailedAppointment = computed(() => order.value?.status === 'FAILED_APPOINTMENT');
+const canAddItems = computed(() => isAdmin.value && !!order.value && canAddOrderItems(order.value));
+const canAssignOrder = computed(
+  () =>
+    isAdmin.value &&
+    (order.value?.status === 'DRAFT' || order.value?.status === 'REQUIRES_CORRECTION'),
+);
+const canRequestCorrection = computed(() => isAdmin.value && order.value?.status === 'COMPLETED');
+const canEnterTechnicalMode = computed(
+  () =>
+    !!order.value &&
+    order.value.status !== 'DRAFT' &&
+    order.value.status !== 'COMPLETED' &&
+    order.value.status !== 'FAILED_APPOINTMENT' &&
+    order.value.status !== 'CANCELLED',
+);
+const canResolveFailedAppointment = computed(
+  () => isAdmin.value && isFailedAppointment.value && !order.value?.failedAppointmentResolution,
+);
+const canCancelOrder = computed(
+  () =>
+    isAdmin.value &&
+    !!order.value &&
+    order.value.status !== 'COMPLETED' &&
+    order.value.status !== 'CANCELLED' &&
+    !order.value.failedAppointmentResolution,
 );
 const syncInfo = computed(() => syncQuery.data.value);
 const auditLogs = computed(() => auditQuery.data.value ?? []);
@@ -377,12 +402,12 @@ async function handleAssignAndSync() {
 }
 
 async function handleCancelOrder() {
-  const isFailedAppointment = order.value?.status === 'FAILED_APPOINTMENT';
+  const wasFailedAppointment = isFailedAppointment.value;
   try {
     await mutations.cancel.mutateAsync({ id: orderId, reason: cancelReason.value || undefined });
     showCancelModal.value = false;
     message.success(
-      isFailedAppointment
+      wasFailedAppointment
         ? 'La cita fallida quedó cerrada administrativamente.'
         : 'Orden cancelada exitosamente.',
     );
@@ -598,10 +623,7 @@ const statusColor = orderStatusTagType;
           <!-- Actions -->
           <div class="flex flex-wrap gap-2">
             <n-button
-              v-if="
-                (order.status === 'DRAFT' || order.status === 'REQUIRES_CORRECTION') &&
-                session.user?.role === 'ADMIN'
-              "
+              v-if="canAssignOrder"
               type="primary"
               :loading="mutations.assign.isPending.value"
               @click="handleAssignAndSync"
@@ -610,7 +632,7 @@ const statusColor = orderStatusTagType;
             </n-button>
 
             <n-button
-              v-if="order.status === 'COMPLETED' && session.user?.role === 'ADMIN'"
+              v-if="canRequestCorrection"
               type="warning"
               secondary
               @click="showCorrectionModal = true"
@@ -619,12 +641,7 @@ const statusColor = orderStatusTagType;
             </n-button>
 
             <n-button
-              v-if="
-                order.status !== 'DRAFT' &&
-                order.status !== 'COMPLETED' &&
-                order.status !== 'FAILED_APPOINTMENT' &&
-                order.status !== 'CANCELLED'
-              "
+              v-if="canEnterTechnicalMode"
               type="info"
               secondary
               @click="router.push(`/orders/${order.id}/execute`)"
@@ -633,11 +650,7 @@ const statusColor = orderStatusTagType;
             </n-button>
 
             <n-button
-              v-if="
-                order.status === 'FAILED_APPOINTMENT' &&
-                !order.failedAppointmentResolution &&
-                session.user?.role === 'ADMIN'
-              "
+              v-if="canResolveFailedAppointment"
               type="warning"
               secondary
               @click="showRescheduleModal = true"
@@ -645,17 +658,7 @@ const statusColor = orderStatusTagType;
               Reprogramar
             </n-button>
 
-            <n-button
-              v-if="
-                order.status !== 'COMPLETED' &&
-                order.status !== 'CANCELLED' &&
-                !order.failedAppointmentResolution &&
-                session.user?.role === 'ADMIN'
-              "
-              type="error"
-              secondary
-              @click="showCancelModal = true"
-            >
+            <n-button v-if="canCancelOrder" type="error" secondary @click="showCancelModal = true">
               {{ order.status === 'FAILED_APPOINTMENT' ? 'Cancelar Servicio' : 'Cancelar Orden' }}
             </n-button>
           </div>
@@ -1679,16 +1682,12 @@ const statusColor = orderStatusTagType;
       <n-modal
         v-model:show="showCancelModal"
         preset="card"
-        :title="
-          order?.status === 'FAILED_APPOINTMENT'
-            ? 'Cancelar Servicio'
-            : 'Cancelar Orden de Servicio'
-        "
+        :title="isFailedAppointment ? 'Cancelar Servicio' : 'Cancelar Orden de Servicio'"
         class="max-w-md"
       >
         <div class="space-y-4">
           <p class="text-sm text-slate-600">
-            <template v-if="order?.status === 'FAILED_APPOINTMENT'">
+            <template v-if="isFailedAppointment">
               La cita fallida conservará su motivo, cobro, reporte e historial, pero quedará cerrada
               administrativamente y ya no podrá reprogramarse.
             </template>

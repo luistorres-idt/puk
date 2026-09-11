@@ -4,6 +4,7 @@ import type {
   ChecklistCondition,
   CreateOrder,
   CreateUnit,
+  FailedAppointmentResolution,
   OrderListQuery,
   OrderServiceType,
   OrderStatus,
@@ -98,7 +99,7 @@ export interface OrderDetail {
   serviceAddress?: string | null;
   generalNotes?: string | null;
   failedReason?: string | null;
-  failedAppointmentResolution?: 'CANCELLED' | 'RESCHEDULED' | null;
+  failedAppointmentResolution?: FailedAppointmentResolution | null;
   failedAppointmentResolvedAt?: string | null;
   failedAppointmentResolutionReason?: string | null;
   rescheduledFrom?: { id: string; folio: string } | null;
@@ -119,7 +120,7 @@ export interface OrderSummary {
   serviceType: OrderServiceType;
   clientNameSnapshot: string;
   scheduledAt: string;
-  failedAppointmentResolution?: 'CANCELLED' | 'RESCHEDULED' | null;
+  failedAppointmentResolution?: FailedAppointmentResolution | null;
   technician?: { id: string; name: string } | null;
   _count?: { units: number };
 }

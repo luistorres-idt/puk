@@ -31,8 +31,49 @@ import {
 } from './order-state-machine.js';
 import { buildEquipmentSheetAssignment } from './equipment-sheet-assignment.js';
 
+type OrderWithEquipment = Prisma.OrderGetPayload<{
+  include: { units: { include: { equipment: true } } };
+}>;
+type OrderEquipment = OrderWithEquipment['units'][number]['equipment'][number];
+
 function createOrderFolio(): string {
   return `OS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
+}
+
+function buildRescheduledEquipmentInput(
+  equipment: OrderEquipment,
+): Prisma.OrderEquipmentCreateWithoutOrderUnitInput {
+  return {
+    sheetName: equipment.sheetName,
+    sheetRowHint: equipment.sheetRowHint,
+    externalId: equipment.externalId,
+    imei: equipment.imei,
+    externalKey: equipment.externalKey,
+    activeAssignment: false,
+    brandSnapshot: equipment.brandSnapshot,
+    modelSnapshot: equipment.modelSnapshot,
+    lineSnapshot: equipment.lineSnapshot,
+    iccidSnapshot: equipment.iccidSnapshot,
+    carrierSnapshot: equipment.carrierSnapshot,
+    equipmentConditionSnapshot: equipment.equipmentConditionSnapshot,
+    serviceStatusSnapshot: equipment.serviceStatusSnapshot,
+    rawSnapshot: equipment.rawSnapshot as Prisma.InputJsonValue,
+    verificationStatus: 'PENDING',
+  };
+}
+
+function buildRescheduledUnitInputs(
+  order: OrderWithEquipment,
+): Prisma.OrderUnitCreateWithoutOrderInput[] {
+  return order.units.map((unit) => ({
+    label: unit.label,
+    makeModel: unit.makeModel,
+    serialNumber: unit.serialNumber,
+    year: unit.year,
+    serviceType: unit.serviceType,
+    status: 'PENDING',
+    equipment: { create: unit.equipment.map(buildRescheduledEquipmentInput) },
+  }));
 }
 
 export class OrdersService {
@@ -578,52 +619,7 @@ export class OrdersService {
     }
 
     if (order.status === OrderStatus.FAILED_APPOINTMENT) {
-      if (order.failedAppointmentResolution === FailedAppointmentResolution.CANCELLED) {
-        return order;
-      }
-      if (order.failedAppointmentResolution !== null) {
-        throw new AppError(
-          409,
-          'FAILED_APPOINTMENT_ALREADY_RESOLVED',
-          'La cita fallida ya fue resuelta mediante una reprogramación',
-        );
-      }
-
-      return domainTransaction(this.prisma, async (tx, effects) => {
-        const resolvedAt = new Date();
-        const result = await tx.order.updateMany({
-          where: {
-            id: orderId,
-            status: OrderStatus.FAILED_APPOINTMENT,
-            failedAppointmentResolution: null,
-          },
-          data: {
-            failedAppointmentResolution: FailedAppointmentResolution.CANCELLED,
-            failedAppointmentResolvedAt: resolvedAt,
-            failedAppointmentResolvedById: actorUserId,
-            failedAppointmentResolutionReason: reason?.trim() || null,
-            version: { increment: 1 },
-          },
-        });
-        if (result.count !== 1) {
-          throw new AppError(
-            409,
-            'FAILED_APPOINTMENT_ALREADY_RESOLVED',
-            'La cita fallida ya fue resuelta por otra solicitud',
-          );
-        }
-
-        const updated = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
-        effects.audit({
-          action: 'FAILED_APPOINTMENT_CANCELLED',
-          actorUserId,
-          entityType: 'Order',
-          entityId: orderId,
-          before: order as unknown as Prisma.InputJsonValue,
-          after: updated as unknown as Prisma.InputJsonValue,
-        });
-        return updated;
-      });
+      return this.cancelFailedAppointment(actorUserId, order, reason);
     }
 
     assertValidOrderTransition(
@@ -756,35 +752,7 @@ export class OrdersService {
           createdById: actorUserId,
           rescheduledFromOrderId: order.id,
           version: 1,
-          units: {
-            create: order.units.map((unit) => ({
-              label: unit.label,
-              makeModel: unit.makeModel,
-              serialNumber: unit.serialNumber,
-              year: unit.year,
-              serviceType: unit.serviceType,
-              status: 'PENDING',
-              equipment: {
-                create: unit.equipment.map((equipment) => ({
-                  sheetName: equipment.sheetName,
-                  sheetRowHint: equipment.sheetRowHint,
-                  externalId: equipment.externalId,
-                  imei: equipment.imei,
-                  externalKey: equipment.externalKey,
-                  activeAssignment: false,
-                  brandSnapshot: equipment.brandSnapshot,
-                  modelSnapshot: equipment.modelSnapshot,
-                  lineSnapshot: equipment.lineSnapshot,
-                  iccidSnapshot: equipment.iccidSnapshot,
-                  carrierSnapshot: equipment.carrierSnapshot,
-                  equipmentConditionSnapshot: equipment.equipmentConditionSnapshot,
-                  serviceStatusSnapshot: equipment.serviceStatusSnapshot,
-                  rawSnapshot: equipment.rawSnapshot as Prisma.InputJsonValue,
-                  verificationStatus: 'PENDING',
-                })),
-              },
-            })),
-          },
+          units: { create: buildRescheduledUnitInputs(order) },
         },
         include: { units: { include: { equipment: true } }, rescheduledFrom: true },
       });
@@ -980,6 +948,59 @@ export class OrdersService {
       );
     }
     return technician;
+  }
+
+  private async cancelFailedAppointment(
+    actorUserId: string,
+    order: OrderWithEquipment,
+    reason?: string,
+  ) {
+    if (order.failedAppointmentResolution === FailedAppointmentResolution.CANCELLED) {
+      return order;
+    }
+    if (order.failedAppointmentResolution !== null) {
+      throw new AppError(
+        409,
+        'FAILED_APPOINTMENT_ALREADY_RESOLVED',
+        'La cita fallida ya fue resuelta mediante una reprogramación',
+      );
+    }
+
+    return domainTransaction(this.prisma, async (tx, effects) => {
+      const resolvedAt = new Date();
+      const result = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          status: OrderStatus.FAILED_APPOINTMENT,
+          failedAppointmentResolution: null,
+        },
+        data: {
+          failedAppointmentResolution: FailedAppointmentResolution.CANCELLED,
+          failedAppointmentResolvedAt: resolvedAt,
+          failedAppointmentResolvedById: actorUserId,
+          failedAppointmentResolutionReason: reason?.trim() || null,
+          version: { increment: 1 },
+        },
+      });
+      if (result.count !== 1) {
+        throw new AppError(
+          409,
+          'FAILED_APPOINTMENT_ALREADY_RESOLVED',
+          'La cita fallida ya fue resuelta por otra solicitud',
+        );
+      }
+
+      const updated = await tx.order.findUniqueOrThrow({ where: { id: order.id } });
+      effects.audit({
+        action: 'FAILED_APPOINTMENT_CANCELLED',
+        actorUserId,
+        entityType: 'Order',
+        entityId: order.id,
+        before: order as unknown as Prisma.InputJsonValue,
+        after: updated as unknown as Prisma.InputJsonValue,
+      });
+      return updated;
+    });
   }
 
   private async assertEquipmentAvailable(
