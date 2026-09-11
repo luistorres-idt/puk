@@ -21,6 +21,7 @@ describe('Technical Report Formatter', () => {
     const order: ReportOrderSource = {
       folio: 'OS-2026-0001',
       serviceType: 'INSTALLATION',
+      status: 'COMPLETED',
       clientNameSnapshot: 'Transportes Bull Dog',
       scheduledAt: '2026-09-09T17:00:00.000Z',
       technicianNameSnapshot: 'Juan Perez',
@@ -64,10 +65,11 @@ describe('Technical Report Formatter', () => {
     expect(row.notas).toBe('Instalación completada sin novedades');
   });
 
-  it('includes failed appointment reason in notes', () => {
+  it('labels a failed appointment and includes its reason while preserving the original service type', () => {
     const order: ReportOrderSource = {
       folio: 'OS-FAIL-001',
-      serviceType: 'FAILED_APPOINTMENT',
+      serviceType: 'INSTALLATION',
+      status: 'FAILED_APPOINTMENT',
       clientNameSnapshot: 'Flotillas Azteca',
       scheduledAt: '2026-09-09T17:00:00.000Z',
       technicianNameSnapshot: 'Carlos Lopez',
@@ -86,6 +88,46 @@ describe('Technical Report Formatter', () => {
     expect(row.notas).toBe(
       'Motivo cita fallida: Cliente no estuvo presente en el domicilio | Se esperaron 45 minutos',
     );
+  });
+
+  it('labels a failed appointment without adding a reason when none was captured', () => {
+    const order: ReportOrderSource = {
+      folio: 'OS-FAIL-002',
+      serviceType: 'REVIEW',
+      status: 'FAILED_APPOINTMENT',
+      clientNameSnapshot: 'Flotillas Azteca',
+      scheduledAt: '2026-09-09T17:00:00.000Z',
+      generalNotes: 'No fue posible realizar el servicio',
+      units: [
+        {
+          id: 'u-1',
+          label: 'ECO-101',
+          serialNumber: 'SER-101',
+          serviceType: 'REVIEW',
+        },
+      ],
+    };
+
+    const row = formatTechnicalReportRow(order);
+
+    expect(row.servicio).toBe('Cita Fallida');
+    expect(row.notas).toBe('No fue posible realizar el servicio');
+  });
+
+  it('includes a failed reason from a legacy payload without failed appointment status', () => {
+    const order: ReportOrderSource = {
+      folio: 'OS-FAIL-003',
+      serviceType: 'INSTALLATION',
+      clientNameSnapshot: 'Flotillas Azteca',
+      scheduledAt: '2026-09-09T17:00:00.000Z',
+      failedReason: '  Acceso denegado  ',
+      units: [],
+    };
+
+    const row = formatTechnicalReportRow(order);
+
+    expect(row.servicio).toBe('Instalación');
+    expect(row.notas).toBe('Motivo cita fallida: Acceso denegado');
   });
 
   it('formats mixed services in servicio column matching multiline units', () => {
