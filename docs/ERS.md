@@ -146,6 +146,10 @@ flowchart TD
 - **RF-15 (Evidencias Fotográficas Obligatorias):** Cada unidad requiere al menos tres fotografías completadas, distribuidas entre las categorías del checklist y subidas a S3 mediante URL prefirmada.
 - **RF-16 (Captura de Firma del Cliente):** La orden finalizada exige la captura digital de una única firma del cliente en pantalla, junto con el nombre completo y documento de la persona firmante.
 - **RF-17 (Cierre de Cita Fallida):** Si la unidad no está disponible o el cliente no se presenta, el técnico puede registrar un cierre como `FAILED_APPOINTMENT` indicando obligatoriamente el motivo, omitiendo fotos, checklist y firma.
+- **RF-18 (Resolución Administrativa de Cita Fallida):** El administrador puede cancelar el
+  servicio o reprogramarlo. La cancelación conserva el cierre, tarifa y reporte de la visita. La
+  reprogramación crea una nueva orden enlazada, con nuevo folio y fecha, en estado `DRAFT`; copia la
+  configuración operativa y reinicia evidencias, firma, checklist, verificaciones y datos de cobro.
 
 ---
 

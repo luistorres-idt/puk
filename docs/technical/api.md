@@ -64,19 +64,20 @@ su propio `serviceType`, por lo que una orden puede combinar instalación, revis
 sensor fuel y cambio de equipo. `FAILED_APPOINTMENT` es un resultado de ejecución y no un bloque
 configurable en el asistente. El listado acepta los seis valores del dominio como filtro.
 
-| Método       | Ruta                                                      | Acceso / propósito                             |
-| ------------ | --------------------------------------------------------- | ---------------------------------------------- |
-| GET/POST     | `/api/v1/orders`                                          | listar propias/todas; crear como administrador |
-| GET/PATCH    | `/api/v1/orders/:id`                                      | consultar; editar como administrador           |
-| POST         | `/api/v1/orders/:id/assign`                               | asignar y encolar sincronización inicial       |
-| POST         | `/api/v1/orders/:id/cancel`                               | cancelar                                       |
-| GET          | `/api/v1/orders/:id/audit`                                | auditoría administrativa                       |
-| POST         | `/api/v1/orders/:id/units`                                | agregar unidad                                 |
-| PATCH/DELETE | `/api/v1/orders/:id/units/:unitId`                        | modificar/eliminar unidad                      |
-| POST         | `/api/v1/orders/:id/units/:unitId/equipment`              | asignar equipo                                 |
-| DELETE       | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId` | retirar equipo                                 |
-| GET          | `/api/v1/orders/:id/sync`                                 | estado de sincronización                       |
-| POST         | `/api/v1/orders/:id/sync/retry`                           | reintento administrativo                       |
+| Método       | Ruta                                                      | Acceso / propósito                               |
+| ------------ | --------------------------------------------------------- | ------------------------------------------------ |
+| GET/POST     | `/api/v1/orders`                                          | listar propias/todas; crear como administrador   |
+| GET/PATCH    | `/api/v1/orders/:id`                                      | consultar; editar como administrador             |
+| POST         | `/api/v1/orders/:id/assign`                               | asignar y encolar sincronización inicial         |
+| POST         | `/api/v1/orders/:id/cancel`                               | cancelar                                         |
+| POST         | `/api/v1/orders/:id/reschedule`                           | reprogramar una cita fallida como nuevo borrador |
+| GET          | `/api/v1/orders/:id/audit`                                | auditoría administrativa                         |
+| POST         | `/api/v1/orders/:id/units`                                | agregar unidad                                   |
+| PATCH/DELETE | `/api/v1/orders/:id/units/:unitId`                        | modificar/eliminar unidad                        |
+| POST         | `/api/v1/orders/:id/units/:unitId/equipment`              | asignar equipo                                   |
+| DELETE       | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId` | retirar equipo                                   |
+| GET          | `/api/v1/orders/:id/sync`                                 | estado de sincronización                         |
+| POST         | `/api/v1/orders/:id/sync/retry`                           | reintento administrativo                         |
 
 ### Ejecución técnica
 

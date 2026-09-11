@@ -20,6 +20,7 @@ La columna de pruebas identifica el nivel mínimo que debe existir antes de cerr
 | Firma de orden                      | `/orders/:id/signature`                                       | Nombre obligatorio, PNG privado y autorización                        |
 | Cierre normal                       | `POST /orders/:id/complete`                                   | Integración: todos los requisitos e idempotencia                      |
 | Cita fallida                        | `POST /orders/:id/fail-appointment`                           | Solo motivo obligatorio; no exige checklist, fotos ni firma           |
+| Resolución de cita fallida          | `POST /orders/:id/cancel`, `POST /orders/:id/reschedule`      | Cancelación preserva el cierre; reprogramación crea un borrador único |
 | Reporte PDF de orden de servicio    | `/orders/:id/report`, `/orders/:id/reports`                   | Contrato, autorización, versionado y regresión visual del PDF         |
 | Corrección y cancelación            | `/orders/:id/request-correction`, `/orders/:id/cancel`        | Matriz de estados, inmutabilidad y auditoría                          |
 | Salud y formato HTTP                | `/health/live`, `/health/ready`                               | Supertest y contrato OpenAPI con `requestId`                          |

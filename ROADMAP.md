@@ -205,6 +205,8 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Implementar solicitud administrativa de corrección y retorno a trabajo técnico.
 - [x] Conservar evidencias y firmas anteriores al reabrir y auditar cualquier reemplazo.
 - [x] Implementar cancelación y reglas de inmutabilidad por estado.
+- [x] Resolver citas fallidas mediante cancelación administrativa o una nueva orden enlazada en
+      estado `DRAFT`.
 - [x] Crear resumen previo al cierre y mensajes claros sobre requisitos faltantes.
 
 ### Criterio de salida
