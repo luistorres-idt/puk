@@ -4,7 +4,12 @@ import { OrdersService } from './orders.service.js';
 import { SyncService } from './sync.service.js';
 import { GoogleSheetsCatalogService } from '../../integrations/google-sheets/google-sheets.service.js';
 import type { SheetsPort } from '../../integrations/ports.js';
-import { OrderStatus, SyncStatus, type PrismaClient } from '../../generated/prisma/client.js';
+import {
+  FailedAppointmentResolution,
+  OrderStatus,
+  SyncStatus,
+  type PrismaClient,
+} from '../../generated/prisma/client.js';
 
 class MockSheetsPort implements SheetsPort {
   public async listClients() {
@@ -931,5 +936,184 @@ describe('OrdersService & SyncService', () => {
     await expect(
       ordersService.getOrderById('historical', { id: 'admin', role: 'ADMIN' }),
     ).resolves.toMatchObject({ technicianId: null });
+  });
+});
+
+describe('failed appointment administrative resolution', () => {
+  const failedOrder = {
+    id: 'order-failed',
+    folio: 'OS-FAILED',
+    serviceType: 'INSTALLATION' as const,
+    status: OrderStatus.FAILED_APPOINTMENT,
+    clientSheetId: 'CLIENT-DEMO',
+    clientNameSnapshot: 'Cliente Demo',
+    technicianId: 'tech-1',
+    technicianNameSnapshot: 'Técnico Uno',
+    technicianExternalKeySnapshot: 'TECH-1',
+    scheduledAt: new Date('2026-09-10T18:00:00.000Z'),
+    isHomeService: true,
+    serviceAddress: 'Dirección original',
+    generalNotes: 'Notas originales',
+    failedReason: 'Cliente ausente',
+    completedAt: new Date('2026-09-10T18:30:00.000Z'),
+    pricingTotal: 250,
+    version: 4,
+    failedAppointmentResolution: null,
+    units: [
+      {
+        id: 'unit-old',
+        label: 'Unidad 1',
+        makeModel: 'Modelo',
+        serialNumber: 'SERIAL-1',
+        year: 2024,
+        serviceType: 'INSTALLATION' as const,
+        status: 'IN_PROGRESS' as const,
+        equipment: [
+          {
+            id: 'equipment-old',
+            sheetName: 'SALIDAS',
+            sheetRowHint: 10,
+            externalId: 'EQ-1',
+            imei: '123456789012345',
+            externalKey: 'EQ-1',
+            activeAssignment: false,
+            brandSnapshot: 'Marca',
+            modelSnapshot: 'Modelo',
+            lineSnapshot: 'Línea',
+            iccidSnapshot: 'ICCID',
+            carrierSnapshot: 'Carrier',
+            equipmentConditionSnapshot: 'BUENO',
+            serviceStatusSnapshot: 'ACTIVO',
+            rawSnapshot: { A: 'valor' },
+            verificationStatus: 'MATCHED' as const,
+          },
+        ],
+      },
+    ],
+  };
+
+  function createResolutionHarness() {
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      id: 'order-rescheduled',
+      ...data,
+    }));
+    const findUniqueOrThrow = vi.fn(async () => ({
+      ...failedOrder,
+      version: 5,
+      failedAppointmentResolution: FailedAppointmentResolution.CANCELLED,
+    }));
+    const tx = {
+      order: { create, updateMany, findUniqueOrThrow },
+      auditLog: { createMany: vi.fn() },
+      sheetSyncOperation: { createMany: vi.fn() },
+    };
+    const prisma = {
+      order: { findUnique: vi.fn(async () => failedOrder) },
+      technician: {
+        findUnique: vi.fn(async () => ({
+          id: 'tech-1',
+          name: 'Técnico Uno',
+          externalKey: 'TECH-1',
+          active: true,
+        })),
+      },
+      $transaction: vi.fn(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx)),
+    };
+    return {
+      create,
+      findUniqueOrThrow,
+      service: new OrdersService(prisma as unknown as PrismaClient),
+      tx,
+      updateMany,
+    };
+  }
+
+  it('creates a clean draft copy while preserving the failed order', async () => {
+    const harness = createResolutionHarness();
+    const result = await harness.service.rescheduleFailedAppointment('admin-1', failedOrder.id, {
+      scheduledAt: '2099-09-15T18:00:00.000Z',
+      version: 4,
+    });
+
+    expect(harness.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: failedOrder.id,
+          version: 4,
+          failedAppointmentResolution: null,
+        }),
+        data: expect.objectContaining({
+          failedAppointmentResolution: FailedAppointmentResolution.RESCHEDULED,
+        }),
+      }),
+    );
+    expect(harness.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: OrderStatus.DRAFT,
+          rescheduledFromOrderId: failedOrder.id,
+          scheduledAt: new Date('2099-09-15T18:00:00.000Z'),
+          units: {
+            create: [
+              expect.objectContaining({
+                status: 'PENDING',
+                equipment: {
+                  create: [
+                    expect.objectContaining({
+                      activeAssignment: false,
+                      verificationStatus: 'PENDING',
+                    }),
+                  ],
+                },
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+    const createdData = harness.create.mock.calls[0]?.[0]?.data;
+    expect(createdData).not.toHaveProperty('failedReason');
+    expect(createdData).not.toHaveProperty('completedAt');
+    expect(createdData).not.toHaveProperty('pricingTotal');
+    expect(result).toMatchObject({ id: 'order-rescheduled', status: OrderStatus.DRAFT });
+    expect(harness.tx.auditLog.createMany).toHaveBeenCalledOnce();
+  });
+
+  it('resolves cancellation without changing the failed outcome or its pricing', async () => {
+    const harness = createResolutionHarness();
+    const result = await harness.service.cancelOrder(
+      'admin-1',
+      failedOrder.id,
+      'El cliente no desea reprogramar',
+    );
+
+    expect(harness.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          failedAppointmentResolution: FailedAppointmentResolution.CANCELLED,
+          failedAppointmentResolutionReason: 'El cliente no desea reprogramar',
+        }),
+      }),
+    );
+    expect(harness.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: OrderStatus.FAILED_APPOINTMENT,
+      failedAppointmentResolution: FailedAppointmentResolution.CANCELLED,
+      pricingTotal: 250,
+    });
+  });
+
+  it('rolls back draft creation when another request resolved the appointment first', async () => {
+    const harness = createResolutionHarness();
+    harness.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      harness.service.rescheduleFailedAppointment('admin-1', failedOrder.id, {
+        scheduledAt: '2099-09-15T18:00:00.000Z',
+        version: 4,
+      }),
+    ).rejects.toMatchObject({ code: 'ORDER_VERSION_CONFLICT', status: 409 });
+    expect(harness.create).not.toHaveBeenCalled();
   });
 });

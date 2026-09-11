@@ -138,6 +138,10 @@ Una cita fallida utiliza el flujo:
 ASSIGNED -> IN_PROGRESS -> FAILED_APPOINTMENT
 ```
 
+El administrador resuelve una cita fallida cancelando el servicio o reprogramándolo. La
+reprogramación conserva la orden fallida como historial y crea una copia enlazada en estado
+`DRAFT`, con una nueva fecha y un nuevo folio.
+
 Para completar un servicio normal, todas las unidades deben tener sus equipos verificados, checklist completo y fotografías requeridas. La orden también debe incluir el nombre y la firma del cliente. Una cita fallida requiere únicamente un motivo.
 
 ## Integración con Google Sheets

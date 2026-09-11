@@ -86,6 +86,9 @@ export const OrderStatusSchema = v.picklist([
 ]);
 export type OrderStatus = v.InferOutput<typeof OrderStatusSchema>;
 
+export const FailedAppointmentResolutionSchema = v.picklist(['CANCELLED', 'RESCHEDULED']);
+export type FailedAppointmentResolution = v.InferOutput<typeof FailedAppointmentResolutionSchema>;
+
 export const UnitStatusSchema = v.picklist(['PENDING', 'IN_PROGRESS', 'COMPLETED']);
 export type UnitStatus = v.InferOutput<typeof UnitStatusSchema>;
 
@@ -207,3 +210,10 @@ export const EquipmentParamsSchema = v.object({
 export const CancelOrderSchema = v.object({
   reason: v.optional(v.string()),
 });
+
+export const RescheduleFailedAppointmentSchema = v.object({
+  scheduledAt: v.pipe(v.string(), v.isoTimestamp()),
+  technicianId: v.optional(v.pipe(v.string(), v.uuid())),
+  version: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+export type RescheduleFailedAppointment = v.InferOutput<typeof RescheduleFailedAppointmentSchema>;

@@ -4,10 +4,12 @@ import type {
   ChecklistCondition,
   CreateOrder,
   CreateUnit,
+  FailedAppointmentResolution,
   OrderListQuery,
   OrderServiceType,
   OrderStatus,
   PricingBreakdown,
+  RescheduleFailedAppointment,
   UpdateOrder,
   UpdateUnit,
 } from '@puk/contracts';
@@ -88,6 +90,7 @@ export interface OrderDetail {
   id: string;
   folio: string;
   status: OrderStatus;
+  version: number;
   serviceType: OrderServiceType;
   clientNameSnapshot: string;
   clientSheetId: string;
@@ -95,6 +98,12 @@ export interface OrderDetail {
   isHomeService: boolean;
   serviceAddress?: string | null;
   generalNotes?: string | null;
+  failedReason?: string | null;
+  failedAppointmentResolution?: FailedAppointmentResolution | null;
+  failedAppointmentResolvedAt?: string | null;
+  failedAppointmentResolutionReason?: string | null;
+  rescheduledFrom?: { id: string; folio: string } | null;
+  rescheduledOrder?: { id: string; folio: string; status: OrderStatus } | null;
   technician?: TechnicianPricing | null;
   units?: UnitItem[];
   signature?: SignatureItem | null;
@@ -111,6 +120,7 @@ export interface OrderSummary {
   serviceType: OrderServiceType;
   clientNameSnapshot: string;
   scheduledAt: string;
+  failedAppointmentResolution?: FailedAppointmentResolution | null;
   technician?: { id: string; name: string } | null;
   _count?: { units: number };
 }
@@ -157,6 +167,14 @@ export async function assignOrder(id: string): Promise<OrderDetail> {
 
 export async function cancelOrder(id: string, reason?: string): Promise<OrderDetail> {
   const response = await api.post<ApiResponse<OrderDetail>>(`/orders/${id}/cancel`, { reason });
+  return response.data.data;
+}
+
+export async function rescheduleFailedAppointment(
+  id: string,
+  data: RescheduleFailedAppointment,
+): Promise<OrderDetail> {
+  const response = await api.post<ApiResponse<OrderDetail>>(`/orders/${id}/reschedule`, data);
   return response.data.data;
 }
 

@@ -543,9 +543,15 @@ DRAFT -> ASSIGNED -> IN_PROGRESS -> COMPLETED
 
 ```text
 ASSIGNED -> IN_PROGRESS -> FAILED_APPOINTMENT
+                                  |-> resolución CANCELLED
+                                  `-> resolución RESCHEDULED -> nueva orden DRAFT
 ```
 
 El cierre como cita fallida requiere únicamente `failedReason` no vacío.
+Una cita fallida conserva su cierre, tarifa y reporte. El administrador debe resolverla mediante
+cancelación administrativa o reprogramación. Reprogramar crea una nueva orden enlazada en estado
+`DRAFT`, copiando la configuración operativa pero no los resultados de ejecución de la visita
+anterior.
 
 ### 9.3 Reglas de transición
 
@@ -742,6 +748,7 @@ Respuesta de error:
 | POST   | `/orders/:id/assign`             | Asignar y sincronizar; admin |
 | POST   | `/orders/:id/start`              | Iniciar; técnico asignado    |
 | POST   | `/orders/:id/cancel`             | Cancelar; admin              |
+| POST   | `/orders/:id/reschedule`         | Reprogramar cita fallida     |
 | POST   | `/orders/:id/require-correction` | Solicitar corrección; admin  |
 | POST   | `/orders/:id/complete`           | Finalizar servicio normal    |
 | POST   | `/orders/:id/fail-appointment`   | Cerrar como cita fallida     |

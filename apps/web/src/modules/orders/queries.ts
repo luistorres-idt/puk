@@ -5,6 +5,7 @@ import type {
   CreateOrder,
   CreateUnit,
   OrderListQuery,
+  RescheduleFailedAppointment,
   UpdateOrder,
   UpdateUnit,
 } from '@puk/contracts';
@@ -23,6 +24,7 @@ import {
   generateReport,
   removeEquipment,
   retrySync,
+  rescheduleFailedAppointment,
   updateOrder,
   updateUnit,
 } from './api.js';
@@ -106,6 +108,15 @@ export function useOrderMutations(orderId?: MaybeRef<string>) {
     onSuccess: (_, vars) => invalidate(vars.id),
   });
 
+  const reschedule = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: RescheduleFailedAppointment }) =>
+      rescheduleFailedAppointment(id, data),
+    onSuccess: (newOrder, vars) => {
+      invalidate(vars.id);
+      invalidate(newOrder.id);
+    },
+  });
+
   const retry = useMutation({
     mutationFn: (id: string) => retrySync(id),
     onSuccess: (_, id) => invalidate(id),
@@ -163,6 +174,7 @@ export function useOrderMutations(orderId?: MaybeRef<string>) {
     insertUnit,
     modifyUnit,
     removeUnit,
+    reschedule,
     retry,
     requestReport,
     update,

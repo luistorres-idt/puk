@@ -7,6 +7,7 @@ import {
   EquipmentParamsSchema,
   IdParamsSchema,
   OrderListQuerySchema,
+  RescheduleFailedAppointmentSchema,
   UnitParamsSchema,
   UpdateOrderSchema,
   UpdateUnitSchema,
@@ -102,6 +103,20 @@ export function createOrdersRouter(options: {
         request.body.reason,
       );
       sendSuccess(response, updated);
+    },
+  );
+
+  router.post(
+    '/:id/reschedule',
+    authorize('orders:manage'),
+    validate({ body: RescheduleFailedAppointmentSchema, params: IdParamsSchema }),
+    async (request, response) => {
+      const created = await options.ordersService.rescheduleFailedAppointment(
+        request.auth!.userId,
+        String(request.params.id),
+        request.body,
+      );
+      sendSuccess(response, created, 201);
     },
   );
 

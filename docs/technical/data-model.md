@@ -22,6 +22,8 @@ erDiagram
     USER ||--o{ AUDIT_LOG : ejecuta
     USER ||--o{ EVIDENCE : carga
     USER ||--o{ SIGNATURE : captura
+    USER ||--o{ ORDER : "resuelve cita fallida"
+    ORDER o|--o| ORDER : "reprograma como"
 
     USER {
         uuid id PK
@@ -54,6 +56,12 @@ erDiagram
         boolean isHomeService
         string serviceAddress
         string generalNotes
+        string failedReason
+        FailedAppointmentResolution failedAppointmentResolution
+        timestamp failedAppointmentResolvedAt
+        uuid failedAppointmentResolvedById FK
+        string failedAppointmentResolutionReason
+        uuid rescheduledFromOrderId FK, UK
         json pricingBreakdown
         int version
         timestamp startedAt
@@ -168,16 +176,23 @@ equipos, checklist, fotografías y discrepancias, lo que permite órdenes multis
 conserva el precio congelado y un desglose por servicio en `pricingBreakdown`. La firma se captura
 una vez por orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
 
+Una cita fallida permanece como resultado histórico y facturable. Su resolución administrativa se
+registra mediante `FailedAppointmentResolution`: `CANCELLED` cierra el servicio y `RESCHEDULED`
+crea una nueva orden enlazada mediante `rescheduledFromOrderId`. La nueva orden comienza en
+`DRAFT`, copia cliente, servicio, técnico, unidades y snapshots de equipos, y reinicia todos los
+datos de ejecución.
+
 ## Enumeraciones de estado
 
-| Entidad        | Estados                                                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------------------- |
-| Orden          | `DRAFT`, `ASSIGNED`, `IN_PROGRESS`, `REQUIRES_CORRECTION`, `COMPLETED`, `FAILED_APPOINTMENT`, `CANCELLED` |
-| Unidad         | `PENDING`, `IN_PROGRESS`, `COMPLETED`                                                                     |
-| Verificación   | `PENDING`, `MATCHED`, `DISCREPANCY_REPORTED`                                                              |
-| Evidencia      | `PENDING`, `COMPLETED`, `REJECTED`, `DELETED`                                                             |
-| Sincronización | `PENDING`, `PROCESSING`, `SYNCED`, `FAILED`                                                               |
-| Reporte        | `PENDING`, `PROCESSING`, `READY`, `FAILED`                                                                |
+| Entidad                    | Estados                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Orden                      | `DRAFT`, `ASSIGNED`, `IN_PROGRESS`, `REQUIRES_CORRECTION`, `COMPLETED`, `FAILED_APPOINTMENT`, `CANCELLED` |
+| Unidad                     | `PENDING`, `IN_PROGRESS`, `COMPLETED`                                                                     |
+| Verificación               | `PENDING`, `MATCHED`, `DISCREPANCY_REPORTED`                                                              |
+| Evidencia                  | `PENDING`, `COMPLETED`, `REJECTED`, `DELETED`                                                             |
+| Sincronización             | `PENDING`, `PROCESSING`, `SYNCED`, `FAILED`                                                               |
+| Reporte                    | `PENDING`, `PROCESSING`, `READY`, `FAILED`                                                                |
+| Resolución de cita fallida | `CANCELLED`, `RESCHEDULED`                                                                                |
 
 ## Restricciones relevantes
 
@@ -191,6 +206,10 @@ una vez por orden. Sincronizaciones y reportes son efectos versionados relaciona
 - `idempotencyKey` impide duplicar operaciones de sincronización.
 - Una restricción parcial de migración impide asignar simultáneamente el mismo `externalKey` a más de una orden activa.
 - `Order.version` implementa concurrencia optimista para edición administrativa.
+- `Order.rescheduledFromOrderId` es único, por lo que una cita fallida solo puede originar una
+  reprogramación.
+- La base restringe las resoluciones administrativas a órdenes cuyo estado es
+  `FAILED_APPOINTMENT`.
 
 ## Eliminación y retención
 

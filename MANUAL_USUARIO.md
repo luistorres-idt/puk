@@ -316,6 +316,13 @@ Si acudes al lugar pero el servicio no se puede realizar (cliente ausente, unida
    - No se exige checklist, fotografías ni firma del cliente.
    - El administrador y el área de logística reciben la notificación para reprogramación o cobro de visita técnica.
 
+El administrador puede resolverla desde el detalle de la orden:
+
+- **Reprogramar:** solicita la nueva fecha y crea una copia enlazada en estado `DRAFT`. La orden
+  fallida original conserva su motivo, cobro, reporte e historial.
+- **Cancelar servicio:** cierra administrativamente la cita fallida sin borrar el registro ni el
+  cobro de la visita realizada.
+
 ---
 
 ## 8. Módulo de Reportes: Actas en PDF
