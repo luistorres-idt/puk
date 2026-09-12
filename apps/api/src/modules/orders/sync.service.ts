@@ -171,7 +171,7 @@ export class SyncService {
       where: { id: operationId },
       data: {
         attempts: 0,
-        lastAttemptAt: new Date(),
+        lastAttemptAt: null,
         lastErrorCode: null,
         lastErrorMessage: null,
         nextAttemptAt: new Date(),

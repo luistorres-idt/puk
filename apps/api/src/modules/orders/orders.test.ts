@@ -75,6 +75,7 @@ interface MockDatabase {
     findUnique: ReturnType<typeof vi.fn>;
   };
   sheetSyncOperation: {
+    findUnique: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     updateMany: ReturnType<typeof vi.fn>;
@@ -182,6 +183,7 @@ describe('OrdersService & SyncService', () => {
         findUnique: vi.fn(),
       },
       sheetSyncOperation: {
+        findUnique: vi.fn(),
         findMany: vi.fn(),
         update: vi.fn(),
         updateMany: vi.fn(),
@@ -192,6 +194,31 @@ describe('OrdersService & SyncService', () => {
     syncService = new SyncService(mockPrisma as unknown as PrismaClient, sheetsPort);
     mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
     mockPrisma.sheetSyncOperation.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('leaves a retried sync operation unattempted until a worker claims it', async () => {
+    mockPrisma.sheetSyncOperation.findUnique.mockResolvedValue({
+      id: 'op-failed',
+      status: SyncStatus.FAILED,
+    });
+    mockPrisma.sheetSyncOperation.update.mockResolvedValue({
+      id: 'op-failed',
+      status: SyncStatus.PENDING,
+    });
+
+    await syncService.retryOperation('op-failed');
+
+    expect(mockPrisma.sheetSyncOperation.update).toHaveBeenCalledWith({
+      where: { id: 'op-failed' },
+      data: {
+        attempts: 0,
+        lastAttemptAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        nextAttemptAt: expect.any(Date),
+        status: SyncStatus.PENDING,
+      },
+    });
   });
 
   it('creates an order in DRAFT status with folio and version 1', async () => {
