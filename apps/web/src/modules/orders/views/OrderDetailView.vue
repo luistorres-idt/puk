@@ -44,6 +44,7 @@ import {
   extractUnitFromEquipment,
   toEquipmentAssignment,
 } from '@/modules/external-catalogs';
+import { TechnicianSelect } from '@/modules/technicians';
 import { useSessionStore } from '@/stores/session';
 import {
   useOrderAuditQuery,
@@ -53,6 +54,7 @@ import {
   useSyncStatusQuery,
 } from '../queries';
 import { getEvidenceUrl, getSignatureUrl, requireCorrection } from '@/modules/service-execution';
+import { getDisabledScheduleTimes, isPastCalendarDate } from '../reschedule-schedule.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -116,6 +118,7 @@ const previewImageTitle = ref<string>('');
 const cancelReason = ref('');
 const correctionNotes = ref('');
 const rescheduleAtTimestamp = ref<number>(Date.now() + 86400000);
+const rescheduleTechnicianId = ref<string | null>(null);
 const targetUnitId = ref<string | null>(null);
 
 const targetUnit = computed(() => order.value?.units?.find((u) => u.id === targetUnitId.value));
@@ -416,8 +419,18 @@ async function handleCancelOrder() {
   }
 }
 
+function openRescheduleModal() {
+  rescheduleAtTimestamp.value = Date.now() + 86400000;
+  rescheduleTechnicianId.value = order.value?.technician?.id ?? null;
+  showRescheduleModal.value = true;
+}
+
 async function handleRescheduleOrder() {
   if (!order.value || !rescheduleAtTimestamp.value) return;
+  if (!rescheduleTechnicianId.value) {
+    message.warning('Selecciona un técnico activo.');
+    return;
+  }
   if (rescheduleAtTimestamp.value <= Date.now()) {
     message.warning('Selecciona una fecha y hora futuras.');
     return;
@@ -427,6 +440,7 @@ async function handleRescheduleOrder() {
       id: orderId,
       data: {
         scheduledAt: new Date(rescheduleAtTimestamp.value).toISOString(),
+        technicianId: rescheduleTechnicianId.value,
         version: order.value.version,
       },
     });
@@ -653,7 +667,7 @@ const statusColor = orderStatusTagType;
               v-if="canResolveFailedAppointment"
               type="warning"
               secondary
-              @click="showRescheduleModal = true"
+              @click="openRescheduleModal"
             >
               Reprogramar
             </n-button>
@@ -663,6 +677,14 @@ const statusColor = orderStatusTagType;
             </n-button>
           </div>
         </div>
+
+        <n-alert
+          v-if="order.status === 'FAILED_APPOINTMENT'"
+          type="error"
+          title="Motivo de la cita fallida"
+        >
+          {{ order.failedReason || 'No se registró un motivo.' }}
+        </n-alert>
 
         <n-alert
           v-if="order.status === 'FAILED_APPOINTMENT' && order.failedAppointmentResolution"
@@ -688,6 +710,10 @@ const statusColor = orderStatusTagType;
           </span>
           <span v-else>
             La cita fallida quedó cerrada administrativamente sin alterar su cobro ni historial.
+            <span v-if="order.failedAppointmentResolutionReason" class="block mt-2">
+              <strong>Motivo de cancelación:</strong>
+              {{ order.failedAppointmentResolutionReason }}
+            </span>
           </span>
         </n-alert>
 
@@ -1737,14 +1763,20 @@ const statusColor = orderStatusTagType;
               v-model:value="rescheduleAtTimestamp"
               type="datetime"
               class="w-full"
-              :is-date-disabled="(timestamp: number) => timestamp < Date.now() - 86400000"
+              :is-date-disabled="isPastCalendarDate"
+              :is-time-disabled="getDisabledScheduleTimes"
             />
           </div>
+          <technician-select
+            v-model="rescheduleTechnicianId"
+            :disabled="mutations.reschedule.isPending.value"
+          />
           <div class="flex justify-end gap-2 pt-2">
             <n-button @click="showRescheduleModal = false">Cerrar</n-button>
             <n-button
               type="warning"
               :loading="mutations.reschedule.isPending.value"
+              :disabled="!rescheduleTechnicianId"
               @click="handleRescheduleOrder"
             >
               Crear Orden Borrador
