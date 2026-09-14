@@ -7,6 +7,12 @@ export const technicianRoutes: RouteRecordRaw[] = [
     name: 'technicians',
     path: '/technicians',
   },
+  {
+    component: () => import('./views/TechnicalAccountsView.vue'),
+    meta: { requiresRole: 'ADMIN' },
+    name: 'technical-accounts',
+    path: '/technical-accounts',
+  },
 ];
 
 export * from './api.js';

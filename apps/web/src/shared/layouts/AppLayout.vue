@@ -34,7 +34,7 @@ async function logout(): Promise<void> {
         <div class="flex items-center gap-3">
           <router-link
             class="flex items-center gap-2 text-sm font-bold tracking-tight text-blue-900 uppercase hover:text-blue-700"
-            to="/"
+            :to="session.user?.orderAccessMode === 'SHARED' ? '/work-order' : '/'"
           >
             <div
               class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-900 text-xs font-black text-white"
@@ -50,37 +50,60 @@ async function logout(): Promise<void> {
             :type="session.user.role === 'ADMIN' ? 'primary' : 'info'"
             round
           >
-            {{ session.user.role === 'ADMIN' ? 'Admin' : 'Técnico' }}
+            {{
+              session.user.role === 'ADMIN'
+                ? 'Admin'
+                : session.user.orderAccessMode === 'SHARED'
+                  ? 'Técnico Compartido'
+                  : 'Técnico'
+            }}
           </n-tag>
         </div>
 
         <nav v-if="session.user" class="flex items-center gap-2 sm:gap-4">
-          <router-link
-            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-            to="/"
-          >
-            Inicio
-          </router-link>
-          <router-link
-            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-            to="/orders"
-          >
-            {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
-          </router-link>
-          <router-link
-            v-if="session.user.role === 'ADMIN'"
-            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-            to="/technicians"
-          >
-            Técnicos
-          </router-link>
-          <router-link
-            v-if="session.user.role === 'ADMIN'"
-            class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-            to="/sync"
-          >
-            Sincronización
-          </router-link>
+          <template v-if="session.user.orderAccessMode === 'SHARED'">
+            <router-link
+              class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+              to="/work-order"
+            >
+              Orden de Trabajo
+            </router-link>
+          </template>
+          <template v-else>
+            <router-link
+              class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+              to="/"
+            >
+              Inicio
+            </router-link>
+            <router-link
+              class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+              to="/orders"
+            >
+              {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
+            </router-link>
+            <router-link
+              v-if="session.user.role === 'ADMIN'"
+              class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+              to="/technicians"
+            >
+              Técnicos
+            </router-link>
+            <router-link
+              v-if="session.user.role === 'ADMIN'"
+              class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+              to="/technical-accounts"
+            >
+              Cuentas Técnicas
+            </router-link>
+            <router-link
+              v-if="session.user.role === 'ADMIN'"
+              class="rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+              to="/sync"
+            >
+              Sincronización
+            </router-link>
+          </template>
 
           <span class="hidden text-xs text-slate-500 md:inline">
             {{ session.user.name }}
