@@ -3,6 +3,7 @@ import type {
   CompleteEvidence,
   CompleteSignature,
   FailAppointment,
+  MeOrderAccessResponse,
   PresignEvidence,
   PresignSignature,
   ReportDiscrepancy,
@@ -150,5 +151,10 @@ export async function requireCorrection(orderId: string, data: RequireCorrection
     `/orders/${orderId}/require-correction`,
     data,
   );
+  return response.data.data;
+}
+
+export async function getMeOrderAccess(): Promise<MeOrderAccessResponse> {
+  const response = await api.get<ApiResponse<MeOrderAccessResponse>>('/me/order-access');
   return response.data.data;
 }

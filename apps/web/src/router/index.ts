@@ -24,9 +24,25 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   const session = useSessionStore();
   await session.initialize();
-  if (to.meta.public === true)
-    return session.isAuthenticated && to.name === 'login' ? { name: 'home' } : true;
+  if (to.meta.public === true) {
+    if (session.isAuthenticated && to.name === 'login') {
+      return session.user?.orderAccessMode === 'SHARED' ? { name: 'work-order' } : { name: 'home' };
+    }
+    return true;
+  }
   if (!session.isAuthenticated) return { name: 'login', query: { redirect: to.fullPath } };
+
+  if (session.user?.orderAccessMode === 'SHARED') {
+    if (to.name !== 'work-order' && to.name !== 'order-execution') {
+      return { name: 'work-order' };
+    }
+    return true;
+  }
+
+  if (to.name === 'work-order') {
+    return { name: 'home' };
+  }
+
   if (to.meta.requiresRole !== undefined && session.user?.role !== to.meta.requiresRole)
     return { name: 'home' };
   return true;
