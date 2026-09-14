@@ -1,8 +1,9 @@
-import { ORDER_SERVICE_LABELS, type OrderServiceType } from '@puk/contracts';
+import { ORDER_SERVICE_LABELS, type OrderServiceType, type OrderStatus } from '@puk/contracts';
 
 export interface ReportOrderSource {
   readonly folio: string;
   readonly serviceType?: OrderServiceType | null;
+  readonly status?: OrderStatus | null;
   readonly clientNameSnapshot: string;
   readonly scheduledAt: Date | string;
   readonly generalNotes?: string | null;
@@ -107,8 +108,12 @@ export function formatTechnicalReportRow(
     return a.id.localeCompare(b.id);
   });
 
+  const isFailedAppointment = order.status === 'FAILED_APPOINTMENT';
+
   let servicio: string;
-  if (sortedUnits.length > 0 && sortedUnits.some((u) => u.serviceType)) {
+  if (isFailedAppointment) {
+    servicio = ORDER_SERVICE_LABELS.FAILED_APPOINTMENT;
+  } else if (sortedUnits.length > 0 && sortedUnits.some((u) => u.serviceType)) {
     servicio = sortedUnits
       .map((u) => {
         const type = u.serviceType ?? order.serviceType;
@@ -140,8 +145,9 @@ export function formatTechnicalReportRow(
   const total = formatDecimalString(order.pricingTotal);
 
   let notas = (order.generalNotes ?? '').trim();
-  if (order.serviceType === 'FAILED_APPOINTMENT' && order.failedReason) {
-    const reasonText = `Motivo cita fallida: ${order.failedReason.trim()}`;
+  const failedReason = (order.failedReason ?? '').trim();
+  if ((isFailedAppointment || order.failedReason) && failedReason) {
+    const reasonText = `Motivo cita fallida: ${failedReason}`;
     notas = notas ? `${reasonText} | ${notas}` : reasonText;
   }
 
