@@ -9,6 +9,10 @@ import {
   AssignEquipmentSchema,
   CreateUnitSchema,
   UpdateOrderSchema,
+  MeOrderAccessResponseSchema,
+  SharedTechnicianAccessConfigSchema,
+  UpdateSharedTechnicianAccessAccountSchema,
+  UpdateSharedTechnicianAccessOrderSchema,
 } from '@puk/contracts';
 
 const schemaConfig = { errorMode: 'ignore' as const };
@@ -17,6 +21,19 @@ const loginRequestSchema = toJsonSchema(LoginRequestSchema, schemaConfig);
 const createOrderSchema = toJsonSchema(CreateOrderSchema, schemaConfig);
 const createTechnicianSchema = toJsonSchema(CreateTechnicianSchema, schemaConfig);
 const technicianOptionSchema = toJsonSchema(TechnicianOptionSchema, schemaConfig);
+const sharedTechnicianAccessConfigSchema = toJsonSchema(
+  SharedTechnicianAccessConfigSchema,
+  schemaConfig,
+);
+const updateSharedTechnicianAccessAccountSchema = toJsonSchema(
+  UpdateSharedTechnicianAccessAccountSchema,
+  schemaConfig,
+);
+const updateSharedTechnicianAccessOrderSchema = toJsonSchema(
+  UpdateSharedTechnicianAccessOrderSchema,
+  schemaConfig,
+);
+const meOrderAccessResponseSchema = toJsonSchema(MeOrderAccessResponseSchema, schemaConfig);
 const orderIdParameter = {
   in: 'path',
   name: 'id',
@@ -337,6 +354,74 @@ export const openApiDocument = {
           '401': { description: 'Unauthorized' },
           '403': { description: 'Order does not belong to the technician' },
           '409': { description: 'Report is not ready' },
+        },
+      },
+    },
+    '/api/v1/shared-technician-access': {
+      get: {
+        operationId: 'getSharedTechnicianAccess',
+        summary: 'Get shared technician access configuration',
+        responses: {
+          '200': {
+            description: 'Shared technician access configuration',
+            content: { 'application/json': { schema: sharedTechnicianAccessConfigSchema } },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires users:manage' },
+        },
+      },
+    },
+    '/api/v1/shared-technician-access/account': {
+      put: {
+        operationId: 'updateSharedTechnicianAccessAccount',
+        summary: 'Designate or clear shared technician account',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: updateSharedTechnicianAccessAccountSchema } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated shared technician access configuration',
+            content: { 'application/json': { schema: sharedTechnicianAccessConfigSchema } },
+          },
+          '400': { description: 'Validation error or invalid technician account' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires users:manage' },
+          '409': { description: 'Order access revision conflict' },
+        },
+      },
+    },
+    '/api/v1/shared-technician-access/order': {
+      put: {
+        operationId: 'updateSharedTechnicianAccessOrder',
+        summary: 'Enable or revoke order for shared technician access',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: updateSharedTechnicianAccessOrderSchema } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated shared technician access configuration',
+            content: { 'application/json': { schema: sharedTechnicianAccessConfigSchema } },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires orders:manage' },
+          '404': { description: 'Order not found' },
+          '409': { description: 'Order access revision conflict or order not eligible' },
+        },
+      },
+    },
+    '/api/v1/me/order-access': {
+      get: {
+        operationId: 'getMeOrderAccess',
+        summary: 'Get current user order access mode and active shared order context',
+        responses: {
+          '200': {
+            description: 'Current order access context',
+            content: { 'application/json': { schema: meOrderAccessResponseSchema } },
+          },
+          '401': { description: 'Unauthorized' },
         },
       },
     },

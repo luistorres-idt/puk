@@ -22,6 +22,10 @@ import {
 } from './modules/orders/index.js';
 import { createExecutionRouter, type ExecutionService } from './modules/execution/index.js';
 import { createReportsRouter, type ReportsService } from './modules/reports/index.js';
+import {
+  createSharedTechnicianAccessRouter,
+  type SharedTechnicianAccessService,
+} from './modules/shared-technician-access/index.js';
 import type { CatalogServicePort } from './integrations/ports.js';
 import { httpLogger } from './observability/logger.js';
 import { metrics, metricsMiddleware } from './observability/metrics.js';
@@ -35,6 +39,7 @@ export interface AppOptions {
   syncService?: SyncService;
   executionService?: ExecutionService;
   reportsService?: ReportsService;
+  sharedTechnicianAccessService?: SharedTechnicianAccessService;
   dependencyCheck?: () => Promise<boolean>;
   trustProxy?: boolean;
 }
@@ -76,11 +81,21 @@ export function createApp(options: AppOptions = {}): Express {
   if (options.auth !== undefined) {
     app.use('/api/v1/auth', createAuthRouter(options.auth));
     app.use('/api/v1', createAdministrationRouter(options.administration ?? options.auth));
+    if (options.sharedTechnicianAccessService !== undefined) {
+      app.use(
+        '/api/v1',
+        createSharedTechnicianAccessRouter({
+          service: options.sharedTechnicianAccessService,
+          tokens: options.auth.tokens,
+        }),
+      );
+    }
     if (options.catalogsService !== undefined) {
       app.use(
         '/api/v1/external',
         createCatalogsRouter({
           catalogsService: options.catalogsService,
+          prisma: options.auth.prisma,
           tokens: options.auth.tokens,
         }),
       );
