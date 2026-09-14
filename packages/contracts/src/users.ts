@@ -45,3 +45,5 @@ export const TechnicianOptionSchema = v.object({
   externalKey: v.optional(v.nullable(v.string())),
 });
 export type TechnicianOption = v.InferOutput<typeof TechnicianOptionSchema>;
+export type CreateUser = v.InferInput<typeof CreateUserSchema>;
+export type UpdateUser = v.InferInput<typeof UpdateUserSchema>;

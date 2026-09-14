@@ -1,17 +1,31 @@
 export {
   LoginRequestSchema,
+  OrderAccessModeSchema,
   SessionUserSchema,
   UserRoleSchema,
   type LoginRequest,
+  type OrderAccessMode,
   type SessionUser,
 } from './auth.js';
 export { HealthResponseSchema, type HealthResponse } from './health.js';
+export {
+  MeOrderAccessResponseSchema,
+  SharedTechnicianAccessConfigSchema,
+  UpdateSharedTechnicianAccessAccountSchema,
+  UpdateSharedTechnicianAccessOrderSchema,
+  type MeOrderAccessResponse,
+  type SharedTechnicianAccessConfig,
+  type UpdateSharedTechnicianAccessAccount,
+  type UpdateSharedTechnicianAccessOrder,
+} from './shared-technician-access.js';
 export {
   CreateTechnicianSchema,
   CreateUserSchema,
   IdParamsSchema,
   TechnicianOptionSchema,
+  type CreateUser,
   type TechnicianOption,
+  type UpdateUser,
   UpdateTechnicianSchema,
   UpdateUserSchema,
 } from './users.js';

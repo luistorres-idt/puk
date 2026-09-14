@@ -105,6 +105,7 @@ model User {
   refreshSessions            RefreshSession[]
   auditLogs                  AuditLog[]       @relation("AuditActor")
   resolvedFailedAppointments Order[]          @relation("FailedAppointmentResolver")
+  sharedTechnicianAccess     SharedTechnicianAccess?
 
   @@index([role, active])
 }
@@ -189,6 +190,7 @@ model Order {
   discrepancies                     Discrepancy[]
   syncOperations                    SheetSyncOperation[]
   reports                           ServiceOrderReport[]
+  sharedTechnicianAccess            SharedTechnicianAccess?
 
   @@index([technicianId, status, scheduledAt])
   @@index([clientSheetId, createdAt])
@@ -388,6 +390,7 @@ model AuditLog {
   entityId    String?
   before      Json?    @db.JsonB
   after       Json?    @db.JsonB
+  context     Json?    @db.JsonB
   requestId   String?
   ipAddress   String?  @db.Inet
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
@@ -396,6 +399,18 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId, createdAt])
   @@index([requestId])
+}
+
+model SharedTechnicianAccess {
+  id        Int      @id
+  userId    String?  @unique @db.Uuid
+  orderId   String?  @unique @db.Uuid
+  revision  Int      @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([userId, orderId])
 }
 
 model SheetSyncOperation {
