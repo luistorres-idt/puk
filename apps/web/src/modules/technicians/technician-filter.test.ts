@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TechnicianOption } from '@puk/contracts';
-import {
-  filterTechnicians,
-  getUniqueCities,
-  getUniqueWorkshops,
-} from './technician-filter.js';
+import { filterTechnicians, getUniqueCities, getUniqueWorkshops } from './technician-filter.js';
 
 const mockTechnicians: TechnicianOption[] = [
   {

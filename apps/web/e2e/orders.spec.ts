@@ -64,6 +64,7 @@ async function mockApi(
           name: 'Admin de prueba',
           email: 'admin@example.invalid',
           role: 'ADMIN',
+          orderAccessMode: 'INDIVIDUAL',
           technicianId: null,
         },
       });
@@ -136,9 +137,7 @@ test('wizard requires a technician, retries a directory failure and submits its 
   await page.getByText('Técnico de prueba · Taller Norte · Ciudad Demo', { exact: true }).click();
   await next.press('Enter');
   await expect(page.getByText('Técnico de prueba', { exact: true })).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Crear Orden de Servicio', exact: true })
-    .press('Enter');
+  await page.getByRole('button', { name: 'Crear Orden de Servicio', exact: true }).press('Enter');
   await expect(page).toHaveURL(new RegExp(`/orders/${orderId}$`));
   expect(submitted).toHaveLength(1);
   expect(submitted[0]?.technicianId).toBe(technician.id);
@@ -160,7 +159,9 @@ for (const serviceType of OrderServiceTypeSchema.options) {
   }) => {
     await mockApi(page, { serviceType });
     await page.goto(`/orders/${orderId}`);
-    await expect(page.getByText(ORDER_SERVICE_LABELS[serviceType], { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText(ORDER_SERVICE_LABELS[serviceType], { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.getByText('Unidad Demo', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Eliminar', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Quitar', exact: true })).toBeVisible();

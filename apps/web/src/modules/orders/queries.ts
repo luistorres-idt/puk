@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { unref, type MaybeRef } from 'vue';
+import { useSessionStore } from '@/stores/session';
 import type {
   AssignEquipment,
   CreateOrder,
@@ -44,28 +45,40 @@ export function useOrderQuery(orderId: MaybeRef<string>) {
   });
 }
 
-export function useSyncStatusQuery(orderId: MaybeRef<string>) {
+export function useSyncStatusQuery(orderId: MaybeRef<string>, enabled?: MaybeRef<boolean>) {
+  const session = useSessionStore();
   return useQuery({
     queryKey: ['order-sync', orderId],
     queryFn: () => fetchSyncStatus(unref(orderId)),
-    enabled: () => Boolean(unref(orderId)),
+    enabled: () =>
+      Boolean(unref(orderId)) &&
+      session.user?.role === 'ADMIN' &&
+      (enabled !== undefined ? unref(enabled) : true),
     refetchInterval: 10000,
   });
 }
 
-export function useOrderAuditQuery(orderId: MaybeRef<string>) {
+export function useOrderAuditQuery(orderId: MaybeRef<string>, enabled?: MaybeRef<boolean>) {
+  const session = useSessionStore();
   return useQuery({
     queryKey: ['order-audit', orderId],
     queryFn: () => fetchOrderAudit(unref(orderId)),
-    enabled: () => Boolean(unref(orderId)),
+    enabled: () =>
+      Boolean(unref(orderId)) &&
+      session.user?.role === 'ADMIN' &&
+      (enabled !== undefined ? unref(enabled) : true),
   });
 }
 
-export function useOrderReportQuery(orderId: MaybeRef<string>) {
+export function useOrderReportQuery(orderId: MaybeRef<string>, enabled?: MaybeRef<boolean>) {
+  const session = useSessionStore();
   return useQuery({
     queryKey: ['order-report', orderId],
     queryFn: () => fetchCurrentReport(unref(orderId)),
-    enabled: () => Boolean(unref(orderId)),
+    enabled: () =>
+      Boolean(unref(orderId)) &&
+      session.user?.orderAccessMode !== 'SHARED' &&
+      (enabled !== undefined ? unref(enabled) : true),
     refetchInterval: (query) =>
       query.state.data?.status === 'PENDING' || query.state.data?.status === 'PROCESSING'
         ? 3000
