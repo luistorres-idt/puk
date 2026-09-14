@@ -953,6 +953,21 @@ describe('OrdersService & SyncService', () => {
     );
   });
 
+  it('includes the rescheduled order in the order list', async () => {
+    mockPrisma.order.count.mockResolvedValue(0);
+    mockPrisma.order.findMany.mockResolvedValue([]);
+
+    await ordersService.listOrders({ id: 'admin', role: 'ADMIN' }, {});
+
+    expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          rescheduledOrder: { select: { id: true, folio: true, status: true } },
+        }),
+      }),
+    );
+  });
+
   it('continues to read historical orders without a technician', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'historical',

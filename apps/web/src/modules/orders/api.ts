@@ -121,6 +121,7 @@ export interface OrderSummary {
   clientNameSnapshot: string;
   scheduledAt: string;
   failedAppointmentResolution?: FailedAppointmentResolution | null;
+  rescheduledOrder?: { id: string; folio: string; status: OrderStatus } | null;
   technician?: { id: string; name: string } | null;
   _count?: { units: number };
 }
