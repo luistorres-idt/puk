@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { CatalogSearchQuerySchema } from '@puk/contracts';
 import { authenticate, authorize } from '../../auth/authenticate.js';
+import { assertIndividualTechnician } from '../../auth/order-access-policy.js';
 import type { TokenService } from '../../auth/tokens.js';
+import type { PrismaClient } from '../../generated/prisma/client.js';
 import { validate } from '../../middleware/validate.js';
 import { AppError } from '../../shared/errors.js';
 import { sendSuccess } from '../../shared/http.js';
@@ -9,6 +11,7 @@ import type { CatalogServicePort } from '../../integrations/ports.js';
 
 export function createCatalogsRouter(options: {
   catalogsService: CatalogServicePort;
+  prisma?: PrismaClient;
   tokens: TokenService;
 }): Router {
   const router = Router();
@@ -19,6 +22,7 @@ export function createCatalogsRouter(options: {
     authorize('catalogs:read'),
     validate({ query: CatalogSearchQuerySchema }),
     async (request, response) => {
+      await rejectSharedCatalogAccess(options.prisma, request.auth!);
       const search = typeof request.query.search === 'string' ? request.query.search : undefined;
       const { data, fetchedAt } = await options.catalogsService.getClients(
         search !== undefined ? { search } : {},
@@ -32,6 +36,7 @@ export function createCatalogsRouter(options: {
     authorize('catalogs:read'),
     validate({ query: CatalogSearchQuerySchema }),
     async (request, response) => {
+      await rejectSharedCatalogAccess(options.prisma, request.auth!);
       const search = typeof request.query.search === 'string' ? request.query.search : undefined;
       const { data, fetchedAt } = await options.catalogsService.getEquipment(
         search !== undefined ? { search } : {},
@@ -41,6 +46,7 @@ export function createCatalogsRouter(options: {
   );
 
   router.get('/equipment/:externalKey', authorize('catalogs:read'), async (request, response) => {
+    await rejectSharedCatalogAccess(options.prisma, request.auth!);
     const externalKey = String(request.params.externalKey);
     const forceFresh = request.query.fresh === 'true';
     const { equipment, fetchedAt } = await options.catalogsService.findEquipmentByKey(
@@ -61,4 +67,16 @@ export function createCatalogsRouter(options: {
   });
 
   return router;
+}
+
+async function rejectSharedCatalogAccess(
+  prisma: PrismaClient | undefined,
+  auth: { role: 'ADMIN' | 'TECHNICIAN'; userId: string },
+): Promise<void> {
+  if (prisma === undefined) return;
+  await assertIndividualTechnician(
+    prisma,
+    { id: auth.userId, role: auth.role },
+    'La cuenta compartida no puede acceder a catálogos.',
+  );
 }

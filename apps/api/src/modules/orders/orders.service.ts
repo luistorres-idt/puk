@@ -10,6 +10,11 @@ import {
   type UpdateOrder,
   type UpdateUnit,
 } from '@puk/contracts';
+import {
+  assertOrderAccess,
+  getSharedAccess,
+  isSharedAccessStatus,
+} from '../../auth/order-access-policy.js';
 import { domainTransaction } from '../../database/transaction.js';
 import { updateOrderVersion } from '../../database/optimistic-lock.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
@@ -35,6 +40,12 @@ type OrderWithEquipment = Prisma.OrderGetPayload<{
   include: { units: { include: { equipment: true } } };
 }>;
 type OrderEquipment = OrderWithEquipment['units'][number]['equipment'][number];
+
+const SHARED_LIST_STATUSES = [
+  OrderStatus.ASSIGNED,
+  OrderStatus.IN_PROGRESS,
+  OrderStatus.REQUIRES_CORRECTION,
+] as const;
 
 function createOrderFolio(): string {
   return `OS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
@@ -92,16 +103,29 @@ export class OrdersService {
 
     const where: Prisma.OrderWhereInput = {};
     const filters: Prisma.OrderWhereInput[] = [];
+    const emptyPage = {
+      data: [],
+      pagination: { page, pageSize, total: 0, totalPages: 0 },
+    };
 
     if (actor.role === 'TECHNICIAN') {
-      const user = await this.prisma.user.findUnique({
-        where: { id: actor.id },
-        select: { technicianId: true },
-      });
-      if (!user?.technicianId) {
-        return { data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
+      const shared = await getSharedAccess(this.prisma);
+      if (shared?.userId === actor.id) {
+        if (query.status !== undefined && !isSharedAccessStatus(query.status)) {
+          return emptyPage;
+        }
+        where.technicianId = query.technicianId ? query.technicianId : { not: null };
+        where.status = { in: [...SHARED_LIST_STATUSES] };
+      } else {
+        const user = await this.prisma.user.findUnique({
+          where: { id: actor.id },
+          select: { technicianId: true },
+        });
+        if (!user?.technicianId) {
+          return emptyPage;
+        }
+        where.technicianId = user.technicianId;
       }
-      where.technicianId = user.technicianId;
     } else if (query.technicianId) {
       where.technicianId = query.technicianId;
     }
@@ -205,15 +229,7 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
-    if (actor.role === 'TECHNICIAN') {
-      const user = await this.prisma.user.findUnique({
-        where: { id: actor.id },
-        select: { technicianId: true },
-      });
-      if (order.technicianId !== user?.technicianId) {
-        throw new AppError(403, 'FORBIDDEN', 'No tienes acceso a esta orden');
-      }
-    }
+    await assertOrderAccess(this.prisma, actor, orderId, 'No tienes acceso a esta orden');
 
     return order;
   }

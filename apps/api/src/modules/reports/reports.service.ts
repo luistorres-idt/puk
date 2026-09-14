@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, ReportStatus } from '../../generated/prisma/enums.js';
+import { assertIndividualTechnician } from '../../auth/order-access-policy.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
 import { type ReportGeneratorPort, ServiceOrderReportGenerator } from './report-generator.js';
@@ -253,6 +254,11 @@ export class ReportsService {
     });
     if (!order) throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     if (role === 'ADMIN') return;
+    await assertIndividualTechnician(
+      this.prisma,
+      { id: userId, role },
+      'La cuenta compartida no puede acceder a reportes.',
+    );
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { technicianId: true },

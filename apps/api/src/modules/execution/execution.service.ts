@@ -10,6 +10,7 @@ import type {
   RequireCorrection,
   SaveChecklistItem,
 } from '@puk/contracts';
+import { assertOrderAccess as assertSharedOrderAccess } from '../../auth/order-access-policy.js';
 import { domainTransaction } from '../../database/transaction.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import {
@@ -75,15 +76,12 @@ export class ExecutionService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
-    if (role === 'TECHNICIAN') {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { technicianId: true },
-      });
-      if (!user?.technicianId || order.technicianId !== user.technicianId) {
-        throw new AppError(403, 'FORBIDDEN', 'No tienes asignada esta orden de servicio');
-      }
-    }
+    await assertSharedOrderAccess(
+      this.prisma,
+      { id: userId, role },
+      orderId,
+      'No tienes asignada esta orden de servicio',
+    );
 
     return order;
   }

@@ -209,14 +209,19 @@ export function createOrdersRouter(options: {
 
   // --- Sync Operations ---
 
-  router.get('/:id/sync', validate({ params: IdParamsSchema }), async (request, response) => {
-    if (!options.syncService) {
-      sendSuccess(response, { isFullySynced: true, operations: [] });
-      return;
-    }
-    const syncStatus = await options.syncService.getOrderSyncStatus(String(request.params.id));
-    sendSuccess(response, syncStatus);
-  });
+  router.get(
+    '/:id/sync',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      if (!options.syncService) {
+        sendSuccess(response, { isFullySynced: true, operations: [] });
+        return;
+      }
+      const syncStatus = await options.syncService.getOrderSyncStatus(String(request.params.id));
+      sendSuccess(response, syncStatus);
+    },
+  );
 
   router.post(
     '/:id/sync/retry',
