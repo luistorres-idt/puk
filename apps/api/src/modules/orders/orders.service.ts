@@ -152,6 +152,7 @@ export class OrdersService {
         take: pageSize,
         include: {
           technician: { select: { id: true, name: true } },
+          rescheduledOrder: { select: { id: true, folio: true, status: true } },
           _count: { select: { units: true } },
         },
       }),

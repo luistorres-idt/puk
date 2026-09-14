@@ -236,6 +236,36 @@ const serviceTypeOptions = [
                 <n-tag size="small" :type="statusColor(order.status)">
                   {{ formatOrderStatus(order.status) }}
                 </n-tag>
+                <template v-if="order.status === 'FAILED_APPOINTMENT'">
+                  <n-tag
+                    size="small"
+                    :type="
+                      order.failedAppointmentResolution === 'RESCHEDULED'
+                        ? 'info'
+                        : order.failedAppointmentResolution === 'CANCELLED'
+                          ? 'default'
+                          : 'warning'
+                    "
+                  >
+                    {{
+                      order.failedAppointmentResolution === 'RESCHEDULED'
+                        ? 'Reprogramada'
+                        : order.failedAppointmentResolution === 'CANCELLED'
+                          ? 'Cancelada'
+                          : 'Pendiente'
+                    }}
+                  </n-tag>
+                  <router-link
+                    v-if="
+                      order.failedAppointmentResolution === 'RESCHEDULED' && order.rescheduledOrder
+                    "
+                    class="text-xs font-mono font-semibold text-blue-700 hover:underline"
+                    :to="`/orders/${order.rescheduledOrder.id}`"
+                    @click.stop
+                  >
+                    {{ order.rescheduledOrder.folio }}
+                  </router-link>
+                </template>
                 <span class="text-xs text-slate-500 font-medium">{{
                   formatServiceType(order.serviceType)
                 }}</span>

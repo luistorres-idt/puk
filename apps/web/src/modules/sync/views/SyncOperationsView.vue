@@ -1,7 +1,18 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
-import { NAlert, NButton, NCard, NEmpty, NInput, NSelect, NSpin, NTag, useMessage } from 'naive-ui';
+import {
+  NAlert,
+  NButton,
+  NCard,
+  NEmpty,
+  NInput,
+  NSelect,
+  NSpin,
+  NTag,
+  NTimePicker,
+  useMessage,
+} from 'naive-ui';
 import type { SyncStatus, UpdateTechnicalReportSyncSchedule } from '@puk/contracts';
 
 import AppLayout from '@/shared/layouts/AppLayout.vue';
@@ -36,6 +47,13 @@ const weekdays = [
   { label: 'Viernes', value: 5 },
   { label: 'Sábado', value: 6 },
 ];
+const supportedTimeZones =
+  typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+const timeZoneOptions = computed(() =>
+  Array.from(
+    new Set(['UTC', 'America/Hermosillo', scheduleForm.timeZone, ...supportedTimeZones]),
+  ).map((value) => ({ label: value.replaceAll('_', ' '), value })),
+);
 const statusOptions = [
   { label: 'Todos', value: '' },
   { label: 'Programadas / pendientes', value: 'PENDING' },
@@ -189,11 +207,21 @@ function formatDate(value: string | null | undefined): string {
           </div>
           <div>
             <label class="mb-1 block text-xs text-slate-500">Hora de envío</label
-            ><n-input v-model:value="scheduleForm.syncTime" type="text" placeholder="17:00" />
+            ><n-time-picker
+              :formatted-value="scheduleForm.syncTime"
+              format="HH:mm"
+              value-format="HH:mm"
+              input-readonly
+              @update:formatted-value="(value) => value && (scheduleForm.syncTime = value)"
+            />
           </div>
           <div>
             <label class="mb-1 block text-xs text-slate-500">Zona horaria</label
-            ><n-input v-model:value="scheduleForm.timeZone" />
+            ><n-select
+              v-model:value="scheduleForm.timeZone"
+              :options="timeZoneOptions"
+              filterable
+            />
           </div>
           <div class="flex items-end">
             <n-button
