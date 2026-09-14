@@ -7,6 +7,7 @@ export interface AuditEntry {
   before?: Prisma.InputJsonValue;
   entityId?: string;
   entityType: string;
+  context?: Prisma.InputJsonValue;
   ipAddress?: string;
   requestId?: string;
 }

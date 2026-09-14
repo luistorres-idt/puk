@@ -79,6 +79,30 @@ export class UsersService {
         : (this.checkPassword(input.password), await hashPassword(input.password));
 
     return this.prisma.$transaction(async (transaction) => {
+      if (transaction.sharedTechnicianAccess) {
+        const shared = await transaction.sharedTechnicianAccess.findUnique({
+          where: { id: 1 },
+        });
+        if (shared?.userId === id) {
+          if (
+            (input.role !== undefined && input.role !== existing.role) ||
+            (input.technicianId !== undefined && input.technicianId !== null)
+          ) {
+            throw new AppError(
+              400,
+              'INVALID_SHARED_TECHNICIAN_ACCOUNT',
+              'No se puede cambiar el rol o asignar técnico individual a la cuenta técnica compartida designada.',
+            );
+          }
+          if (input.active === false && existing.active) {
+            await transaction.sharedTechnicianAccess.update({
+              where: { id: 1 },
+              data: { orderId: null, revision: { increment: 1 } },
+            });
+          }
+        }
+      }
+
       const user = await transaction.user.update({
         data: {
           ...(input.active === undefined ? {} : { active: input.active }),

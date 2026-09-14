@@ -17,6 +17,7 @@ describe('session store', () => {
       id: '00000000-0000-4000-8000-000000000001',
       name: 'Admin',
       role: 'ADMIN',
+      orderAccessMode: 'INDIVIDUAL',
       technicianId: null,
     });
     expect(session.isAuthenticated).toBe(true);
