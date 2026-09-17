@@ -111,3 +111,16 @@ docs/                    requisitos, decisiones y documentación técnica
 - TanStack Query para estado remoto; Pinia se limita a sesión y estado global de UI.
 - Mocks de Sheets, almacenamiento y claves JWT únicamente en desarrollo con valores `development-only`.
 - Staging definido como infraestructura inmutable en dos stacks CDK: foundation para estado/red y application para cómputo/entrega.
+
+## Estado implementado al 2026-09-17
+
+- El acceso técnico compartido se modela como configuración versionada y auditable; las políticas
+  distinguen ejecución individual de tablero multiorden.
+- Cada request protegido resuelve el principal vigente desde PostgreSQL. El JWT identifica la
+  sesión, pero no es la fuente final de actividad ni de rol.
+- Las respuestas de detalle de órdenes usan read models explícitos: el detalle administrativo y el
+  detalle operativo tienen selects, mapeadores y contratos separados.
+- La web reconcilia la identidad con `/auth/me` al navegar, recuperar foco y actualizar el tablero;
+  las APIs de cuentas técnicas viven fuera del módulo `orders`.
+
+La secuencia histórica de implementación y sus commits está en la [línea de tiempo del proyecto](../project-timeline.md).

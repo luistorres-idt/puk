@@ -13,7 +13,8 @@ apps/web/src/
 │   ├── external-catalogs/selectores de Sheets
 │   ├── orders/           lista, alta y detalle administrativo
 │   ├── service-execution/flujo móvil, cámara y firma
-│   └── technicians/      directorio administrativo
+│   ├── technicians/      directorio y cuentas técnicas
+│   └── technical-accounts/ APIs de cuentas compartidas y usuarios técnicos
 ├── router/               composición y guardas
 ├── shared/               HTTP y layout
 └── stores/               sesión
@@ -59,6 +60,11 @@ La guarda de navegación inicializa la sesión, revalida la identidad cuando ven
 según `orderAccessMode` y aplica `requiresRole`. Recuperar el foco y actualizar manualmente el
 tablero compartido fuerzan la misma reconciliación y reutilizan una única política de redirección.
 La autorización real siempre se repite en backend.
+
+La administración de cuentas técnicas se compone desde `technicians/views/TechnicalAccountsView.vue`:
+`useTechnicalAccounts` concentra estado y mutaciones, mientras `SharedAccountPanel`,
+`TechnicalAccountTable` y `TechnicalAccountModals` mantienen la presentación separada. Las llamadas
+de usuarios y acceso compartido pertenecen a `modules/technical-accounts`.
 La vista de ejecución carga `/orders/:id/execution`, cuyo contrato omite información administrativa,
 fiscal y de sincronización. Los técnicos navegan a esa vista también para consultar su historial.
 
