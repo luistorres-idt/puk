@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NButton,
@@ -18,18 +18,16 @@ import {
 import type {
   ChecklistCategory,
   ChecklistCondition,
-  OrderServiceType,
+  OrderEvidenceDetail,
+  OrderExecutionDetail,
   SaveChecklistItem,
 } from '@puk/contracts';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { useSessionStore } from '../../../stores/session.js';
 import {
-  fetchOrderById,
+  fetchOrderExecutionById,
   formatServiceType,
-  type ChecklistEvidenceItem,
-  type OrderDetail,
-  type TechnicianPricing,
 } from '../../orders/index.js';
 import {
   checkCompleteness,
@@ -53,7 +51,7 @@ const session = useSessionStore();
 const message = useMessage();
 
 const orderId = String(route.params.id);
-const order = ref<OrderDetail | null>(null);
+const order = ref<OrderExecutionDetail | null>(null);
 const completeness = ref<{ isComplete: boolean; missingRequirements: string[] } | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -166,7 +164,7 @@ function getUnitItem(unitId: string, category: ChecklistCategory): LocalChecklis
 function getUnitAllEvidences(unitId: string) {
   const unit = order.value?.units?.find((u) => u.id === unitId);
   if (!unit?.checklist?.items) return [];
-  const evidences: ChecklistEvidenceItem[] = [];
+  const evidences: OrderEvidenceDetail[] = [];
   for (const item of unit.checklist.items) {
     if (item.evidence) {
       for (const ev of item.evidence) {
@@ -184,7 +182,7 @@ async function loadData() {
   error.value = null;
   try {
     const [orderData, compData] = await Promise.all([
-      fetchOrderById(orderId),
+      fetchOrderExecutionById(orderId),
       checkCompleteness(orderId).catch(() => null),
     ]);
     order.value = orderData;
@@ -307,52 +305,6 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
   }
 }
 
-type TechnicianRateField = keyof Pick<
-  TechnicianPricing,
-  | 'installationRate'
-  | 'reviewRate'
-  | 'uninstallationRate'
-  | 'replacementRate'
-  | 'failedAppointmentRate'
-  | 'fuelSensorRate'
->;
-
-const RATE_CONFIG: Record<OrderServiceType, { field: TechnicianRateField; label: string }> = {
-  INSTALLATION: { field: 'installationRate', label: 'Instalación' },
-  REVIEW: { field: 'reviewRate', label: 'Revisión' },
-  UNINSTALLATION: { field: 'uninstallationRate', label: 'Desinstalación' },
-  EQUIPMENT_REPLACEMENT: { field: 'replacementRate', label: 'Cambio de equipo' },
-  FAILED_APPOINTMENT: { field: 'failedAppointmentRate', label: 'Cita fallida' },
-  FUEL_SENSOR: { field: 'fuelSensorRate', label: 'Sensor de combustible' },
-};
-
-function isInvalidRate(rate: number | string | null | undefined): boolean {
-  if (rate === null || rate === undefined || rate === '') return true;
-  const numericRate = Number(rate);
-  return !Number.isFinite(numericRate) || numericRate < 0;
-}
-
-const missingTechnicianRates = computed<string[]>(() => {
-  if (!order.value?.technician || !order.value?.units) return [];
-  const tech = order.value.technician;
-  const neededServices = new Set<OrderServiceType>();
-  for (const u of order.value.units) {
-    if (u.serviceType) {
-      neededServices.add(u.serviceType);
-    }
-  }
-  if (neededServices.size === 0 && order.value.serviceType) {
-    neededServices.add(order.value.serviceType);
-  }
-
-  return [...neededServices].flatMap((serviceType) => {
-    const config = RATE_CONFIG[serviceType];
-    return isInvalidRate(tech[config.field])
-      ? [`El técnico no tiene tarifa para ${config.label} (se liquidará con tarifa $0.00 MXN).`]
-      : [];
-  });
-});
-
 async function handleCompleteOrder() {
   try {
     const res = await completeOrder(orderId);
@@ -416,7 +368,7 @@ onMounted(() => {
           </p>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <NTag
             v-if="order"
             size="medium"
@@ -431,7 +383,12 @@ onMounted(() => {
             {{ formatOrderStatus(order.status) }}
           </NTag>
 
-          <NButton v-if="order?.status === 'ASSIGNED'" type="primary" @click="handleStartOrder">
+          <NButton
+            v-if="order?.status === 'ASSIGNED'"
+            type="primary"
+            class="w-full sm:w-auto"
+            @click="handleStartOrder"
+          >
             Iniciar Trabajo
           </NButton>
         </div>
@@ -653,32 +610,13 @@ onMounted(() => {
                 </ul>
               </div>
 
-              <!-- Warning if technician is missing rate for any service in the order -->
-              <div
-                v-if="missingTechnicianRates.length > 0 && order.status !== 'COMPLETED'"
-                class="p-3 rounded-lg border text-xs bg-amber-50 border-amber-300 text-amber-900 space-y-1"
-              >
-                <div class="font-bold flex items-center gap-1.5 text-amber-800">
-                  <span>⚠️</span>
-                  <span>Aviso: Tarifas no configuradas para el técnico</span>
-                </div>
-                <ul class="list-disc list-inside space-y-0.5 text-amber-900">
-                  <li v-for="(msg, mIdx) in missingTechnicianRates" :key="mIdx">
-                    {{ msg }}
-                  </li>
-                </ul>
-                <p class="text-[11px] text-amber-700 mt-1">
-                  La orden puede finalizarse normalmente, pero estos conceptos se calcularán con
-                  importe $0.00 en la liquidación técnica.
-                </p>
-              </div>
-
-              <div class="flex flex-wrap gap-3 items-center justify-between pt-2">
+              <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-2">
                 <NButton
                   v-if="order.status === 'IN_PROGRESS' || order.status === 'ASSIGNED'"
                   type="error"
                   secondary
                   size="small"
+                  class="order-2 sm:order-1"
                   @click="showFailedModal = true"
                 >
                   Reportar Cita Fallida
@@ -689,6 +627,7 @@ onMounted(() => {
                   type="warning"
                   secondary
                   size="small"
+                  class="order-2 sm:order-1"
                   @click="showCorrectionModal = true"
                 >
                   Solicitar Corrección (Admin)
@@ -698,6 +637,7 @@ onMounted(() => {
                   v-if="order.status === 'IN_PROGRESS' || order.status === 'REQUIRES_CORRECTION'"
                   type="primary"
                   size="medium"
+                  class="order-1 sm:order-2 w-full sm:w-auto"
                   :disabled="!completeness?.isComplete"
                   @click="handleCompleteOrder"
                 >
@@ -714,7 +654,7 @@ onMounted(() => {
         v-model:show="showDiscrepancyModal"
         preset="card"
         title="Reportar Discrepancia de Equipo"
-        class="max-w-md"
+        class="w-[92vw] max-w-md"
       >
         <div class="space-y-3">
           <div>
@@ -752,7 +692,7 @@ onMounted(() => {
         v-model:show="showFailedModal"
         preset="card"
         title="Reportar Cita Fallida"
-        class="max-w-md"
+        class="w-[92vw] max-w-md"
       >
         <div class="space-y-3">
           <p class="text-xs text-slate-500">
@@ -784,7 +724,7 @@ onMounted(() => {
         v-model:show="showCorrectionModal"
         preset="card"
         title="Solicitar Corrección al Técnico"
-        class="max-w-md"
+        class="w-[92vw] max-w-md"
       >
         <div class="space-y-3">
           <p class="text-xs text-slate-500">

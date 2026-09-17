@@ -72,7 +72,7 @@ export class AuthService {
       throw new AppError(401, 'REFRESH_TOKEN_REUSED', 'The session was revoked.');
     }
     if (!current.user.active)
-      throw new AppError(401, 'USER_INACTIVE', 'The session is no longer active.');
+      throw new AppError(401, 'SESSION_REVOKED', 'The session is no longer active.');
 
     const nextRefresh = await this.tokens.createRefreshToken(current.userId);
     const accessToken = await this.tokens.createAccessToken(current.user);
@@ -125,7 +125,7 @@ export class AuthService {
   public async me(userId: string): Promise<SessionUser> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (user === null || !user.active)
-      throw new AppError(401, 'USER_INACTIVE', 'The session is no longer active.');
+      throw new AppError(401, 'SESSION_REVOKED', 'The session is no longer active.');
     return this.sessionUser(user);
   }
 

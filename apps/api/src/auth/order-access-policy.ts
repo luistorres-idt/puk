@@ -62,7 +62,7 @@ export async function assertOrderAccess(
 ) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { technician: true },
+    select: { id: true, status: true, technicianId: true },
   });
   if (!order) throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
 

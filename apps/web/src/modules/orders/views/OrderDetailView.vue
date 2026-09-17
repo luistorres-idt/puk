@@ -977,9 +977,9 @@ const statusColor = orderStatusTagType;
 
               <div v-for="unit in order.units" :key="unit.id" class="space-y-2">
                 <n-card class="shadow-sm" size="small">
-                  <div class="flex items-start justify-between">
+                  <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div>
-                      <div class="flex items-center gap-2">
+                      <div class="flex flex-wrap items-center gap-2">
                         <span class="font-bold text-base text-slate-800">{{ unit.label }}</span>
                         <n-tag size="small" :type="unitStatusTagType(unit.status)">
                           {{ formatUnitStatus(unit.status) }}
@@ -999,7 +999,7 @@ const statusColor = orderStatusTagType;
 
                     <div
                       v-if="order.status === 'DRAFT' && session.user?.role === 'ADMIN'"
-                      class="flex gap-2"
+                      class="flex items-center gap-2 shrink-0 self-start sm:self-auto"
                     >
                       <n-button
                         v-if="canAddItems"
@@ -1405,7 +1405,7 @@ const statusColor = orderStatusTagType;
         v-model:show="showAddUnitModal"
         preset="card"
         title="Agregar Unidad a la Orden"
-        class="max-w-lg"
+        class="w-[92vw] max-w-lg"
       >
         <div class="space-y-4">
           <div>
@@ -1660,7 +1660,7 @@ const statusColor = orderStatusTagType;
         v-model:show="showAddEqModal"
         preset="card"
         title="Asignar Equipo desde Google Sheets"
-        class="max-w-lg"
+        class="w-[92vw] max-w-lg"
       >
         <div class="space-y-4">
           <equipment-select
@@ -1709,7 +1709,7 @@ const statusColor = orderStatusTagType;
         v-model:show="showCancelModal"
         preset="card"
         :title="isFailedAppointment ? 'Cancelar Servicio' : 'Cancelar Orden de Servicio'"
-        class="max-w-md"
+        class="w-[92vw] max-w-md"
       >
         <div class="space-y-4">
           <p class="text-sm text-slate-600">
@@ -1750,7 +1750,7 @@ const statusColor = orderStatusTagType;
         v-model:show="showRescheduleModal"
         preset="card"
         title="Reprogramar Cita Fallida"
-        class="max-w-md"
+        class="w-[92vw] max-w-md"
       >
         <div class="space-y-4">
           <p class="text-sm text-slate-600">
@@ -1790,7 +1790,7 @@ const statusColor = orderStatusTagType;
         v-model:show="showCorrectionModal"
         preset="card"
         title="Solicitar Corrección Técnica"
-        class="max-w-md"
+        class="w-[92vw] max-w-md"
       >
         <div class="space-y-4">
           <p class="text-sm text-slate-600">
@@ -1821,7 +1821,7 @@ const statusColor = orderStatusTagType;
         v-model:show="showImageModal"
         preset="card"
         :title="previewImageTitle"
-        class="max-w-2xl"
+        class="w-[92vw] max-w-2xl"
       >
         <div class="flex justify-center p-2">
           <img

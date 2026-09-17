@@ -13,8 +13,8 @@ const technicians = useQuery({
 
 <template>
   <app-layout>
-    <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-      <div class="mb-6">
+    <div class="space-y-6">
+      <div>
         <h1 class="text-2xl font-bold text-slate-900">Técnicos</h1>
         <p class="mt-1 text-sm text-slate-600">Directorio del personal técnico.</p>
       </div>
@@ -45,6 +45,6 @@ const technicians = useQuery({
           </div>
         </n-card>
       </div>
-    </main>
+    </div>
   </app-layout>
 </template>

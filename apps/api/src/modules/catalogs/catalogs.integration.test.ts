@@ -36,6 +36,12 @@ describe('Catalogs Integration Tests', () => {
       auth: {
         cookie: { httpOnly: true, maxAge: 1000, path: '/', sameSite: 'lax', secure: false },
         minimumPasswordLength: 12,
+        principalResolver: {
+          resolve: async (userId) => ({
+            id: userId,
+            role: userId === '11111111-1111-1111-1111-111111111111' ? 'ADMIN' : 'TECHNICIAN',
+          }),
+        },
         prisma: {} as unknown as PrismaClient,
         tokens,
       },

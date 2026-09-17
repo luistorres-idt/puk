@@ -15,7 +15,7 @@ const props = withDefaults(
     orderId: string;
     unitId: string;
     category?: ChecklistCategory;
-    evidences?: Array<{ id: string; objectKey: string; status: string }>;
+    evidences?: Array<{ id: string; status: string }>;
     disabled?: boolean;
     minRequired?: number;
   }>(),
@@ -241,7 +241,7 @@ async function handleDelete(evidenceId: string) {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <h4 class="text-sm font-bold text-slate-800">Evidencias Fotográficas del Vehículo</h4>
           <span
             v-if="evidences.length >= minRequired"
@@ -320,7 +320,7 @@ async function handleDelete(evidenceId: string) {
     <!-- Status warning when photos < minRequired -->
     <div
       v-if="evidences.length < minRequired"
-      class="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex items-center justify-between gap-2"
+      class="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
     >
       <div class="flex items-center gap-1.5">
         <span>
@@ -336,6 +336,7 @@ async function handleDelete(evidenceId: string) {
         size="tiny"
         type="warning"
         ghost
+        class="self-start sm:self-auto shrink-0"
         @click="fileInputRef?.click()"
       >
         Subir fotos faltantes

@@ -18,6 +18,7 @@ export const orderRoutes: RouteRecordRaw[] = [
   },
   {
     component: () => import('./views/OrderDetailView.vue'),
+    meta: { requiresRole: 'ADMIN' },
     name: 'orders-detail',
     path: '/orders/:id',
   },

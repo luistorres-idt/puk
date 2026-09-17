@@ -2,14 +2,19 @@ import { randomUUID } from 'node:crypto';
 import {
   isMatchingClient,
   normalizeString,
+  OrderAdministrationDetailSchema,
+  OrderExecutionDetailSchema,
   type AssignEquipment,
   type CreateOrder,
   type CreateUnit,
+  type OrderAdministrationDetail,
+  type OrderExecutionDetail,
   type OrderListQuery,
   type RescheduleFailedAppointment,
   type UpdateOrder,
   type UpdateUnit,
 } from '@puk/contracts';
+import * as v from 'valibot';
 import {
   assertOrderAccess,
   getSharedAccess,
@@ -21,7 +26,6 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import {
   FailedAppointmentResolution,
   OrderStatus,
-  UploadStatus,
   type OrderServiceType,
   type Prisma,
 } from '../../generated/prisma/client.js';
@@ -35,6 +39,12 @@ import {
   assertValidOrderTransition,
 } from './order-state-machine.js';
 import { buildEquipmentSheetAssignment } from './equipment-sheet-assignment.js';
+import {
+  administrationOrderSelect,
+  executionOrderSelect,
+  mapAdministrationOrder,
+  mapExecutionOrder,
+} from './order-read-models.js';
 
 type OrderWithEquipment = Prisma.OrderGetPayload<{
   include: { units: { include: { equipment: true } } };
@@ -193,45 +203,41 @@ export class OrdersService {
     };
   }
 
-  public async getOrderById(orderId: string, actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' }) {
+  public async getOrderById(
+    orderId: string,
+    actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
+  ): Promise<OrderAdministrationDetail> {
+    if (actor.role !== 'ADMIN') {
+      throw new AppError(403, 'FORBIDDEN', 'No tienes acceso al detalle administrativo');
+    }
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: {
-        technician: true,
-        createdBy: { select: { id: true, name: true, email: true } },
-        units: {
-          include: {
-            equipment: true,
-            checklist: {
-              include: {
-                items: {
-                  include: {
-                    evidence: {
-                      where: { status: UploadStatus.COMPLETED },
-                      orderBy: { createdAt: 'asc' },
-                    },
-                  },
-                },
-              },
-            },
-            discrepancies: true,
-          },
-        },
-        signature: true,
-        discrepancies: true,
-        syncOperations: { orderBy: { createdAt: 'desc' } },
-        rescheduledFrom: { select: { id: true, folio: true } },
-        rescheduledOrder: { select: { id: true, folio: true, status: true } },
-      },
+      select: administrationOrderSelect,
     });
 
     if (!order) {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
 
+    return v.parse(OrderAdministrationDetailSchema, mapAdministrationOrder(order));
+  }
+
+  public async getOrderExecutionById(
+    orderId: string,
+    actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
+  ): Promise<OrderExecutionDetail> {
     await assertOrderAccess(this.prisma, actor, orderId, 'No tienes acceso a esta orden');
 
-    return order;
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: executionOrderSelect,
+    });
+    if (!order) {
+      throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
+    }
+
+    return v.parse(OrderExecutionDetailSchema, mapExecutionOrder(order));
   }
 
   public async createOrder(actorUserId: string, input: CreateOrder) {

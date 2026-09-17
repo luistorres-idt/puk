@@ -1,122 +1,36 @@
 import type {
   AssignEquipment,
-  ChecklistCategory,
-  ChecklistCondition,
   CreateOrder,
   CreateUnit,
-  CreateUser,
   FailedAppointmentResolution,
+  OrderAdministrationDetail,
+  OrderAdministrationEquipmentDetail,
+  OrderAdministrationTechnician,
+  OrderAdministrationUnitDetail,
+  OrderChecklistDetail,
+  OrderChecklistItemDetail,
+  OrderEvidenceDetail,
+  OrderExecutionDetail,
   OrderListQuery,
   OrderServiceType,
+  OrderSignatureDetail,
   OrderStatus,
-  PricingBreakdown,
   RescheduleFailedAppointment,
-  SharedTechnicianAccessConfig,
   UpdateOrder,
-  UpdateSharedTechnicianAccessAccount,
-  UpdateSharedTechnicianAccessOrder,
   UpdateUnit,
-  UpdateUser,
 } from '@puk/contracts';
 import { api, type ApiResponse } from '../../shared/http/client.js';
 
 export type { ApiResponse };
 
-export interface EquipmentItem {
-  id: string;
-  externalKey: string;
-  externalId?: string | null;
-  imei?: string | null;
-  brandSnapshot?: string | null;
-  modelSnapshot?: string | null;
-  equipmentConditionSnapshot?: string | null;
-  verificationStatus?: string | null;
-}
-
-export interface ChecklistEvidenceItem {
-  id: string;
-  objectKey: string;
-  status: string;
-  mimeType?: string;
-  sizeBytes?: number;
-  width?: number | null;
-  height?: number | null;
-  createdAt?: string;
-}
-
-export interface UnitChecklistItem {
-  id: string;
-  category: ChecklistCategory;
-  condition?: ChecklistCondition | null;
-  notes?: string | null;
-  evidence?: ChecklistEvidenceItem[];
-}
-
-export interface UnitChecklist {
-  id: string;
-  items?: UnitChecklistItem[];
-}
-
-export interface UnitItem {
-  id: string;
-  label: string;
-  makeModel: string;
-  serialNumber: string;
-  year?: number | null;
-  serviceType: OrderServiceType;
-  status: string;
-  equipment?: EquipmentItem[];
-  checklist?: UnitChecklist | null;
-}
-
-export interface TechnicianPricing {
-  id: string;
-  name: string;
-  installationRate?: number | string | null;
-  reviewRate?: number | string | null;
-  uninstallationRate?: number | string | null;
-  replacementRate?: number | string | null;
-  failedAppointmentRate?: number | string | null;
-  fuelSensorRate?: number | string | null;
-}
-
-export interface SignatureItem {
-  id: string;
-  orderId: string;
-  signerName: string;
-  objectKey: string;
-  mimeType: string;
-  sizeBytes: number;
-  signedAt: string;
-  capturedById?: string;
-}
-
-export interface OrderDetail {
-  id: string;
-  folio: string;
-  status: OrderStatus;
-  version: number;
-  serviceType: OrderServiceType;
-  clientNameSnapshot: string;
-  clientSheetId: string;
-  scheduledAt: string;
-  isHomeService: boolean;
-  serviceAddress?: string | null;
-  generalNotes?: string | null;
-  failedReason?: string | null;
-  failedAppointmentResolution?: FailedAppointmentResolution | null;
-  failedAppointmentResolvedAt?: string | null;
-  failedAppointmentResolutionReason?: string | null;
-  rescheduledFrom?: { id: string; folio: string } | null;
-  rescheduledOrder?: { id: string; folio: string; status: OrderStatus } | null;
-  technician?: TechnicianPricing | null;
-  units?: UnitItem[];
-  signature?: SignatureItem | null;
-  pricingBaseCost?: number | string | null;
-  pricingTravelExpenses?: number | string | null;
-  pricingTotal?: number | string | null;
-  pricingBreakdown?: PricingBreakdown | null;
-}
+export type EquipmentItem = OrderAdministrationEquipmentDetail;
+export type ChecklistEvidenceItem = OrderEvidenceDetail;
+export type UnitChecklistItem = OrderChecklistItemDetail;
+export type UnitChecklist = OrderChecklistDetail;
+export type UnitItem = OrderAdministrationUnitDetail;
+export type TechnicianPricing = OrderAdministrationTechnician;
+export type SignatureItem = OrderSignatureDetail;
+export type OrderDetail = OrderAdministrationDetail;
 
 export interface OrderSummary {
   id: string;
@@ -153,6 +67,11 @@ export async function fetchOrders(
 
 export async function fetchOrderById(id: string): Promise<OrderDetail> {
   const response = await api.get<ApiResponse<OrderDetail>>(`/orders/${id}`);
+  return response.data.data;
+}
+
+export async function fetchOrderExecutionById(id: string): Promise<OrderExecutionDetail> {
+  const response = await api.get<ApiResponse<OrderExecutionDetail>>(`/orders/${id}/execution`);
   return response.data.data;
 }
 
@@ -314,58 +233,3 @@ export async function fetchReportDownload(orderId: string): Promise<{
   >(`/orders/${orderId}/report/download`);
   return response.data.data;
 }
-
-export async function getSharedTechnicianAccess(): Promise<SharedTechnicianAccessConfig> {
-  const response = await api.get<ApiResponse<SharedTechnicianAccessConfig>>(
-    '/shared-technician-access',
-  );
-  return response.data.data;
-}
-
-export async function updateSharedTechnicianAccount(
-  data: UpdateSharedTechnicianAccessAccount,
-): Promise<SharedTechnicianAccessConfig> {
-  const response = await api.put<ApiResponse<SharedTechnicianAccessConfig>>(
-    '/shared-technician-access/account',
-    data,
-  );
-  return response.data.data;
-}
-
-export async function updateSharedTechnicianOrder(
-  data: UpdateSharedTechnicianAccessOrder,
-): Promise<SharedTechnicianAccessConfig> {
-  const response = await api.put<ApiResponse<SharedTechnicianAccessConfig>>(
-    '/shared-technician-access/order',
-    data,
-  );
-  return response.data.data;
-}
-
-export interface AdminUserListItem {
-  id: string;
-  name: string;
-  email: string;
-  role: 'ADMIN' | 'TECHNICIAN';
-  active: boolean;
-  technicianId: string | null;
-}
-
-export async function listAdminUsers(): Promise<AdminUserListItem[]> {
-  const response = await api.get<ApiResponse<AdminUserListItem[]>>('/users');
-  return response.data.data;
-}
-
-export async function createAdminUser(data: CreateUser): Promise<AdminUserListItem> {
-  const response = await api.post<ApiResponse<AdminUserListItem>>('/users', data);
-  return response.data.data;
-}
-
-export async function updateAdminUser(
-  id: string,
-  data: UpdateUser,
-): Promise<AdminUserListItem> {
-  const response = await api.patch<ApiResponse<AdminUserListItem>>(`/users/${id}`, data);
-  return response.data.data;
-}
-

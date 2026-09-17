@@ -1,8 +1,7 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { CatalogSearchQuerySchema } from '@puk/contracts';
-import { authenticate, authorize } from '../../auth/authenticate.js';
+import { authorize } from '../../auth/authenticate.js';
 import { assertIndividualTechnician } from '../../auth/order-access-policy.js';
-import type { TokenService } from '../../auth/tokens.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { validate } from '../../middleware/validate.js';
 import { AppError } from '../../shared/errors.js';
@@ -12,10 +11,10 @@ import type { CatalogServicePort } from '../../integrations/ports.js';
 export function createCatalogsRouter(options: {
   catalogsService: CatalogServicePort;
   prisma?: PrismaClient;
-  tokens: TokenService;
+  requireAccess: RequestHandler;
 }): Router {
   const router = Router();
-  router.use(authenticate(options.tokens));
+  router.use(options.requireAccess);
 
   router.get(
     '/clients',

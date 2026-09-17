@@ -7,6 +7,7 @@ import { serviceExecutionRoutes } from '@/modules/service-execution';
 import { technicianRoutes } from '@/modules/technicians';
 import { syncRoutes } from '@/modules/sync';
 import { useSessionStore } from '@/stores/session';
+import { resolveSessionAccessRedirect } from './session-access';
 
 export const router = createRouter({
   history: typeof window !== 'undefined' ? createWebHistory() : createMemoryHistory(),
@@ -24,26 +25,14 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   const session = useSessionStore();
   await session.initialize();
-  if (to.meta.public === true) {
-    if (session.isAuthenticated && to.name === 'login') {
-      return session.user?.orderAccessMode === 'SHARED' ? { name: 'work-order' } : { name: 'home' };
+  if (to.meta.public !== true && session.isAuthenticated) {
+    try {
+      await session.revalidateIdentity();
+    } catch {
+      // Keep the last known identity on transient authority/network failures.
+      // The API remains the authorization boundary for every protected operation.
     }
-    return true;
-  }
-  if (!session.isAuthenticated) return { name: 'login', query: { redirect: to.fullPath } };
-
-  if (session.user?.orderAccessMode === 'SHARED') {
-    if (to.name !== 'work-order' && to.name !== 'order-execution') {
-      return { name: 'work-order' };
-    }
-    return true;
   }
 
-  if (to.name === 'work-order') {
-    return { name: 'home' };
-  }
-
-  if (to.meta.requiresRole !== undefined && session.user?.role !== to.meta.requiresRole)
-    return { name: 'home' };
-  return true;
+  return resolveSessionAccessRedirect(session.user, to) ?? true;
 });

@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
+import { authenticate } from '../../auth/authenticate.js';
 import type { TokenService } from '../../auth/tokens.js';
 import type { TechniciansService } from '../technicians/index.js';
 import type { UsersService } from '../users/index.js';
@@ -76,7 +77,9 @@ describe('createAdministrationRouter', () => {
     app.use(
       '/admin',
       createAdministrationRouter({
-        tokens: mockTokens,
+        requireAccess: authenticate(mockTokens, {
+          resolve: async (userId) => ({ id: userId, role: 'ADMIN' }),
+        }),
         usersService: mockUsersService as unknown as UsersService,
         techniciansService: mockTechniciansService as unknown as TechniciansService,
         syncService: mockSyncService as unknown as SyncService,

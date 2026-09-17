@@ -19,9 +19,12 @@ import {
   orderStatusTagType,
   useOrdersQuery,
 } from '@/modules/orders';
+import { reconcileCurrentSessionAccess } from '@/router/identity-reconciliation';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
+import { useSessionStore } from '@/stores/session';
 
 const router = useRouter();
+const session = useSessionStore();
 
 const search = ref('');
 const statusFilter = ref<OrderStatus | ''>('');
@@ -56,8 +59,9 @@ const error = computed(() =>
       : null,
 );
 
-function refresh(): void {
-  void ordersQuery.refetch();
+async function refresh(): Promise<void> {
+  const redirected = await reconcileCurrentSessionAccess(session, router);
+  if (!redirected) await ordersQuery.refetch();
 }
 
 function formatDate(dateStr: string): string {
@@ -131,9 +135,9 @@ function formatDate(dateStr: string): string {
           hoverable
         >
           <div class="space-y-4">
-            <div class="flex items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
               <span class="font-mono text-base font-bold text-slate-900">{{ order.folio }}</span>
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <n-tag size="small" :type="orderStatusTagType(order.status)" round>
                   {{ formatOrderStatus(order.status) }}
                 </n-tag>
@@ -170,6 +174,7 @@ function formatDate(dateStr: string): string {
               <n-button
                 type="primary"
                 size="medium"
+                class="w-full sm:w-auto"
                 @click="router.push(`/orders/${order.id}/execute`)"
               >
                 {{ order.status === 'IN_PROGRESS' ? 'Continuar Orden →' : 'Atender Orden →' }}

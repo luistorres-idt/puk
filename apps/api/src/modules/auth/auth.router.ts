@@ -1,7 +1,8 @@
 import { LoginRequestSchema } from '@puk/contracts';
-import { Router, type CookieOptions } from 'express';
+import { Router, type CookieOptions, type RequestHandler } from 'express';
 
 import { authenticate } from '../../auth/authenticate.js';
+import { PrismaPrincipalResolver, type PrincipalResolver } from '../../auth/principal-resolver.js';
 import type { TokenService } from '../../auth/tokens.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { authenticationRateLimit } from '../../middleware/rate-limits.js';
@@ -13,14 +14,21 @@ const REFRESH_COOKIE = 'puk_refresh';
 
 export interface AuthRouterOptions {
   cookie: CookieOptions;
+  principalResolver?: PrincipalResolver;
   prisma: PrismaClient;
+  requireAccess?: RequestHandler;
   tokens: TokenService;
 }
 
 export function createAuthRouter(options: AuthRouterOptions): Router {
   const router = Router();
   const service = new AuthService(options.prisma, options.tokens);
-  const requireAccess = authenticate(options.tokens);
+  const requireAccess =
+    options.requireAccess ??
+    authenticate(
+      options.tokens,
+      options.principalResolver ?? new PrismaPrincipalResolver(options.prisma),
+    );
 
   router.post(
     '/login',

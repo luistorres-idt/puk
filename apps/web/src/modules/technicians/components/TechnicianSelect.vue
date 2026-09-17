@@ -106,7 +106,7 @@ defineExpose({
 <template>
   <div class="space-y-3">
     <!-- Header with Google Sheets label and refresh action -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div>
         <label class="block text-sm font-semibold text-slate-700">
           Técnico Asignado (Hoja DIRECTORIO TECNICO)

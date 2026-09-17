@@ -6,6 +6,8 @@ import {
   CreateTechnicianSchema,
   TechnicianOptionSchema,
   OrderServiceTypeSchema,
+  OrderAdministrationDetailSchema,
+  OrderExecutionDetailSchema,
   AssignEquipmentSchema,
   CreateUnitSchema,
   UpdateOrderSchema,
@@ -34,6 +36,8 @@ const updateSharedTechnicianAccessOrderSchema = toJsonSchema(
   schemaConfig,
 );
 const meOrderAccessResponseSchema = toJsonSchema(MeOrderAccessResponseSchema, schemaConfig);
+const orderAdministrationDetailSchema = toJsonSchema(OrderAdministrationDetailSchema, schemaConfig);
+const orderExecutionDetailSchema = toJsonSchema(OrderExecutionDetailSchema, schemaConfig);
 const orderIdParameter = {
   in: 'path',
   name: 'id',
@@ -139,6 +143,28 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/v1/auth/logout-all': {
+      post: {
+        operationId: 'logoutAll',
+        summary: 'Revoke every refresh session for the current active principal',
+        responses: {
+          '200': { description: 'All refresh sessions revoked' },
+          '401': { description: 'Invalid token or SESSION_REVOKED' },
+          '503': { description: 'AUTHORITY_UNAVAILABLE while resolving current authorization' },
+        },
+      },
+    },
+    '/api/v1/auth/me': {
+      get: {
+        operationId: 'getCurrentSessionUser',
+        summary: 'Get the current active user using live authorization state',
+        responses: {
+          '200': { description: 'Current session user' },
+          '401': { description: 'Invalid token or SESSION_REVOKED' },
+          '503': { description: 'AUTHORITY_UNAVAILABLE while resolving current authorization' },
+        },
+      },
+    },
     '/api/v1/technicians': {
       get: {
         operationId: 'listTechnicians',
@@ -224,6 +250,28 @@ export const openApiDocument = {
       },
     },
     '/api/v1/orders/{id}': {
+      get: {
+        operationId: 'getOrderAdministrationDetail',
+        summary: 'Get the explicit administrative order detail',
+        parameters: [orderIdParameter],
+        responses: {
+          '200': {
+            description: 'Administrative order detail',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: orderAdministrationDetailSchema },
+                  required: ['data'],
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Administrator permission required' },
+          '404': { description: 'Order not found' },
+        },
+      },
       patch: {
         operationId: 'updateOrder',
         summary: 'Update an editable order; technician selection cannot be cleared',
@@ -244,6 +292,30 @@ export const openApiDocument = {
           '403': { description: 'Forbidden' },
           '404': { description: 'Order or technician not found' },
           '409': { description: 'Order version conflict' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/execution': {
+      get: {
+        operationId: 'getOrderExecutionDetail',
+        summary: 'Get the least-privilege order detail required for service execution',
+        parameters: [orderIdParameter],
+        responses: {
+          '200': {
+            description: 'Execution order detail without administrative or billing data',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: orderExecutionDetailSchema },
+                  required: ['data'],
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Order is not accessible to the current technician' },
+          '404': { description: 'Order not found' },
         },
       },
     },

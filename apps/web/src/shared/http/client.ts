@@ -59,6 +59,17 @@ export async function refreshSession(): Promise<void> {
   return refreshPromise;
 }
 
+export async function fetchCurrentSessionUser(accessToken: string): Promise<SessionUser> {
+  const response = await sessionApi.get<ApiResponse<SessionUser>>('/auth/me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return response.data.data;
+}
+
+export function isUnauthorizedHttpError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 401;
+}
+
 export interface ApiResponse<T> {
   data: T;
   meta: {

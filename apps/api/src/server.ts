@@ -156,7 +156,6 @@ const executionService = new ExecutionService(prisma, storagePort, {
 const server = createApp({
   administration: {
     prisma,
-    tokens,
     techniciansService,
     syncService,
     technicalReportSyncSchedule,
