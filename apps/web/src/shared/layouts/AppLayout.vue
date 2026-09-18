@@ -3,6 +3,7 @@ import { ref, watch } from 'vue';
 import { NButton, NTag } from 'naive-ui';
 import { useRoute, useRouter } from 'vue-router';
 import { useOnline } from '@vueuse/core';
+import ThemeToggle from '@/shared/components/ThemeToggle.vue';
 import { useSessionStore } from '@/stores/session';
 
 const session = useSessionStore();
@@ -73,89 +74,93 @@ async function logout(): Promise<void> {
           </n-tag>
         </div>
 
-        <!-- Desktop Navigation -->
-        <nav v-if="session.user" class="hidden md:flex items-center gap-2 lg:gap-4">
-          <template v-if="session.user.orderAccessMode === 'SHARED'">
-            <router-link
-              class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-              to="/work-order"
-            >
-              Orden de Trabajo
-            </router-link>
-          </template>
-          <template v-else>
-            <router-link
-              class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-              to="/"
-            >
-              Inicio
-            </router-link>
-            <router-link
-              class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-              to="/orders"
-            >
-              {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
-            </router-link>
-            <router-link
-              v-if="session.user.role === 'ADMIN'"
-              class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-              to="/technicians"
-            >
-              Técnicos
-            </router-link>
-            <router-link
-              v-if="session.user.role === 'ADMIN'"
-              class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-              to="/technical-accounts"
-            >
-              Cuentas Técnicas
-            </router-link>
-            <router-link
-              v-if="session.user.role === 'ADMIN'"
-              class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-              to="/sync"
-            >
-              Sincronización
-            </router-link>
-          </template>
+        <div class="flex items-center gap-2">
+          <ThemeToggle />
 
-          <span class="hidden text-xs text-slate-500 lg:inline">
-            {{ session.user.name }}
-          </span>
+          <!-- Desktop Navigation -->
+          <nav v-if="session.user" class="hidden md:flex items-center gap-2 lg:gap-4">
+            <template v-if="session.user.orderAccessMode === 'SHARED'">
+              <router-link
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                to="/work-order"
+              >
+                Orden de Trabajo
+              </router-link>
+            </template>
+            <template v-else>
+              <router-link
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                to="/"
+              >
+                Inicio
+              </router-link>
+              <router-link
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                to="/orders"
+              >
+                {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
+              </router-link>
+              <router-link
+                v-if="session.user.role === 'ADMIN'"
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                to="/technicians"
+              >
+                Técnicos
+              </router-link>
+              <router-link
+                v-if="session.user.role === 'ADMIN'"
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                to="/technical-accounts"
+              >
+                Cuentas Técnicas
+              </router-link>
+              <router-link
+                v-if="session.user.role === 'ADMIN'"
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                to="/sync"
+              >
+                Sincronización
+              </router-link>
+            </template>
 
-          <n-button quaternary size="small" @click="logout"> Salir </n-button>
-        </nav>
+            <span class="hidden text-xs text-slate-500 lg:inline">
+              {{ session.user.name }}
+            </span>
 
-        <!-- Mobile hamburger toggle -->
-        <button
-          v-if="session.user"
-          type="button"
-          class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 md:hidden focus:outline-none"
-          :aria-expanded="isMobileMenuOpen"
-          aria-label="Menú principal"
-          @click="isMobileMenuOpen = !isMobileMenuOpen"
-        >
-          <svg
-            v-if="!isMobileMenuOpen"
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
+            <n-button quaternary size="small" @click="logout"> Salir </n-button>
+          </nav>
+
+          <!-- Mobile hamburger toggle -->
+          <button
+            v-if="session.user"
+            type="button"
+            class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 md:hidden focus:outline-none"
+            :aria-expanded="isMobileMenuOpen"
+            aria-label="Menú principal"
+            @click="isMobileMenuOpen = !isMobileMenuOpen"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-          <svg
-            v-else
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+            <svg
+              v-if="!isMobileMenuOpen"
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <svg
+              v-else
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Mobile Navigation Drawer / Dropdown -->
@@ -168,11 +173,7 @@ async function logout(): Promise<void> {
             <p class="text-xs font-semibold text-slate-800">{{ session.user.name }}</p>
             <p class="text-[11px] text-slate-500">{{ session.user.email }}</p>
           </div>
-          <n-tag
-            size="small"
-            :type="session.user.role === 'ADMIN' ? 'primary' : 'info'"
-            round
-          >
+          <n-tag size="small" :type="session.user.role === 'ADMIN' ? 'primary' : 'info'" round>
             {{
               session.user.role === 'ADMIN'
                 ? 'Admin'

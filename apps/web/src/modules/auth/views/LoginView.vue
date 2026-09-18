@@ -3,6 +3,7 @@ import { NAlert, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui';
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import ThemeToggle from '@/shared/components/ThemeToggle.vue';
 import { useSessionStore } from '@/stores/session';
 
 const session = useSessionStore();
@@ -30,6 +31,7 @@ async function submit(): Promise<void> {
 <template>
   <main class="grid min-h-screen place-items-center bg-slate-100 px-4 py-10">
     <n-card class="w-full max-w-md shadow-sm" size="large">
+      <div class="mb-4 flex justify-end"><ThemeToggle /></div>
       <div class="mb-6 space-y-2">
         <p class="text-sm font-semibold tracking-wide text-blue-800 uppercase">Bull Dog Solution</p>
         <h1 class="text-2xl font-bold text-slate-900">Iniciar sesión</h1>

@@ -26,7 +26,7 @@ await prisma.user.upsert({
     passwordHash,
     role: UserRole.ADMIN,
   },
-  update: { passwordHash },
+  update: {},
   where: { email: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.invalid' },
 });
 
@@ -38,7 +38,7 @@ await prisma.user.upsert({
     role: UserRole.TECHNICIAN,
     technicianId: technician.id,
   },
-  update: { passwordHash },
+  update: {},
   where: { email: process.env.SEED_TECHNICIAN_EMAIL ?? 'technician@example.invalid' },
 });
 
