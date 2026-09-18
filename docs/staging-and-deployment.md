@@ -78,11 +78,7 @@ aws sts get-caller-identity
 pnpm infra:bootstrap
 pnpm infra:foundation
 
-GOOGLE_SPREADSHEET_ID="..." \
-GOOGLE_TECHNICIANS_SPREADSHEET_ID="..." \
-GOOGLE_SERVICE_ACCOUNT_FILE="/ruta/segura/service-account.json" \
-SEED_ADMIN_EMAIL="admin@ejemplo.com" \
-pnpm infra:configure
+AWS_REGION=us-east-2 node --env-file=.env infra/scripts/configure-staging-secrets.mjs
 
 pnpm infra:deploy
 
@@ -90,9 +86,32 @@ pnpm infra:deploy
 gh variable set AWS_STAGING_READY --body true --repo luistorres-idt/puk
 ```
 
-`infra:configure` genera automáticamente dos pares Ed25519 para JWT y una contraseña inicial
-aleatoria. La contraseña se muestra una sola vez en la terminal y debe guardarse en el gestor de
-contraseñas del equipo.
+El script genera automáticamente dos pares Ed25519 para JWT y una contraseña inicial aleatoria.
+Nunca imprime la contraseña ni otros valores sensibles. El operador debe recuperar la contraseña
+de seed mediante el acceso seguro aprobado a Secrets Manager, sin mostrarla en terminal, logs,
+capturas, chat ni tickets.
+
+Para rotar el secreto existente, repita el comando con `--overwrite` sólo después de validar los
+valores de entrada:
+
+```bash
+AWS_REGION=us-east-2 node --env-file=.env infra/scripts/configure-staging-secrets.mjs --overwrite
+```
+
+La rotación crea una nueva versión en Secrets Manager, pero las tareas ECS ya iniciadas conservan
+los valores inyectados al arrancar. Fuerce un nuevo despliegue o reinicie el servicio antes de
+validar. La rotación de las claves JWT invalida los tokens emitidos con las claves anteriores;
+planifique el impacto sobre sesiones activas.
+
+Para habilitar el despliegue automático, configure la variable de repositorio en GitHub: **Settings >
+Secrets and variables > Actions > Variables**, con nombre `AWS_STAGING_READY` y valor exacto `true`.
+También existe el CLI:
+
+```bash
+gh variable set AWS_STAGING_READY --body true --repo luistorres-idt/puk
+```
+
+La variable no se presupone configurada. El workflow sólo despliega cuando su valor es `true`.
 
 Para obtener nuevamente la URL:
 
@@ -105,6 +124,40 @@ aws cloudformation describe-stacks \
 ```
 
 Una vez creado el rol `puk-staging-github-deploy`, cada ejecución exitosa del pipeline CI sobre
-`main` activa `.github/workflows/deploy-staging.yml` y realiza el despliegue y smoke test. El
-workflow permanece deshabilitado mientras `AWS_STAGING_READY` no tenga el valor `true`, evitando
+`main` puede activar `.github/workflows/deploy-staging.yml` y realizar el despliegue y smoke test.
+El workflow permanece deshabilitado mientras `AWS_STAGING_READY` no tenga el valor `true`, evitando
 que intente desplegar antes de completar el bootstrap y la carga inicial de secretos.
+
+### Diagnóstico, incidente y rollback
+
+Diagnóstico de sólo lectura, sin imprimir secretos:
+
+```bash
+aws cloudformation describe-stacks --region us-east-2 --stack-name PukStagingApplication
+aws ecs describe-services --region us-east-2 --cluster puk-staging --services <service-name>
+aws ecs list-tasks --region us-east-2 --cluster puk-staging --service-name <service-name>
+aws logs tail /puk/staging/migration --region us-east-2 --since 30m
+aws logs tail /puk/staging/api --region us-east-2 --since 30m
+```
+
+Después de un despliegue, obtenga la URL de CloudFront con el comando anterior y ejecute:
+
+```bash
+TARGET_URL="https://<cloudfront-host>" ./infra/scripts/smoke-test.sh
+```
+
+El smoke test comprueba `/health/live`, `/health/ready`, `/metrics` y `/docs/`. Si falla una
+migración, la API no inicia: conserve los logs, no repita el despliegue a ciegas y evalúe la
+migración antes de corregirla. El circuit breaker de ECS puede revertir la revisión de aplicación;
+para una recuperación de datos use un respaldo verificado y `infra/scripts/restore.sh` con
+aprobación operativa. RDS y S3 usan `RETAIN`: no los borre como parte de un rollback.
+
+Los assets desplegados por CI corresponden a `workflow_run.head_sha`. Si se despliega CDK
+manualmente, registre antes el SHA de Git usado junto con la revisión de ECS y el cambio aplicado.
+
+### Costos y teardown
+
+RDS tiene deletion protection y los recursos persistentes usan `RETAIN`. NAT Gateway y RDS
+generan costos mientras existan, aun cuando no haya tráfico. No destruya stacks ni modifique la
+protección de borrado casualmente: coordine la titularidad operativa, respaldos y retención de
+RDS, S3 y logs antes de cualquier teardown.
