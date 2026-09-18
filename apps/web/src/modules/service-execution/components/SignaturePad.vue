@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue';
+import { useResizeObserver } from '@vueuse/core';
 import { NButton, NCard, NImage, NInput, NSpin } from 'naive-ui';
 import { getSignatureUrl } from '../api.js';
 
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   (e: 'save', payload: { signerName: string; blob: Blob }): void;
 }>();
 
+const containerRef = ref<HTMLDivElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const signerName = ref('');
 const isDrawing = ref(false);
@@ -58,11 +60,31 @@ async function loadSignaturePreview() {
 async function initCanvas() {
   await nextTick();
   if (canvasRef.value) {
-    canvasRef.value.width = canvasRef.value.parentElement?.clientWidth || 400;
+    const parentWidth = containerRef.value?.clientWidth || canvasRef.value.parentElement?.clientWidth || 400;
+    canvasRef.value.width = parentWidth;
     canvasRef.value.height = 180;
     clearCanvas();
   }
 }
+
+useResizeObserver(containerRef, (entries) => {
+  const entry = entries[0];
+  if (!entry || !isEditing.value) return;
+  const newWidth = Math.floor(entry.contentRect.width);
+  if (canvasRef.value && newWidth > 0 && canvasRef.value.width !== newWidth) {
+    const prevData = hasDrawn.value ? canvasRef.value.toDataURL() : null;
+    canvasRef.value.width = newWidth;
+    canvasRef.value.height = 180;
+    if (prevData) {
+      const img = new Image();
+      img.onload = () => {
+        const ctx = canvasRef.value?.getContext('2d');
+        ctx?.drawImage(img, 0, 0);
+      };
+      img.src = prevData;
+    }
+  }
+});
 
 function startReSigning() {
   isEditing.value = true;
@@ -238,7 +260,7 @@ onMounted(() => {
         <label class="block text-xs font-semibold text-slate-700 mb-1">
           Firma digital en pantalla *
         </label>
-        <div class="border border-slate-300 rounded bg-white overflow-hidden touch-none">
+        <div ref="containerRef" class="border border-slate-300 rounded bg-white overflow-hidden touch-none">
           <canvas
             ref="canvasRef"
             class="w-full cursor-crosshair block"

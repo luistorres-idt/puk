@@ -7,6 +7,7 @@ import { serviceExecutionRoutes } from '@/modules/service-execution';
 import { technicianRoutes } from '@/modules/technicians';
 import { syncRoutes } from '@/modules/sync';
 import { useSessionStore } from '@/stores/session';
+import { resolveSessionAccessRedirect } from './session-access';
 
 export const router = createRouter({
   history: typeof window !== 'undefined' ? createWebHistory() : createMemoryHistory(),
@@ -24,10 +25,14 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   const session = useSessionStore();
   await session.initialize();
-  if (to.meta.public === true)
-    return session.isAuthenticated && to.name === 'login' ? { name: 'home' } : true;
-  if (!session.isAuthenticated) return { name: 'login', query: { redirect: to.fullPath } };
-  if (to.meta.requiresRole !== undefined && session.user?.role !== to.meta.requiresRole)
-    return { name: 'home' };
-  return true;
+  if (to.meta.public !== true && session.isAuthenticated) {
+    try {
+      await session.revalidateIdentity();
+    } catch {
+      // Keep the last known identity on transient authority/network failures.
+      // The API remains the authorization boundary for every protected operation.
+    }
+  }
+
+  return resolveSessionAccessRedirect(session.user, to) ?? true;
 });

@@ -394,18 +394,49 @@ async function handleFinish() {
 <template>
   <app-layout>
     <div class="max-w-3xl mx-auto space-y-6">
-      <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold text-slate-800">Nueva Orden de Servicio</h1>
-        <NButton secondary @click="router.push('/orders')">Cancelar</NButton>
+      <div class="flex items-center justify-between gap-3">
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Nueva Orden de Servicio</h1>
+        <NButton secondary size="small" @click="router.push('/orders')">Cancelar</NButton>
       </div>
 
-      <NSteps :current="currentStep" class="py-4">
+      <!-- Desktop Steps Indicator (sm and above) -->
+      <NSteps :current="currentStep" class="hidden sm:flex py-4">
         <NStep title="Cliente" description="Selección del cliente" />
         <NStep title="Servicios y Unidades" description="Configuración por bloques" />
         <NStep title="Programación" description="Fecha y ubicación" />
         <NStep title="Técnico" description="Asignación inicial" />
         <NStep title="Revisión" description="Crear orden" />
       </NSteps>
+
+      <!-- Mobile Compact Step Progress (below sm) -->
+      <div class="flex sm:hidden flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-blue-900 uppercase tracking-wider">
+            Paso {{ currentStep }} de 5
+          </span>
+          <span class="text-xs font-bold text-slate-700">
+            {{
+              currentStep === 1
+                ? 'Cliente'
+                : currentStep === 2
+                  ? 'Servicios y Unidades'
+                  : currentStep === 3
+                    ? 'Programación'
+                    : currentStep === 4
+                      ? 'Técnico'
+                      : 'Revisión y Creación'
+            }}
+          </span>
+        </div>
+        <div class="flex gap-1.5">
+          <div
+            v-for="s in 5"
+            :key="s"
+            class="h-1.5 flex-1 rounded-full transition-all duration-300"
+            :class="s <= currentStep ? 'bg-blue-600' : 'bg-slate-200'"
+          />
+        </div>
+      </div>
 
       <NAlert v-if="error" type="error" closable class="mb-4" @close="error = null">
         {{ error }}
@@ -720,7 +751,9 @@ async function handleFinish() {
                 "
               >
                 <!-- Block header -->
-                <div class="bg-slate-50 px-4 py-2.5 border-b flex items-center justify-between">
+                <div
+                  class="bg-slate-50 px-4 py-2.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
                   <div class="flex items-center gap-2">
                     <NTag
                       :type="
@@ -743,14 +776,14 @@ async function handleFinish() {
                     </span>
                   </div>
 
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 flex-wrap">
                     <NButton
                       size="tiny"
                       secondary
                       type="primary"
                       @click="selectServiceBlockForAdding(block.serviceType)"
                     >
-                      + Agregar otra unidad a este bloque
+                      + Agregar unidad
                     </NButton>
                     <NButton
                       size="tiny"
@@ -950,14 +983,19 @@ async function handleFinish() {
       </NCard>
 
       <!-- Navigation buttons -->
-      <div class="flex justify-between">
-        <NButton :disabled="currentStep === 1 || loading" @click="currentStep--">
+      <div class="flex items-center justify-between gap-3 pt-2">
+        <NButton
+          :disabled="currentStep === 1 || loading"
+          class="min-w-24 sm:min-w-28"
+          @click="currentStep--"
+        >
           Anterior
         </NButton>
 
         <NButton
           v-if="currentStep < 5"
           type="primary"
+          class="min-w-24 sm:min-w-28"
           :disabled="!canProceed() || loading"
           @click="currentStep++"
         >
@@ -967,6 +1005,7 @@ async function handleFinish() {
         <NButton
           v-else
           type="primary"
+          class="flex-1 sm:flex-initial"
           :loading="loading"
           :disabled="!hasValidTechnician"
           @click="handleFinish"

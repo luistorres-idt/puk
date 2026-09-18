@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { NButton, NImage, NPopconfirm, NSpin, useMessage } from 'naive-ui';
-import type { ChecklistCategory } from '@puk/contracts';
+import { MIN_REQUIRED_EVIDENCE_PHOTOS, type ChecklistCategory } from '@puk/contracts';
 import {
   completeEvidence,
   deleteEvidence,
@@ -15,7 +15,7 @@ const props = withDefaults(
     orderId: string;
     unitId: string;
     category?: ChecklistCategory;
-    evidences?: Array<{ id: string; objectKey: string; status: string }>;
+    evidences?: Array<{ id: string; status: string }>;
     disabled?: boolean;
     minRequired?: number;
   }>(),
@@ -23,7 +23,7 @@ const props = withDefaults(
     category: 'BODYWORK',
     evidences: () => [],
     disabled: false,
-    minRequired: 3,
+    minRequired: MIN_REQUIRED_EVIDENCE_PHOTOS,
   },
 );
 
@@ -241,7 +241,7 @@ async function handleDelete(evidenceId: string) {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <h4 class="text-sm font-bold text-slate-800">Evidencias Fotográficas del Vehículo</h4>
           <span
             v-if="evidences.length >= minRequired"
@@ -320,7 +320,7 @@ async function handleDelete(evidenceId: string) {
     <!-- Status warning when photos < minRequired -->
     <div
       v-if="evidences.length < minRequired"
-      class="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex items-center justify-between gap-2"
+      class="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
     >
       <div class="flex items-center gap-1.5">
         <span>
@@ -336,6 +336,7 @@ async function handleDelete(evidenceId: string) {
         size="tiny"
         type="warning"
         ghost
+        class="self-start sm:self-auto shrink-0"
         @click="fileInputRef?.click()"
       >
         Subir fotos faltantes

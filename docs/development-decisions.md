@@ -16,7 +16,7 @@ Estas reglas desbloquean el desarrollo sin conceder acceso a datos productivos. 
 ## Evidencias
 
 - Cada fotografía admite JPEG, PNG o WebP, con máximo de 10 MiB.
-- Se exigen al menos tres fotografías completadas por unidad, distribuidas entre las categorías. No existe un máximo funcional por categoría.
+- Se exigen al menos diez fotografías completadas por unidad, distribuidas entre las categorías. No existe un máximo funcional por categoría.
 - La firma PNG tiene un máximo de 1 MiB.
 - Los límites se configuran por entorno y el backend siempre los vuelve a validar.
 

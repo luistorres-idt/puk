@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import * as v from 'valibot';
 import {
   ChecklistCategorySchema,
@@ -12,20 +12,20 @@ import {
   ReportDiscrepancySchema,
   RequireCorrectionSchema,
   SaveChecklistSchema,
+  UpdateExecutionNotesSchema,
   UnitParamsSchema,
 } from '@puk/contracts';
-import { authenticate, authorize } from '../../auth/authenticate.js';
-import type { TokenService } from '../../auth/tokens.js';
+import { authorize } from '../../auth/authenticate.js';
 import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import type { ExecutionService } from './execution.service.js';
 
 export function createExecutionRouter(options: {
   executionService: ExecutionService;
-  tokens: TokenService;
+  requireAccess: RequestHandler;
 }): Router {
   const router = Router();
-  router.use(authenticate(options.tokens));
+  router.use(options.requireAccess);
 
   // --- Start order ---
   router.post(
@@ -202,6 +202,20 @@ export function createExecutionRouter(options: {
     validate({ params: IdParamsSchema }),
     async (request, response) => {
       const result = await options.executionService.validateCompleteness(String(request.params.id));
+      sendSuccess(response, result);
+    },
+  );
+
+  router.patch(
+    '/orders/:id/execution-notes',
+    validate({ body: UpdateExecutionNotesSchema, params: IdParamsSchema }),
+    async (request, response) => {
+      const result = await options.executionService.updateExecutionNotes(
+        request.auth!.userId,
+        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+        String(request.params.id),
+        request.body,
+      );
       sendSuccess(response, result);
     },
   );

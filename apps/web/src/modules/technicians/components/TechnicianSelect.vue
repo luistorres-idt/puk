@@ -3,11 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { NAlert, NButton, NSelect, NTag } from 'naive-ui';
 import type { TechnicianOption } from '@puk/contracts';
 import { fetchSelectableTechnicians } from '../api.js';
-import {
-  filterTechnicians,
-  getUniqueCities,
-  getUniqueWorkshops,
-} from '../technician-filter.js';
+import { filterTechnicians, getUniqueCities, getUniqueWorkshops } from '../technician-filter.js';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 
 const props = defineProps<{
@@ -41,8 +37,8 @@ const filteredTechnicians = computed(() =>
   }),
 );
 
-const selectedTechnician = computed(() =>
-  technicians.value.find((t) => t.id === props.modelValue) ?? null,
+const selectedTechnician = computed(
+  () => technicians.value.find((t) => t.id === props.modelValue) ?? null,
 );
 
 const selectOptions = computed(() =>
@@ -110,7 +106,7 @@ defineExpose({
 <template>
   <div class="space-y-3">
     <!-- Header with Google Sheets label and refresh action -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div>
         <label class="block text-sm font-semibold text-slate-700">
           Técnico Asignado (Hoja DIRECTORIO TECNICO)

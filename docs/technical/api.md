@@ -12,7 +12,7 @@
 
 ## Autenticación y autorización
 
-El access token se envía como `Authorization: Bearer <token>`. El refresh token se guarda en la cookie HTTP-only `puk_refresh`. Los roles son `ADMIN` y `TECHNICIAN`; además de capacidades, los servicios verifican que el técnico sea propietario de la orden.
+El access token se envía como `Authorization: Bearer <token>`. El refresh token se guarda en la cookie HTTP-only `puk_refresh`. El JWT prueba la identidad, pero cada request protegido resuelve desde PostgreSQL que el usuario siga activo y cuál es su rol vigente. Un usuario inexistente o inactivo recibe `401 SESSION_REVOKED`; si no puede consultarse la autoridad vigente, la API falla cerrada con `503 AUTHORITY_UNAVAILABLE`. Los roles son `ADMIN` y `TECHNICIAN`; además de capacidades, los servicios verifican que el técnico sea propietario de la orden.
 
 ## Endpoints
 
@@ -67,7 +67,8 @@ configurable en el asistente. El listado acepta los seis valores del dominio com
 | Método       | Ruta                                                      | Acceso / propósito                               |
 | ------------ | --------------------------------------------------------- | ------------------------------------------------ |
 | GET/POST     | `/api/v1/orders`                                          | listar propias/todas; crear como administrador   |
-| GET/PATCH    | `/api/v1/orders/:id`                                      | consultar; editar como administrador             |
+| GET/PATCH    | `/api/v1/orders/:id`                                      | detalle administrativo explícito; editar         |
+| GET          | `/api/v1/orders/:id/execution`                            | detalle operativo mínimo para ejecutar           |
 | POST         | `/api/v1/orders/:id/assign`                               | asignar y encolar sincronización inicial         |
 | POST         | `/api/v1/orders/:id/cancel`                               | cancelar                                         |
 | POST         | `/api/v1/orders/:id/reschedule`                           | reprogramar una cita fallida como nuevo borrador |
@@ -81,8 +82,14 @@ configurable en el asistente. El listado acepta los seis valores del dominio com
 
 ### Ejecución técnica
 
+`GET /api/v1/orders/:id/execution` es el único detalle consumido por la vista técnica. Su respuesta
+omite datos fiscales y de contacto del técnico, tarifas, creador, auditoría y operaciones de
+sincronización. `GET /api/v1/orders/:id` queda reservado al administrador y también usa una
+proyección de respuesta explícita.
+
 | Método | Ruta                                                                    | Propósito                 |
 | ------ | ----------------------------------------------------------------------- | ------------------------- |
+| GET    | `/api/v1/orders/:id/execution`                                          | cargar detalle operativo  |
 | POST   | `/api/v1/orders/:id/start`                                              | iniciar trabajo           |
 | POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/verify`        | verificar equipo          |
 | POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/discrepancy`   | reportar diferencia       |
@@ -95,9 +102,14 @@ configurable en el asistente. El listado acepta los seis valores del dominio com
 | POST   | `/api/v1/orders/:id/signature/complete?objectKey=...`                   | confirmar firma           |
 | GET    | `/api/v1/orders/:id/signature/url`                                      | URL temporal de firma     |
 | GET    | `/api/v1/orders/:id/completeness`                                       | requisitos pendientes     |
+| PATCH  | `/api/v1/orders/:id/execution-notes`                                   | guardar nota general de ejecución |
 | POST   | `/api/v1/orders/:id/complete`                                           | completar orden           |
 | POST   | `/api/v1/orders/:id/fail-appointment`                                   | registrar cita fallida    |
 | POST   | `/api/v1/orders/:id/require-correction`                                 | solicitar corrección      |
+
+La nota de ejecución pertenece a la orden completa, no a una unidad individual. El endpoint permite
+guardarla durante `IN_PROGRESS`; la vista también la guarda automáticamente antes de solicitar el
+cierre cuando existen cambios pendientes.
 
 Al completar una orden se congelan el precio y su desglose por servicio, se encola nuevamente el
 estado final de cada equipo en `SALIDAS` y se publica el renglón del reporte técnico. Estas tareas

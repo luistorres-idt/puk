@@ -7,9 +7,15 @@
 - Contraseñas con Argon2id.
 - Access y refresh JWT firmados con pares de claves separados.
 - Access token de corta duración y refresh token rotativo.
+- Validación viva del principal en cada request protegido: el JWT aporta la identidad y PostgreSQL determina actividad y rol vigente.
 - Solo se almacena el hash del refresh token en PostgreSQL.
 - Cookie HTTP-only configurable con `Secure`, `SameSite` y dominio.
 - Revocación por sesión y cierre de todas las sesiones.
+- La desactivación bloquea inmediatamente access tokens vigentes con `SESSION_REVOKED`; una falla al consultar la autoridad produce `AUTHORITY_UNAVAILABLE` y no se confunde con credenciales inválidas.
+- El cliente reconcilia `/auth/me` al navegar, recuperar el foco y actualizar el tablero compartido;
+  un `401` limpia la sesión sin pasar por el interceptor de refresh. Los `403` no se reintentan ni
+  disparan un interceptor global: la reconciliación ocurre en esos límites explícitos para evitar
+  ciclos y efectos laterales sobre denegaciones que no implican un cambio de identidad.
 
 ### API
 

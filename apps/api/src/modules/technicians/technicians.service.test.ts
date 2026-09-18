@@ -25,21 +25,61 @@ describe('technician selection', () => {
 
   it('synchronizes technicians from sheets on listSelectable when sheetsPort is provided', async () => {
     const validHeaderRow = [
-      'TECNICO', 'TALLER', 'RAZON SOCIAL', 'TELEFONO', 'CORREO', 'DIRECCIÓN',
-      'CIUDAD', 'ESTADO', 'FACTURA', 'DATOS FISCALES', 'DIRECCION FISCAL',
-      'COSTO SALIDA DEL TALLER', 'CAMBIO DE EQUIPO', 'INSTALACION', 'REVISION',
-      'DESINSTALACION', 'CITA FALLIDA', 'SENSOR FUEL', 'NOTAS ADICIONALES',
-      'NOMBRE DE LA CUENTA BANCARIA', 'CUENTA BANCARIA', 'BANCO', 'ID_TECNICO',
+      'TECNICO',
+      'TALLER',
+      'RAZON SOCIAL',
+      'TELEFONO',
+      'CORREO',
+      'DIRECCIÓN',
+      'CIUDAD',
+      'ESTADO',
+      'FACTURA',
+      'DATOS FISCALES',
+      'DIRECCION FISCAL',
+      'COSTO SALIDA DEL TALLER',
+      'CAMBIO DE EQUIPO',
+      'INSTALACION',
+      'REVISION',
+      'DESINSTALACION',
+      'CITA FALLIDA',
+      'SENSOR FUEL',
+      'NOTAS ADICIONALES',
+      'NOMBRE DE LA CUENTA BANCARIA',
+      'CUENTA BANCARIA',
+      'BANCO',
+      'ID_TECNICO',
     ];
     const mockSheetsPort = {
-      listTechniciansDirectory: vi.fn().mockResolvedValue([
-        validHeaderRow,
-        [
-          'Ana Gomez', 'Taller Sur', '', '6620000000', '',
-          '', 'Hermosillo', 'Sonora', '', '', '',
-          '', '', '', '', '', '', '', '', '', '', '', 'TEC-0001',
-        ],
-      ]),
+      listTechniciansDirectory: vi
+        .fn()
+        .mockResolvedValue([
+          validHeaderRow,
+          [
+            'Ana Gomez',
+            'Taller Sur',
+            '',
+            '6620000000',
+            '',
+            '',
+            'Hermosillo',
+            'Sonora',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'TEC-0001',
+          ],
+        ]),
     };
     const findMany = vi.fn().mockResolvedValue([]);
     const findUnique = vi.fn().mockResolvedValue(null);
@@ -67,9 +107,13 @@ describe('technician selection', () => {
 
   it('falls back to local database technicians if sheetsPort fails during listSelectable', async () => {
     const mockSheetsPort = {
-      listTechniciansDirectory: vi.fn().mockRejectedValue(new Error('Google Sheets API unavailable')),
+      listTechniciansDirectory: vi
+        .fn()
+        .mockRejectedValue(new Error('Google Sheets API unavailable')),
     };
-    const fallbackTechs = [{ id: 'tech-fallback', name: 'Tecnico Local', workshop: 'Taller', city: 'Ciudad' }];
+    const fallbackTechs = [
+      { id: 'tech-fallback', name: 'Tecnico Local', workshop: 'Taller', city: 'Ciudad' },
+    ];
     const findMany = vi.fn().mockResolvedValue(fallbackTechs);
     const mockPrisma = {
       technician: { findMany },
@@ -85,7 +129,9 @@ describe('technician selection', () => {
   it('allocates next durable ID when creating technician without externalKey', async () => {
     const existing = [{ externalKey: 'TEC-0001' }, { externalKey: 'TEC-0088' }];
     const findMany = vi.fn().mockResolvedValue(existing);
-    const create = vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'uuid-1', ...data }));
+    const create = vi
+      .fn()
+      .mockImplementation(({ data }) => Promise.resolve({ id: 'uuid-1', ...data }));
     const auditCreate = vi.fn().mockResolvedValue({});
 
     const mockPrisma = {
@@ -113,23 +159,62 @@ describe('technician selection', () => {
 
   it('synchronizes technicians from sheets idempotently and deactivates retired ones', async () => {
     const validHeaderRow = [
-      'TECNICO', 'TALLER', 'RAZON SOCIAL', 'TELEFONO', 'CORREO', 'DIRECCIÓN',
-      'CIUDAD', 'ESTADO', 'FACTURA', 'DATOS FISCALES', 'DIRECCION FISCAL',
-      'COSTO SALIDA DEL TALLER', 'CAMBIO DE EQUIPO', 'INSTALACION', 'REVISION',
-      'DESINSTALACION', 'CITA FALLIDA', 'SENSOR FUEL', 'NOTAS ADICIONALES',
-      'NOMBRE DE LA CUENTA BANCARIA', 'CUENTA BANCARIA', 'BANCO', 'ID_TECNICO',
+      'TECNICO',
+      'TALLER',
+      'RAZON SOCIAL',
+      'TELEFONO',
+      'CORREO',
+      'DIRECCIÓN',
+      'CIUDAD',
+      'ESTADO',
+      'FACTURA',
+      'DATOS FISCALES',
+      'DIRECCION FISCAL',
+      'COSTO SALIDA DEL TALLER',
+      'CAMBIO DE EQUIPO',
+      'INSTALACION',
+      'REVISION',
+      'DESINSTALACION',
+      'CITA FALLIDA',
+      'SENSOR FUEL',
+      'NOTAS ADICIONALES',
+      'NOMBRE DE LA CUENTA BANCARIA',
+      'CUENTA BANCARIA',
+      'BANCO',
+      'ID_TECNICO',
     ];
 
     const mockSheetsPort = {
-      listTechniciansDirectory: vi.fn().mockResolvedValue([
-        validHeaderRow,
-        [
-          'Juan Perez', 'Taller Central', 'Juan SA', '6621234567', 'juan@test.com',
-          'Calle 1', 'Hermosillo', 'Sonora', 'SI', 'PEPJ', 'Dir 1',
-          '$350.00', '$500.00', '$700.00', '$400.00', '$450.00', '$250.00', '$600.00',
-          'Notas', '', '', '', 'TEC-0001',
-        ],
-      ]),
+      listTechniciansDirectory: vi
+        .fn()
+        .mockResolvedValue([
+          validHeaderRow,
+          [
+            'Juan Perez',
+            'Taller Central',
+            'Juan SA',
+            '6621234567',
+            'juan@test.com',
+            'Calle 1',
+            'Hermosillo',
+            'Sonora',
+            'SI',
+            'PEPJ',
+            'Dir 1',
+            '$350.00',
+            '$500.00',
+            '$700.00',
+            '$400.00',
+            '$450.00',
+            '$250.00',
+            '$600.00',
+            'Notas',
+            '',
+            '',
+            '',
+            'TEC-0001',
+          ],
+        ]),
     };
 
     const existingTech = {

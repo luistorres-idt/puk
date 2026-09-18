@@ -1,6 +1,7 @@
 import * as v from 'valibot';
 
 export const UserRoleSchema = v.picklist(['ADMIN', 'TECHNICIAN']);
+export const OrderAccessModeSchema = v.picklist(['INDIVIDUAL', 'SHARED']);
 
 export const LoginRequestSchema = v.object({
   email: v.pipe(
@@ -16,9 +17,11 @@ export const SessionUserSchema = v.object({
   email: v.pipe(v.string(), v.email()),
   id: v.pipe(v.string(), v.uuid()),
   name: v.string(),
+  orderAccessMode: OrderAccessModeSchema,
   role: UserRoleSchema,
   technicianId: v.nullable(v.pipe(v.string(), v.uuid())),
 });
 
 export type LoginRequest = v.InferOutput<typeof LoginRequestSchema>;
+export type OrderAccessMode = v.InferOutput<typeof OrderAccessModeSchema>;
 export type SessionUser = v.InferOutput<typeof SessionUserSchema>;

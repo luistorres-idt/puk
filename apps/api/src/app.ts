@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 
 import { openApiDocument } from './docs/openapi.js';
+import { authenticate } from './auth/authenticate.js';
+import { PrismaPrincipalResolver } from './auth/principal-resolver.js';
 import { errorHandler, notFound } from './middleware/error-handler.js';
 import { generalRateLimit } from './middleware/rate-limits.js';
 import { requestId } from './middleware/request-id.js';
@@ -22,19 +24,24 @@ import {
 } from './modules/orders/index.js';
 import { createExecutionRouter, type ExecutionService } from './modules/execution/index.js';
 import { createReportsRouter, type ReportsService } from './modules/reports/index.js';
+import {
+  createSharedTechnicianAccessRouter,
+  type SharedTechnicianAccessService,
+} from './modules/shared-technician-access/index.js';
 import type { CatalogServicePort } from './integrations/ports.js';
 import { httpLogger } from './observability/logger.js';
 import { metrics, metricsMiddleware } from './observability/metrics.js';
 
 export interface AppOptions {
-  administration?: AdministrationRouterOptions;
+  administration?: Omit<AdministrationRouterOptions, 'requireAccess'>;
   allowedOrigins?: readonly string[];
-  auth?: AuthRouterOptions & { minimumPasswordLength: number };
+  auth?: Omit<AuthRouterOptions, 'requireAccess'> & { minimumPasswordLength: number };
   catalogsService?: CatalogServicePort;
   ordersService?: OrdersService;
   syncService?: SyncService;
   executionService?: ExecutionService;
   reportsService?: ReportsService;
+  sharedTechnicianAccessService?: SharedTechnicianAccessService;
   dependencyCheck?: () => Promise<boolean>;
   trustProxy?: boolean;
 }
@@ -74,14 +81,34 @@ export function createApp(options: AppOptions = {}): Express {
 
   app.use('/health', createHealthRouter(options.dependencyCheck ?? (async () => true)));
   if (options.auth !== undefined) {
-    app.use('/api/v1/auth', createAuthRouter(options.auth));
-    app.use('/api/v1', createAdministrationRouter(options.administration ?? options.auth));
+    const principalResolver =
+      options.auth.principalResolver ?? new PrismaPrincipalResolver(options.auth.prisma);
+    const requireAccess = authenticate(options.auth.tokens, principalResolver);
+
+    app.use('/api/v1/auth', createAuthRouter({ ...options.auth, requireAccess }));
+    app.use(
+      '/api/v1',
+      createAdministrationRouter({
+        ...(options.administration ?? options.auth),
+        requireAccess,
+      }),
+    );
+    if (options.sharedTechnicianAccessService !== undefined) {
+      app.use(
+        '/api/v1',
+        createSharedTechnicianAccessRouter({
+          service: options.sharedTechnicianAccessService,
+          requireAccess,
+        }),
+      );
+    }
     if (options.catalogsService !== undefined) {
       app.use(
         '/api/v1/external',
         createCatalogsRouter({
           catalogsService: options.catalogsService,
-          tokens: options.auth.tokens,
+          prisma: options.auth.prisma,
+          requireAccess,
         }),
       );
     }
@@ -90,8 +117,8 @@ export function createApp(options: AppOptions = {}): Express {
         '/api/v1/orders',
         createOrdersRouter({
           ordersService: options.ordersService,
+          requireAccess,
           ...(options.syncService !== undefined ? { syncService: options.syncService } : {}),
-          tokens: options.auth.tokens,
         }),
       );
     }
@@ -100,7 +127,7 @@ export function createApp(options: AppOptions = {}): Express {
         '/api/v1',
         createExecutionRouter({
           executionService: options.executionService,
-          tokens: options.auth.tokens,
+          requireAccess,
         }),
       );
     }
@@ -109,7 +136,7 @@ export function createApp(options: AppOptions = {}): Express {
         '/api/v1/orders',
         createReportsRouter({
           reportsService: options.reportsService,
-          tokens: options.auth.tokens,
+          requireAccess,
         }),
       );
     }

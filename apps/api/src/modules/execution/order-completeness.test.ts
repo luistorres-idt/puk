@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MIN_REQUIRED_EVIDENCE_PHOTOS } from '@puk/contracts';
 
 import {
   evaluateOrderCompleteness,
@@ -17,8 +18,13 @@ describe('evaluateOrderCompleteness', () => {
         checklist: {
           items: [
             { category: 'DASHBOARD', evidence: [{ status: 'COMPLETED' }] },
-            { category: 'WINDOWS', evidence: [{ status: 'COMPLETED' }] },
-            { category: 'ACCESSORIES', evidence: [{ status: 'COMPLETED' }] },
+            {
+              category: 'WINDOWS',
+              evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS - 1 }, () => ({
+                status: 'COMPLETED',
+              })),
+            },
+            { category: 'ACCESSORIES', evidence: [] },
             { category: 'TRIMS', evidence: [] },
             { category: 'BODYWORK', evidence: [] },
           ],
@@ -103,7 +109,7 @@ describe('evaluateOrderCompleteness', () => {
     );
   });
 
-  it('fails when fewer than 3 photos are completed for a unit', () => {
+  it('fails when fewer than 10 photos are completed for a unit', () => {
     const order: OrderForCompletenessEvaluation = {
       ...completeOrder,
       units: [
@@ -125,7 +131,7 @@ describe('evaluateOrderCompleteness', () => {
     const result = evaluateOrderCompleteness(order);
     expect(result.isComplete).toBe(false);
     expect(result.missingRequirements).toContain(
-      'Se requieren al menos 3 fotografías de evidencia en unidad Tracto 101 (actualmente 2/3)',
+      `Se requieren al menos ${MIN_REQUIRED_EVIDENCE_PHOTOS} fotografías de evidencia en unidad Tracto 101 (actualmente 2/${MIN_REQUIRED_EVIDENCE_PHOTOS})`,
     );
   });
 

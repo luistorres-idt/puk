@@ -36,6 +36,12 @@ describe('Catalogs Integration Tests', () => {
       auth: {
         cookie: { httpOnly: true, maxAge: 1000, path: '/', sameSite: 'lax', secure: false },
         minimumPasswordLength: 12,
+        principalResolver: {
+          resolve: async (userId) => ({
+            id: userId,
+            role: userId === '11111111-1111-1111-1111-111111111111' ? 'ADMIN' : 'TECHNICIAN',
+          }),
+        },
         prisma: {} as unknown as PrismaClient,
         tokens,
       },
@@ -51,7 +57,7 @@ describe('Catalogs Integration Tests', () => {
   it('allows authenticated users to query clients and equipment', async () => {
     const clientsRes = await request(app)
       .get('/api/v1/external/clients')
-      .set('Authorization', `Bearer ${technicianToken}`);
+      .set('Authorization', `Bearer ${adminToken}`);
 
     expect(clientsRes.status).toBe(200);
     expect(clientsRes.body.data).toBeInstanceOf(Array);
@@ -60,7 +66,7 @@ describe('Catalogs Integration Tests', () => {
 
     const searchRes = await request(app)
       .get('/api/v1/external/clients?search=Bull')
-      .set('Authorization', `Bearer ${technicianToken}`);
+      .set('Authorization', `Bearer ${adminToken}`);
 
     expect(searchRes.status).toBe(200);
     expect(searchRes.body.data).toHaveLength(1);
@@ -68,7 +74,7 @@ describe('Catalogs Integration Tests', () => {
 
     const equipmentRes = await request(app)
       .get('/api/v1/external/equipment')
-      .set('Authorization', `Bearer ${technicianToken}`);
+      .set('Authorization', `Bearer ${adminToken}`);
 
     expect(equipmentRes.status).toBe(200);
     expect(equipmentRes.body.data.length).toBeGreaterThan(0);

@@ -13,7 +13,8 @@ apps/web/src/
 │   ├── external-catalogs/selectores de Sheets
 │   ├── orders/           lista, alta y detalle administrativo
 │   ├── service-execution/flujo móvil, cámara y firma
-│   └── technicians/      directorio administrativo
+│   ├── technicians/      directorio y cuentas técnicas
+│   └── technical-accounts/ APIs de cuentas compartidas y usuarios técnicos
 ├── router/               composición y guardas
 ├── shared/               HTTP y layout
 └── stores/               sesión
@@ -35,7 +36,8 @@ flowchart LR
 ```
 
 - TanStack Query mantiene datos remotos, caché, polling e invalidación.
-- Pinia conserva usuario, access token en memoria e inicialización de sesión.
+- Pinia conserva usuario, access token en memoria e inicialización de sesión. La identidad se
+  reconcilia con `/auth/me` mediante una promesa deduplicada y TTL de 30 segundos.
 - Axios adjunta el access token y coordina un único refresh ante respuestas `401`.
 - Los módulos de frontend (`orders`, `service-execution`, `technicians`) encapsulan sus peticiones en archivos `api.ts` dedicados que comparten la interfaz `ApiResponse<T>`.
 - El manejo de errores de interfaz utiliza la utilidad `extractApiErrorMessage` (`@/shared/http/client.ts`) para presentar transparentemente al usuario los mensajes de error originados en el backend en lugar de códigos genéricos de Axios.
@@ -50,11 +52,24 @@ flowchart LR
 | `/`                   | dashboard / órdenes recientes            | autenticado                         |
 | `/orders`             | listado y filtros                        | autenticado; datos filtrados en API |
 | `/orders/new`         | asistente de creación                    | administrador                       |
-| `/orders/:id`         | detalle, evidencias, reporte y auditoría | autorizado sobre la orden           |
-| `/orders/:id/execute` | ejecución mobile-first                   | técnico asignado o administrador    |
+| `/orders/:id`         | detalle, evidencias, reporte y auditoría | administrador                       |
+| `/orders/:id/execute` | ejecución mobile-first                   | técnico autorizado o administrador  |
 | `/technicians`        | administración de técnicos               | administrador                       |
 
-La guarda de navegación inicializa la sesión, redirige al login y aplica `requiresRole`. La autorización real siempre se repite en backend.
+La guarda de navegación inicializa la sesión, revalida la identidad cuando vence el TTL, redirige
+según `orderAccessMode` y aplica `requiresRole`. Recuperar el foco y actualizar manualmente el
+tablero compartido fuerzan la misma reconciliación y reutilizan una única política de redirección.
+La autorización real siempre se repite en backend.
+
+La administración de cuentas técnicas se compone desde `technicians/views/TechnicalAccountsView.vue`:
+`useTechnicalAccounts` concentra estado y mutaciones, mientras `SharedAccountPanel`,
+`TechnicalAccountTable` y `TechnicalAccountModals` mantienen la presentación separada. Las llamadas
+de usuarios y acceso compartido pertenecen a `modules/technical-accounts`.
+La vista de ejecución carga `/orders/:id/execution`, cuyo contrato omite información administrativa,
+fiscal y de sincronización. Los técnicos navegan a esa vista también para consultar su historial.
+Al final de la vista, la tarjeta **Notas de ejecución** permite guardar una nota general de la orden
+de hasta 5000 caracteres. Si hay cambios pendientes al pulsar **Finalizar y Cerrar Servicio**, la
+interfaz los guarda automáticamente antes de completar la orden; las notas no se separan por unidad.
 
 ## Asistente de creación de órdenes y catálogo de equipos
 

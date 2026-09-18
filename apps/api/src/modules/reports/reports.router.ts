@@ -1,18 +1,17 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { IdParamsSchema } from '@puk/contracts';
 
-import { authenticate, authorize } from '../../auth/authenticate.js';
-import type { TokenService } from '../../auth/tokens.js';
+import { authorize } from '../../auth/authenticate.js';
 import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import type { ReportsService } from './reports.service.js';
 
 export function createReportsRouter(options: {
   reportsService: ReportsService;
-  tokens: TokenService;
+  requireAccess: RequestHandler;
 }): Router {
   const router = Router();
-  router.use(authenticate(options.tokens));
+  router.use(options.requireAccess);
 
   router.get('/:id/report', validate({ params: IdParamsSchema }), async (request, response) => {
     const report = await options.reportsService.getCurrent(

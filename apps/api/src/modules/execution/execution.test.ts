@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { MIN_REQUIRED_EVIDENCE_PHOTOS } from '@puk/contracts';
 import { ExecutionService, ALL_CHECKLIST_CATEGORIES } from './execution.service.js';
 import { DevMockStorageClient } from '../../integrations/object-storage/dev-mock-storage.client.js';
 import {
@@ -192,6 +193,21 @@ describe('ExecutionService', () => {
     expect(result.status).toBe(OrderStatus.IN_PROGRESS);
   });
 
+  it('updates execution notes for an order in progress', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.IN_PROGRESS,
+      technicianId: 'tech-1',
+      generalNotes: 'Notas iniciales',
+    });
+
+    const result = await service.updateExecutionNotes('admin-1', 'ADMIN', 'order-1', {
+      notes: 'Servicio realizado sin incidencias',
+    });
+
+    expect(result.generalNotes).toBe('Servicio realizado sin incidencias');
+  });
+
   it('verifies equipment match on a unit', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
@@ -324,7 +340,12 @@ describe('ExecutionService', () => {
       (category, index) => ({
         category,
         condition: 'GOOD',
-        evidence: index === 0 ? [{ id: 'ev-1' }, { id: 'ev-2' }, { id: 'ev-3' }] : [],
+        evidence:
+          index === 0
+            ? Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, (_, evidenceIndex) => ({
+                id: `ev-${evidenceIndex + 1}`,
+              }))
+            : [],
       }),
     );
     mockPrisma.order.findUnique.mockResolvedValue({
@@ -453,7 +474,7 @@ describe('ExecutionService', () => {
     const checklistItems = ALL_CHECKLIST_CATEGORIES.map((category) => ({
       category,
       condition: 'GOOD',
-      evidence: [{ id: 'ev-1' }],
+      evidence: Array.from({ length: 2 }, (_, index) => ({ id: `ev-${index + 1}` })),
     }));
 
     mockPrisma.order.findUnique.mockResolvedValue({

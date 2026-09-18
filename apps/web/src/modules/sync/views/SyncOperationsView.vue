@@ -226,10 +226,12 @@ function formatDate(value: string | null | undefined): string {
           <div class="flex items-end">
             <n-button
               type="primary"
+              class="w-full md:w-auto"
               :loading="saveSchedule.isPending.value"
               @click="saveSchedule.mutate()"
-              >Guardar horario</n-button
             >
+              Guardar horario
+            </n-button>
           </div>
         </div>
         <n-alert v-if="schedule" class="mt-4" type="info" :show-icon="false">

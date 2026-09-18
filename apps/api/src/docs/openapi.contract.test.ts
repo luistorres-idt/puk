@@ -64,4 +64,23 @@ describe('OpenAPI Contract Tests', () => {
     });
     expect(openApiDocument.paths['/api/v1/technicians/selectable']).toBeDefined();
   });
+
+  it('documents separate administrative and execution order details', () => {
+    expect(openApiDocument.paths['/api/v1/orders/{id}'].get.operationId).toBe(
+      'getOrderAdministrationDetail',
+    );
+    expect(openApiDocument.paths['/api/v1/orders/{id}/execution'].get.operationId).toBe(
+      'getOrderExecutionDetail',
+    );
+  });
+
+  it('documents live-principal failures for protected session routes', () => {
+    for (const operation of [
+      openApiDocument.paths['/api/v1/auth/me'].get,
+      openApiDocument.paths['/api/v1/auth/logout-all'].post,
+    ]) {
+      expect(operation.responses['401'].description).toContain('SESSION_REVOKED');
+      expect(operation.responses['503'].description).toContain('AUTHORITY_UNAVAILABLE');
+    }
+  });
 });

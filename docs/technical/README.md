@@ -2,7 +2,7 @@
 
 **Proyecto:** Bull Dog Solution — Sistema de órdenes de servicio
 
-**Última actualización:** 2026-09-07
+**Última actualización:** 2026-09-17
 
 **Alcance:** estado implementado en la rama actual
 
@@ -17,6 +17,7 @@ Este directorio describe la arquitectura y operación técnica del sistema. A di
 5. [Frontend](./frontend.md): estructura Vue, estado, rutas y flujo de datos.
 6. [Infraestructura y operación](./infrastructure-and-operations.md): Docker, configuración, despliegue, observabilidad y comandos.
 7. [Seguridad y calidad](./security-and-quality.md): controles implementados y estrategia de pruebas.
+8. [Línea de tiempo del proyecto](../project-timeline.md): evolución por fases, fechas y commits.
 
 ## Fuentes de verdad
 

@@ -221,17 +221,14 @@ const serviceTypeOptions = [
           hoverable
           class="cursor-pointer transition-shadow"
           @click="
-            session.user?.role === 'TECHNICIAN' &&
-            (order.status === 'ASSIGNED' ||
-              order.status === 'IN_PROGRESS' ||
-              order.status === 'REQUIRES_CORRECTION')
+            session.user?.role === 'TECHNICIAN'
               ? router.push(`/orders/${order.id}/execute`)
               : router.push(`/orders/${order.id}`)
           "
         >
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <span class="font-mono font-bold text-indigo-700 text-base">{{ order.folio }}</span>
                 <n-tag size="small" :type="statusColor(order.status)">
                   {{ formatOrderStatus(order.status) }}
@@ -300,17 +297,12 @@ const serviceTypeOptions = [
               </div>
               <div>
                 <n-button
-                  v-if="
-                    session.user?.role === 'TECHNICIAN' &&
-                    (order.status === 'ASSIGNED' ||
-                      order.status === 'IN_PROGRESS' ||
-                      order.status === 'REQUIRES_CORRECTION')
-                  "
+                  v-if="session.user?.role === 'TECHNICIAN'"
                   size="small"
                   type="primary"
                   @click.stop="router.push(`/orders/${order.id}/execute`)"
                 >
-                  Atender Orden →
+                  Ver Orden →
                 </n-button>
                 <n-button
                   v-else

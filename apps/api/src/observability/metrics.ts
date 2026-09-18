@@ -50,7 +50,10 @@ export class MetricsService {
     this.uploadsFailed += 1;
   }
 
-  public recordSheetsOperation(status: 'COMPLETED' | 'FAILED' | 'PENDING', operationType?: string): void {
+  public recordSheetsOperation(
+    status: 'COMPLETED' | 'FAILED' | 'PENDING',
+    operationType?: string,
+  ): void {
     if (operationType) {
       const key = `${operationType}_${status}`;
       this.sheetsOperations.set(key, (this.sheetsOperations.get(key) ?? 0) + 1);

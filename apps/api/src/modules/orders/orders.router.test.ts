@@ -2,6 +2,8 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrderServiceTypeSchema } from '@puk/contracts';
+import { authenticate } from '../../auth/authenticate.js';
+import type { PrincipalResolver } from '../../auth/principal-resolver.js';
 import type { TokenService } from '../../auth/tokens.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { errorHandler } from '../../middleware/error-handler.js';
@@ -18,6 +20,13 @@ const input = {
   serviceType: 'INSTALLATION',
   technicianId,
 };
+const verifyAccessToken = vi.fn<() => Promise<{ role: 'ADMIN' | 'TECHNICIAN'; sub: string }>>(
+  async () => ({ role: 'ADMIN', sub: 'admin-demo' }),
+);
+const resolvePrincipal = vi.fn<PrincipalResolver['resolve']>(async (userId) => ({
+  id: userId,
+  role: 'ADMIN',
+}));
 
 describe('order HTTP validation', () => {
   const transaction = {
@@ -45,9 +54,9 @@ describe('order HTTP validation', () => {
   app.use(
     '/orders',
     createOrdersRouter({
-      tokens: {
-        verifyAccessToken: vi.fn(async () => ({ role: 'ADMIN', sub: 'admin-demo' })),
-      } as unknown as TokenService,
+      requireAccess: authenticate({ verifyAccessToken } as unknown as TokenService, {
+        resolve: resolvePrincipal,
+      }),
       ordersService: new OrdersService(database as unknown as PrismaClient),
     }),
   );
@@ -55,9 +64,49 @@ describe('order HTTP validation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    verifyAccessToken.mockResolvedValue({ role: 'ADMIN', sub: 'admin-demo' });
+    resolvePrincipal.mockImplementation(async (userId) => ({ id: userId, role: 'ADMIN' }));
     database.technician.findUnique.mockResolvedValue({ id: technicianId, active: true });
     database.orderUnit.findUnique.mockResolvedValue(null);
     database.orderEquipment.findFirst.mockResolvedValue(null);
+  });
+
+  it('serves the explicit execution endpoint', async () => {
+    database.order.findUnique
+      .mockResolvedValueOnce({ id: orderId, status: 'ASSIGNED', technicianId })
+      .mockResolvedValueOnce({
+        id: orderId,
+        folio: 'OS-DEMO',
+        status: 'ASSIGNED',
+        serviceType: 'INSTALLATION',
+        clientNameSnapshot: 'Client',
+        scheduledAt: new Date('2026-09-14T18:00:00.000Z'),
+        isHomeService: false,
+        serviceAddress: null,
+        generalNotes: null,
+        correctionReason: null,
+        technician: { id: technicianId, name: 'Technician' },
+        units: [],
+        signature: null,
+      });
+
+    const response = await request(app)
+      .get(`/orders/${orderId}/execution`)
+      .set('Authorization', 'Bearer test-session');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ id: orderId, folio: 'OS-DEMO' });
+  });
+
+  it('reserves the administrative detail endpoint for administrators', async () => {
+    resolvePrincipal.mockResolvedValueOnce({ id: 'admin-demo', role: 'TECHNICIAN' });
+
+    const response = await request(app)
+      .get(`/orders/${orderId}`)
+      .set('Authorization', 'Bearer test-session');
+
+    expect(response.status).toBe(403);
+    expect(database.order.findUnique).not.toHaveBeenCalled();
   });
 
   it.each([undefined, null, '', 'invalid'])(

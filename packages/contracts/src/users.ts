@@ -22,6 +22,15 @@ export const UpdateUserSchema = v.partial(
   v.object({ active: v.boolean(), ...CreateUserSchema.entries }),
 );
 
+export const AdminUserListItemSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  name: v.string(),
+  email: v.pipe(v.string(), v.email()),
+  role: UserRoleSchema,
+  active: v.boolean(),
+  technicianId: v.nullable(v.pipe(v.string(), v.uuid())),
+});
+
 export const CreateTechnicianSchema = v.object({
   address: optionalText,
   city: optionalText,
@@ -45,3 +54,6 @@ export const TechnicianOptionSchema = v.object({
   externalKey: v.optional(v.nullable(v.string())),
 });
 export type TechnicianOption = v.InferOutput<typeof TechnicianOptionSchema>;
+export type CreateUser = v.InferInput<typeof CreateUserSchema>;
+export type UpdateUser = v.InferInput<typeof UpdateUserSchema>;
+export type AdminUserListItem = v.InferOutput<typeof AdminUserListItemSchema>;

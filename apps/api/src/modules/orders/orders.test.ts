@@ -74,6 +74,12 @@ interface MockDatabase {
   technician: {
     findUnique: ReturnType<typeof vi.fn>;
   };
+  user: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
+  sharedTechnicianAccess: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
   sheetSyncOperation: {
     findUnique: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
@@ -182,6 +188,12 @@ describe('OrdersService & SyncService', () => {
       technician: {
         findUnique: vi.fn(),
       },
+      user: {
+        findUnique: vi.fn(),
+      },
+      sharedTechnicianAccess: {
+        findUnique: vi.fn(),
+      },
       sheetSyncOperation: {
         findUnique: vi.fn(),
         findMany: vi.fn(),
@@ -194,6 +206,68 @@ describe('OrdersService & SyncService', () => {
     syncService = new SyncService(mockPrisma as unknown as PrismaClient, sheetsPort);
     mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
     mockPrisma.sheetSyncOperation.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('returns a least-privilege execution read model for shared technicians', async () => {
+    const actorId = '00000000-0000-4000-8000-000000000010';
+    const orderId = '00000000-0000-4000-8000-000000000011';
+    const technicianId = '00000000-0000-4000-8000-000000000012';
+    mockPrisma.order.findUnique
+      .mockResolvedValueOnce({ id: orderId, status: OrderStatus.ASSIGNED, technicianId })
+      .mockResolvedValueOnce({
+        id: orderId,
+        folio: 'OS-SECURE',
+        status: OrderStatus.ASSIGNED,
+        serviceType: 'INSTALLATION',
+        clientNameSnapshot: 'Client',
+        scheduledAt: new Date('2026-09-14T18:00:00.000Z'),
+        isHomeService: false,
+        serviceAddress: null,
+        generalNotes: null,
+        correctionReason: null,
+        technician: {
+          id: technicianId,
+          name: 'Technician',
+          taxData: 'private',
+          installationRate: '500.00',
+        },
+        units: [],
+        signature: null,
+        createdBy: { email: 'admin@example.com' },
+        syncOperations: [{ id: 'operation-1' }],
+      });
+    mockPrisma.user.findUnique.mockResolvedValue({ active: true, technicianId: null });
+    mockPrisma.sharedTechnicianAccess.findUnique.mockResolvedValue({
+      userId: actorId,
+      orderId,
+    });
+
+    const result = await ordersService.getOrderExecutionById(orderId, {
+      id: actorId,
+      role: 'TECHNICIAN',
+    });
+
+    expect(result).not.toHaveProperty('createdBy');
+    expect(result).not.toHaveProperty('syncOperations');
+    expect(result.technician).toEqual({ id: technicianId, name: 'Technician' });
+    expect(result.scheduledAt).toBe('2026-09-14T18:00:00.000Z');
+    expect(mockPrisma.order.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { id: orderId },
+      select: expect.not.objectContaining({
+        createdBy: expect.anything(),
+        syncOperations: expect.anything(),
+      }),
+    });
+  });
+
+  it('rejects technicians from the administrative order detail', async () => {
+    await expect(
+      ordersService.getOrderById('00000000-0000-4000-8000-000000000011', {
+        id: '00000000-0000-4000-8000-000000000010',
+        role: 'TECHNICIAN',
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    expect(mockPrisma.order.findUnique).not.toHaveBeenCalled();
   });
 
   it('leaves a retried sync operation unattempted until a worker claims it', async () => {
@@ -970,14 +1044,43 @@ describe('OrdersService & SyncService', () => {
 
   it('continues to read historical orders without a technician', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
-      id: 'historical',
-      technicianId: null,
+      id: '00000000-0000-4000-8000-000000000020',
+      folio: 'OS-HISTORICAL',
+      status: OrderStatus.COMPLETED,
+      version: 1,
+      serviceType: 'INSTALLATION',
+      clientNameSnapshot: 'Historical client',
+      clientSheetId: 'CLIENT-HISTORICAL',
+      scheduledAt: new Date('2026-09-14T18:00:00.000Z'),
+      isHomeService: false,
+      serviceAddress: null,
+      generalNotes: null,
+      failedReason: null,
+      failedAppointmentResolution: null,
+      failedAppointmentResolvedAt: null,
+      failedAppointmentResolutionReason: null,
+      rescheduledFrom: null,
+      rescheduledOrder: null,
       technician: null,
       units: [],
+      signature: null,
+      pricingBaseCost: { toString: () => '100.00' },
+      pricingTravelExpenses: { toString: () => '25.00' },
+      pricingTotal: { toString: () => '125.00' },
+      pricingBreakdown: null,
     });
-    await expect(
-      ordersService.getOrderById('historical', { id: 'admin', role: 'ADMIN' }),
-    ).resolves.toMatchObject({ technicianId: null });
+    const result = await ordersService.getOrderById('00000000-0000-4000-8000-000000000020', {
+      id: 'admin',
+      role: 'ADMIN',
+    });
+
+    expect(result).toMatchObject({
+      technician: null,
+      scheduledAt: '2026-09-14T18:00:00.000Z',
+      pricingBaseCost: '100.00',
+      pricingTravelExpenses: '25.00',
+      pricingTotal: '125.00',
+    });
   });
 });
 

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import {
   AssignEquipmentSchema,
   CancelOrderSchema,
@@ -13,8 +13,7 @@ import {
   UpdateUnitSchema,
   type OrderListQuery,
 } from '@puk/contracts';
-import { authenticate, authorize } from '../../auth/authenticate.js';
-import type { TokenService } from '../../auth/tokens.js';
+import { authorize } from '../../auth/authenticate.js';
 import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import type { OrdersService } from './orders.service.js';
@@ -22,11 +21,11 @@ import type { SyncService } from './sync.service.js';
 
 export function createOrdersRouter(options: {
   ordersService: OrdersService;
+  requireAccess: RequestHandler;
   syncService?: SyncService;
-  tokens: TokenService;
 }): Router {
   const router = Router();
-  router.use(authenticate(options.tokens));
+  router.use(options.requireAccess);
 
   // --- Orders CRUD ---
 
@@ -52,14 +51,31 @@ export function createOrdersRouter(options: {
     },
   );
 
-  router.get('/:id', validate({ params: IdParamsSchema }), async (request, response) => {
+  router.get('/:id/execution', validate({ params: IdParamsSchema }), async (request, response) => {
     const actor = {
       id: request.auth!.userId,
       role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
     };
-    const order = await options.ordersService.getOrderById(String(request.params.id), actor);
+    const order = await options.ordersService.getOrderExecutionById(
+      String(request.params.id),
+      actor,
+    );
     sendSuccess(response, order);
   });
+
+  router.get(
+    '/:id',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      const actor = {
+        id: request.auth!.userId,
+        role: request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+      };
+      const order = await options.ordersService.getOrderById(String(request.params.id), actor);
+      sendSuccess(response, order);
+    },
+  );
 
   router.patch(
     '/:id',
@@ -209,14 +225,19 @@ export function createOrdersRouter(options: {
 
   // --- Sync Operations ---
 
-  router.get('/:id/sync', validate({ params: IdParamsSchema }), async (request, response) => {
-    if (!options.syncService) {
-      sendSuccess(response, { isFullySynced: true, operations: [] });
-      return;
-    }
-    const syncStatus = await options.syncService.getOrderSyncStatus(String(request.params.id));
-    sendSuccess(response, syncStatus);
-  });
+  router.get(
+    '/:id/sync',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      if (!options.syncService) {
+        sendSuccess(response, { isFullySynced: true, operations: [] });
+        return;
+      }
+      const syncStatus = await options.syncService.getOrderSyncStatus(String(request.params.id));
+      sendSuccess(response, syncStatus);
+    },
+  );
 
   router.post(
     '/:id/sync/retry',

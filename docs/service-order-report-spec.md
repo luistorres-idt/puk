@@ -74,6 +74,10 @@ La primera página debe contener:
 
 El folio, cliente y logotipo deben poder identificarse sin ampliar el documento. La firma se escala conservando su proporción y nunca debe deformarse.
 
+Las observaciones generales incluyen las notas capturadas durante la creación o ejecución de la
+orden. Se trata de un único campo por orden; las notas específicas por unidad quedan fuera de este
+alcance.
+
 ### 4.2 Detalle por unidad
 
 Después de la portada se crea una sección independiente por cada unidad, en el mismo orden en que aparecen en la orden. Cada sección debe comenzar con un encabezado que repita el folio e identifique la unidad.

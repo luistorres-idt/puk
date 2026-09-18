@@ -6,9 +6,15 @@ import {
   CreateTechnicianSchema,
   TechnicianOptionSchema,
   OrderServiceTypeSchema,
+  OrderAdministrationDetailSchema,
+  OrderExecutionDetailSchema,
   AssignEquipmentSchema,
   CreateUnitSchema,
   UpdateOrderSchema,
+  MeOrderAccessResponseSchema,
+  SharedTechnicianAccessConfigSchema,
+  UpdateSharedTechnicianAccessAccountSchema,
+  UpdateSharedTechnicianAccessOrderSchema,
 } from '@puk/contracts';
 
 const schemaConfig = { errorMode: 'ignore' as const };
@@ -17,6 +23,21 @@ const loginRequestSchema = toJsonSchema(LoginRequestSchema, schemaConfig);
 const createOrderSchema = toJsonSchema(CreateOrderSchema, schemaConfig);
 const createTechnicianSchema = toJsonSchema(CreateTechnicianSchema, schemaConfig);
 const technicianOptionSchema = toJsonSchema(TechnicianOptionSchema, schemaConfig);
+const sharedTechnicianAccessConfigSchema = toJsonSchema(
+  SharedTechnicianAccessConfigSchema,
+  schemaConfig,
+);
+const updateSharedTechnicianAccessAccountSchema = toJsonSchema(
+  UpdateSharedTechnicianAccessAccountSchema,
+  schemaConfig,
+);
+const updateSharedTechnicianAccessOrderSchema = toJsonSchema(
+  UpdateSharedTechnicianAccessOrderSchema,
+  schemaConfig,
+);
+const meOrderAccessResponseSchema = toJsonSchema(MeOrderAccessResponseSchema, schemaConfig);
+const orderAdministrationDetailSchema = toJsonSchema(OrderAdministrationDetailSchema, schemaConfig);
+const orderExecutionDetailSchema = toJsonSchema(OrderExecutionDetailSchema, schemaConfig);
 const orderIdParameter = {
   in: 'path',
   name: 'id',
@@ -122,6 +143,28 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/v1/auth/logout-all': {
+      post: {
+        operationId: 'logoutAll',
+        summary: 'Revoke every refresh session for the current active principal',
+        responses: {
+          '200': { description: 'All refresh sessions revoked' },
+          '401': { description: 'Invalid token or SESSION_REVOKED' },
+          '503': { description: 'AUTHORITY_UNAVAILABLE while resolving current authorization' },
+        },
+      },
+    },
+    '/api/v1/auth/me': {
+      get: {
+        operationId: 'getCurrentSessionUser',
+        summary: 'Get the current active user using live authorization state',
+        responses: {
+          '200': { description: 'Current session user' },
+          '401': { description: 'Invalid token or SESSION_REVOKED' },
+          '503': { description: 'AUTHORITY_UNAVAILABLE while resolving current authorization' },
+        },
+      },
+    },
     '/api/v1/technicians': {
       get: {
         operationId: 'listTechnicians',
@@ -207,6 +250,28 @@ export const openApiDocument = {
       },
     },
     '/api/v1/orders/{id}': {
+      get: {
+        operationId: 'getOrderAdministrationDetail',
+        summary: 'Get the explicit administrative order detail',
+        parameters: [orderIdParameter],
+        responses: {
+          '200': {
+            description: 'Administrative order detail',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: orderAdministrationDetailSchema },
+                  required: ['data'],
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Administrator permission required' },
+          '404': { description: 'Order not found' },
+        },
+      },
       patch: {
         operationId: 'updateOrder',
         summary: 'Update an editable order; technician selection cannot be cleared',
@@ -227,6 +292,30 @@ export const openApiDocument = {
           '403': { description: 'Forbidden' },
           '404': { description: 'Order or technician not found' },
           '409': { description: 'Order version conflict' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/execution': {
+      get: {
+        operationId: 'getOrderExecutionDetail',
+        summary: 'Get the least-privilege order detail required for service execution',
+        parameters: [orderIdParameter],
+        responses: {
+          '200': {
+            description: 'Execution order detail without administrative or billing data',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: orderExecutionDetailSchema },
+                  required: ['data'],
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Order is not accessible to the current technician' },
+          '404': { description: 'Order not found' },
         },
       },
     },
@@ -337,6 +426,74 @@ export const openApiDocument = {
           '401': { description: 'Unauthorized' },
           '403': { description: 'Order does not belong to the technician' },
           '409': { description: 'Report is not ready' },
+        },
+      },
+    },
+    '/api/v1/shared-technician-access': {
+      get: {
+        operationId: 'getSharedTechnicianAccess',
+        summary: 'Get shared technician access configuration',
+        responses: {
+          '200': {
+            description: 'Shared technician access configuration',
+            content: { 'application/json': { schema: sharedTechnicianAccessConfigSchema } },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires users:manage' },
+        },
+      },
+    },
+    '/api/v1/shared-technician-access/account': {
+      put: {
+        operationId: 'updateSharedTechnicianAccessAccount',
+        summary: 'Designate or clear shared technician account',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: updateSharedTechnicianAccessAccountSchema } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated shared technician access configuration',
+            content: { 'application/json': { schema: sharedTechnicianAccessConfigSchema } },
+          },
+          '400': { description: 'Validation error or invalid technician account' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires users:manage' },
+          '409': { description: 'Order access revision conflict' },
+        },
+      },
+    },
+    '/api/v1/shared-technician-access/order': {
+      put: {
+        operationId: 'updateSharedTechnicianAccessOrder',
+        summary: 'Enable or revoke order for shared technician access',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: updateSharedTechnicianAccessOrderSchema } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated shared technician access configuration',
+            content: { 'application/json': { schema: sharedTechnicianAccessConfigSchema } },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires orders:manage' },
+          '404': { description: 'Order not found' },
+          '409': { description: 'Order access revision conflict or order not eligible' },
+        },
+      },
+    },
+    '/api/v1/me/order-access': {
+      get: {
+        operationId: 'getMeOrderAccess',
+        summary: 'Get current user order access mode and active shared order context',
+        responses: {
+          '200': {
+            description: 'Current order access context',
+            content: { 'application/json': { schema: meOrderAccessResponseSchema } },
+          },
+          '401': { description: 'Unauthorized' },
         },
       },
     },

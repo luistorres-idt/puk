@@ -54,7 +54,7 @@ onMounted(() => {
 
 <template>
   <div class="space-y-2">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
       <label class="text-sm font-medium text-slate-700">Cliente (Google Sheets)</label>
       <div v-if="fetchedAt" class="text-xs text-slate-500">
         Obtenido: {{ new Date(fetchedAt).toLocaleTimeString() }}

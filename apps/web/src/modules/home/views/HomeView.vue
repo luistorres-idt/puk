@@ -73,7 +73,7 @@ function statusTagType(status: string) {
         class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm"
       >
         <div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <h1 class="text-2xl font-bold text-slate-900">Hola, {{ session.user?.name }}</h1>
             <n-tag size="small" :type="session.user?.role === 'ADMIN' ? 'primary' : 'info'" round>
               {{ session.user?.role === 'ADMIN' ? 'Administrador' : 'Técnico' }}
@@ -88,7 +88,7 @@ function statusTagType(status: string) {
           </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
           <n-button
             v-if="session.user?.role === 'ADMIN'"
             type="primary"
@@ -215,17 +215,14 @@ function statusTagType(status: string) {
               class="cursor-pointer transition-shadow"
               size="small"
               @click="
-                session.user?.role === 'TECHNICIAN' &&
-                (order.status === 'ASSIGNED' ||
-                  order.status === 'IN_PROGRESS' ||
-                  order.status === 'REQUIRES_CORRECTION')
+                session.user?.role === 'TECHNICIAN'
                   ? router.push(`/orders/${order.id}/execute`)
                   : router.push(`/orders/${order.id}`)
               "
             >
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <div class="flex items-center gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
                     <span class="font-mono font-bold text-indigo-700">{{ order.folio }}</span>
                     <n-tag size="small" :type="statusTagType(order.status)">{{
                       formatOrderStatus(order.status)
@@ -260,17 +257,12 @@ function statusTagType(status: string) {
                     }}
                   </span>
                   <n-button
-                    v-if="
-                      session.user?.role === 'TECHNICIAN' &&
-                      (order.status === 'ASSIGNED' ||
-                        order.status === 'IN_PROGRESS' ||
-                        order.status === 'REQUIRES_CORRECTION')
-                    "
+                    v-if="session.user?.role === 'TECHNICIAN'"
                     size="small"
                     type="primary"
                     @click.stop="router.push(`/orders/${order.id}/execute`)"
                   >
-                    Atender Orden →
+                    Ver Orden →
                   </n-button>
                   <n-button
                     v-else

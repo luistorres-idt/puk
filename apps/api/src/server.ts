@@ -14,6 +14,7 @@ import { ExecutionService } from './modules/execution/index.js';
 import { S3StorageClient } from './integrations/object-storage/s3.client.js';
 import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
 import { ReportsService } from './modules/reports/index.js';
+import { SharedTechnicianAccessService } from './modules/shared-technician-access/index.js';
 import { TechniciansService } from './modules/technicians/index.js';
 import {
   CircuitBreaker,
@@ -135,6 +136,7 @@ const reportsService = new ReportsService(
   storagePort,
   environment.PRESIGNED_URL_TTL_SECONDS,
 );
+const sharedTechnicianAccessService = new SharedTechnicianAccessService(prisma);
 
 const reportsInterval = setInterval(() => {
   reportsService.processPendingReports().catch((error) => {
@@ -154,7 +156,6 @@ const executionService = new ExecutionService(prisma, storagePort, {
 const server = createApp({
   administration: {
     prisma,
-    tokens,
     techniciansService,
     syncService,
     technicalReportSyncSchedule,
@@ -179,6 +180,7 @@ const server = createApp({
   syncService,
   executionService,
   reportsService,
+  sharedTechnicianAccessService,
   dependencyCheck: async () => {
     try {
       await prisma.$queryRaw`SELECT 1`;

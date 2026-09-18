@@ -12,6 +12,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 
 - Los administradores crean órdenes, seleccionan clientes, registran unidades, asignan equipos y eligen al técnico responsable.
 - Los técnicos consultan sus servicios, verifican equipos, documentan cada unidad con checklist y fotografías, reportan discrepancias y obtienen la firma del cliente.
+- Los técnicos pueden guardar una nota general de ejecución antes del cierre; las notas no se separan por unidad.
 - Google Sheets conserva la autoridad sobre los catálogos de clientes y equipos.
 - PostgreSQL mantiene los datos transaccionales, el historial y el estado de sincronización.
 - Las fotografías y firmas se almacenan de forma privada en un servicio compatible con Amazon S3.
@@ -37,7 +38,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Reporte de diferencias de ID, IMEI, serie o unidad sin bloquear el trabajo.
 - Checklist posterior al servicio para tablero, cristales, accesorios, molduras y carrocería.
 - Estados `Bien`, `Mal` y `No aplica`, con observación obligatoria para elementos en mal estado.
-- Captura de al menos tres fotografías por unidad, distribuidas entre las categorías del checklist.
+- Captura de al menos diez fotografías por unidad, distribuidas entre las categorías del checklist.
 - Firma única del cliente y registro del nombre de la persona firmante.
 - Cierre normal con validación integral o cierre simplificado como cita fallida.
 

@@ -12,3 +12,10 @@ apps/api/openapi.json
 *.log
 cdk.out/
 .agents/
+# Local runtime state & agent tooling
+.atl/
+.claude/
+.codegraph/
+.pi/
+.windsurf/
+skills-lock.json

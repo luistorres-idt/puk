@@ -3,6 +3,7 @@ import type { SessionUser } from '@puk/contracts';
 import type { PrismaClient, User } from '../../generated/prisma/client.js';
 import { AppError } from '../../shared/errors.js';
 import { verifyPassword } from '../../auth/password.js';
+import { getOrderAccessMode } from '../../auth/order-access-policy.js';
 import { hashRefreshToken, type TokenService } from '../../auth/tokens.js';
 
 const INVALID_CREDENTIALS = new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
@@ -71,7 +72,7 @@ export class AuthService {
       throw new AppError(401, 'REFRESH_TOKEN_REUSED', 'The session was revoked.');
     }
     if (!current.user.active)
-      throw new AppError(401, 'USER_INACTIVE', 'The session is no longer active.');
+      throw new AppError(401, 'SESSION_REVOKED', 'The session is no longer active.');
 
     const nextRefresh = await this.tokens.createRefreshToken(current.userId);
     const accessToken = await this.tokens.createAccessToken(current.user);
@@ -94,7 +95,11 @@ export class AuthService {
       }),
     ]);
 
-    return { accessToken, refreshToken: nextRefresh.token, user: sessionUser(current.user) };
+    return {
+      accessToken,
+      refreshToken: nextRefresh.token,
+      user: await this.sessionUser(current.user),
+    };
   }
 
   public async logout(refreshToken: string | undefined): Promise<void> {
@@ -120,8 +125,8 @@ export class AuthService {
   public async me(userId: string): Promise<SessionUser> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (user === null || !user.active)
-      throw new AppError(401, 'USER_INACTIVE', 'The session is no longer active.');
-    return sessionUser(user);
+      throw new AppError(401, 'SESSION_REVOKED', 'The session is no longer active.');
+    return this.sessionUser(user);
   }
 
   private async issueSession(user: User, ipAddress?: string, userAgent?: string) {
@@ -140,18 +145,19 @@ export class AuthService {
     return {
       accessToken: await this.tokens.createAccessToken(user),
       refreshToken: refresh.token,
-      user: sessionUser(user),
+      user: await this.sessionUser(user),
     };
   }
-}
 
-function sessionUser(user: User): SessionUser {
-  return {
-    active: user.active,
-    email: user.email,
-    id: user.id,
-    name: user.name,
-    role: user.role,
-    technicianId: user.technicianId,
-  };
+  private async sessionUser(user: User): Promise<SessionUser> {
+    return {
+      active: user.active,
+      email: user.email,
+      id: user.id,
+      name: user.name,
+      orderAccessMode: await getOrderAccessMode(this.prisma, user.id),
+      role: user.role,
+      technicianId: user.technicianId,
+    };
+  }
 }

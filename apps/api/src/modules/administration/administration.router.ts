@@ -7,10 +7,9 @@ import {
   UpdateTechnicianSchema,
   UpdateUserSchema,
 } from '@puk/contracts';
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 
-import { authenticate, authorize } from '../../auth/authenticate.js';
-import type { TokenService } from '../../auth/tokens.js';
+import { authorize } from '../../auth/authenticate.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
@@ -21,7 +20,7 @@ import type { SyncService, TechnicalReportSyncScheduleService } from '../orders/
 export interface AdministrationRouterOptions {
   minimumPasswordLength?: number;
   prisma?: PrismaClient;
-  tokens: TokenService;
+  requireAccess: RequestHandler;
   usersService?: UsersService;
   techniciansService?: TechniciansService;
   syncService?: SyncService;
@@ -34,7 +33,7 @@ export function createAdministrationRouter(options: AdministrationRouterOptions)
     options.usersService ?? new UsersService(options.prisma!, options.minimumPasswordLength ?? 12);
   const technicians = options.techniciansService ?? new TechniciansService(options.prisma!);
 
-  router.use(authenticate(options.tokens));
+  router.use(options.requireAccess);
 
   router.get('/users', authorize('users:manage'), async (_request, response) =>
     sendSuccess(response, await users.list()),

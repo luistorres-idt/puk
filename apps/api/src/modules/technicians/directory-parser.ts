@@ -71,7 +71,11 @@ const EXPECTED_HEADERS: Readonly<Record<number, string>> = {
 
 export function validateDirectoryHeaders(headerRow?: readonly string[]): void {
   if (!headerRow || headerRow.length === 0) {
-    throw new AppError(400, 'DIRECTORY_HEADERS_MISSING', 'El directorio técnico no contiene fila de encabezados');
+    throw new AppError(
+      400,
+      'DIRECTORY_HEADERS_MISSING',
+      'El directorio técnico no contiene fila de encabezados',
+    );
   }
 
   const mismatches: string[] = [];
@@ -127,7 +131,9 @@ export function parseMoneyRate(raw?: string | null): ParsedRate {
   };
 }
 
-export function parseTechnicianDirectoryRows(rows: readonly (readonly string[])[]): DirectoryParseResult {
+export function parseTechnicianDirectoryRows(
+  rows: readonly (readonly string[])[],
+): DirectoryParseResult {
   if (!rows || rows.length === 0) {
     throw new AppError(400, 'DIRECTORY_EMPTY', 'El directorio técnico está vacío');
   }
@@ -144,7 +150,9 @@ export function parseTechnicianDirectoryRows(rows: readonly (readonly string[])[
     const rowNumber = i + 1;
 
     // Check if entire row is blank
-    const isBlank = row.every((cell) => cell === undefined || cell === null || cell.toString().trim() === '');
+    const isBlank = row.every(
+      (cell) => cell === undefined || cell === null || cell.toString().trim() === '',
+    );
     if (isBlank) {
       continue;
     }
