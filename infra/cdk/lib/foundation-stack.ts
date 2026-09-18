@@ -119,16 +119,20 @@ export class PukStagingFoundationStack extends Stack {
       'puk/staging/runtime',
     );
 
-    // Reuse the account-level GitHub provider created during bootstrap. Creating
-    // a second provider via the CDK custom resource can fail during rollback when
-    // the provider already exists.
-    const githubProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
-      this,
-      'GitHubProvider',
-      `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
-    );
+    const githubOidcProviderArn = this.node.tryGetContext('githubOidcProviderArn') as
+      string | undefined;
+    const githubProviderArn = githubOidcProviderArn
+      ? iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+          this,
+          'GitHubProvider',
+          githubOidcProviderArn,
+        ).openIdConnectProviderArn
+      : new iam.CfnOIDCProvider(this, 'GitHubProvider', {
+          url: 'https://token.actions.githubusercontent.com',
+          clientIdList: ['sts.amazonaws.com'],
+        }).attrArn;
     const deployRole = new iam.Role(this, 'GitHubDeployRole', {
-      assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
+      assumedBy: new iam.WebIdentityPrincipal(githubProviderArn, {
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
           // GitHub uses immutable OIDC subjects for this repository.
