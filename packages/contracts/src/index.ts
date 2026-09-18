@@ -116,6 +116,7 @@ export {
   CompleteEvidenceSchema,
   CompleteSignatureSchema,
   FailAppointmentSchema,
+  MIN_REQUIRED_EVIDENCE_PHOTOS,
   PresignEvidenceSchema,
   PresignSignatureSchema,
   ReportDiscrepancySchema,
@@ -133,6 +134,8 @@ export {
   type RequireCorrection,
   type SaveChecklist,
   type SaveChecklistItem,
+  type UpdateExecutionNotes,
+  UpdateExecutionNotesSchema,
 } from './execution.js';
 export {
   SyncOperationsQuerySchema,

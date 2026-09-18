@@ -146,7 +146,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
   <div class="flow-card admin"><span class="step-num">3</span><br>Asigna Técnico Responsable</div>
   <div class="flow-card tech"><span class="step-num">4</span><br><b>Técnico</b> inicia Servicio</div>
   <div class="flow-card tech"><span class="step-num">5</span><br>Valida Hardware e IMEI</div>
-  <div class="flow-card tech"><span class="step-num">6</span><br>Checklist + mínimo 3 fotos por unidad</div>
+  <div class="flow-card tech"><span class="step-num">6</span><br>Checklist + mínimo 10 fotos por unidad</div>
   <div class="flow-card tech"><span class="step-num">7</span><br>Firma Digital Cliente</div>
   <div class="flow-card final"><span class="step-num">8</span><br>Cierre y Reporte PDF</div>
 </div>
@@ -156,7 +156,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
   <span class="badge badge-error">Cierre como Cita Fallida (con motivo)</span>
 </div>
 
-> **Regla de oro:** El técnico no puede cerrar un servicio normal si una unidad tiene menos de tres fotografías, si alguna unidad no tiene su checklist completo o si falta la firma con nombre del cliente.
+> **Regla de oro:** El técnico no puede cerrar un servicio normal si una unidad tiene menos de diez fotografías, si alguna unidad no tiene su checklist completo o si falta la firma con nombre del cliente.
 
 ---
 
@@ -279,13 +279,13 @@ Al terminar los trabajos mecánicos/eléctricos, debes realizar la inspección d
 ## 6. Reglas de Evidencias Fotográficas
 
 > ⚠️ **REGLA ESTRICTA DE CALIDAD:**  
-> **Cada unidad requiere al menos tres fotografías completadas**, distribuidas entre las categorías del checklist.
+> **Cada unidad requiere al menos diez fotografías completadas**, distribuidas entre las categorías del checklist.
 
 1. Pulsa sobre el icono de cámara en la categoría correspondiente.
 2. Toma una foto clara y bien iluminada desde tu teléfono.
 3. La foto se sube automáticamente a almacenamiento privado seguro (S3).
 4. El sistema mostrará una miniatura con confirmación verde.
-5. Si alguna unidad no tiene las tres fotos requeridas, la aplicación indicará el requisito pendiente y no permitirá finalizar.
+5. Si alguna unidad no tiene las diez fotos requeridas, la aplicación indicará el requisito pendiente y no permitirá finalizar.
 
 ---
 
@@ -297,7 +297,11 @@ Cuando todas las unidades tengan sus equipos verificados y sus checklists comple
 2. Ingresa el **Nombre Completo** de la persona que recibe el servicio.
 3. Opcionalmente registra su cargo o documento de identidad.
 4. Pídele al cliente que firme directamente en la pantalla de tu celular en el recuadro táctil.
-5. Pulsa **`Finalizar Orden de Servicio`**:
+5. En la sección **`Notas de ejecución`**, agrega las observaciones generales del servicio si aplica.
+   Puedes guardarlas antes de finalizar; si quedan cambios pendientes, el sistema las guarda
+   automáticamente al solicitar el cierre. Estas notas pertenecen a toda la orden, no a una unidad
+   específica.
+6. Pulsa **`Finalizar Orden de Servicio`**:
    - La orden pasa a **`COMPLETED`**.
    - Se sella la fecha y hora final.
    - El sistema genera el acta técnica digital con validez de entrega.
@@ -379,7 +383,7 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 - **¿Puedo cambiar de técnico una orden ya asignada?**  
   Sí, el administrador puede reasignarla desde el panel web mientras la orden no haya sido finalizada.
 - **¿Por qué no se habilita el botón de finalizar orden?**  
-  Verifica que: (1) Todas las unidades tengan checklist completo, (2) Cada unidad tenga al menos tres fotos, (3) Todos los equipos estén verificados o con discrepancia reportada, y (4) Se haya ingresado el nombre y firma del cliente.
+  Verifica que: (1) Todas las unidades tengan checklist completo, (2) Cada unidad tenga al menos diez fotos, (3) Todos los equipos estén verificados o con discrepancia reportada, y (4) Se haya ingresado el nombre y firma del cliente.
 
 ---
 

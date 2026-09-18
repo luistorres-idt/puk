@@ -9,6 +9,7 @@ import type {
   ReportDiscrepancy,
   RequireCorrection,
   SaveChecklistItem,
+  UpdateExecutionNotes,
 } from '@puk/contracts';
 import { assertOrderAccess as assertSharedOrderAccess } from '../../auth/order-access-policy.js';
 import { domainTransaction } from '../../database/transaction.js';
@@ -276,6 +277,34 @@ export class ExecutionService {
         where: { id: checklist.id },
         include: { items: true },
       });
+    });
+  }
+
+  public async updateExecutionNotes(
+    userId: string,
+    role: 'ADMIN' | 'TECHNICIAN',
+    orderId: string,
+    input: UpdateExecutionNotes,
+  ) {
+    const order = await this.assertOrderAccess(userId, role, orderId);
+    assertCanExecuteWork(order.status, 'guardar las notas de ejecución');
+
+    return domainTransaction(this.prisma, async (tx, effects) => {
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: { generalNotes: input.notes || null },
+      });
+
+      effects.audit({
+        action: 'EXECUTION_NOTES_UPDATED',
+        actorUserId: userId,
+        entityType: 'Order',
+        entityId: orderId,
+        before: { generalNotes: order.generalNotes } as unknown as Prisma.InputJsonValue,
+        after: { generalNotes: updated.generalNotes } as unknown as Prisma.InputJsonValue,
+      });
+
+      return updated;
     });
   }
 

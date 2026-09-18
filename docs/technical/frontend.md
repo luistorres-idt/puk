@@ -67,6 +67,9 @@ La administración de cuentas técnicas se compone desde `technicians/views/Tech
 de usuarios y acceso compartido pertenecen a `modules/technical-accounts`.
 La vista de ejecución carga `/orders/:id/execution`, cuyo contrato omite información administrativa,
 fiscal y de sincronización. Los técnicos navegan a esa vista también para consultar su historial.
+Al final de la vista, la tarjeta **Notas de ejecución** permite guardar una nota general de la orden
+de hasta 5000 caracteres. Si hay cambios pendientes al pulsar **Finalizar y Cerrar Servicio**, la
+interfaz los guarda automáticamente antes de completar la orden; las notas no se separan por unidad.
 
 ## Asistente de creación de órdenes y catálogo de equipos
 

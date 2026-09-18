@@ -1,4 +1,4 @@
-import type { ChecklistCategory } from '@puk/contracts';
+import { MIN_REQUIRED_EVIDENCE_PHOTOS, type ChecklistCategory } from '@puk/contracts';
 
 export const ALL_CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
   'DASHBOARD',
@@ -81,16 +81,16 @@ export function evaluateOrderCompleteness(
         }
       }
 
-      // Check minimum 3 completed photos per unit
+      // Check minimum completed photos per unit
       const totalEvidence = checklist.items.reduce((sum, item) => {
         const completedEvidence =
           item.evidence?.filter((e) => e.status === undefined || e.status === 'COMPLETED') ?? [];
         return sum + completedEvidence.length;
       }, 0);
 
-      if (totalEvidence < 3) {
+      if (totalEvidence < MIN_REQUIRED_EVIDENCE_PHOTOS) {
         missing.push(
-          `Se requieren al menos 3 fotografías de evidencia en unidad ${unit.label} (actualmente ${totalEvidence}/3)`,
+          `Se requieren al menos ${MIN_REQUIRED_EVIDENCE_PHOTOS} fotografías de evidencia en unidad ${unit.label} (actualmente ${totalEvidence}/${MIN_REQUIRED_EVIDENCE_PHOTOS})`,
         );
       }
     }

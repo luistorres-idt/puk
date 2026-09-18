@@ -33,7 +33,7 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 - Servicios de instalación, revisión, desinstalación, sensor fuel, cambio de equipo y cita fallida.
 - Combinación de varios servicios en una misma orden mediante el tipo de cada unidad.
 - Checklist por unidad.
-- Mínimo de tres fotografías por unidad.
+- Mínimo de diez fotografías por unidad.
 - Reporte de discrepancias sin bloquear el trabajo del técnico.
 - Una firma del cliente por orden.
 - Reporte PDF de la orden de servicio completada, conforme a [docs/service-order-report-spec.md](./docs/service-order-report-spec.md).
@@ -71,12 +71,12 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
    - Molduras.
    - Carrocería.
 8. Cada categoría admite `Bien`, `Mal` o `No aplica`.
-9. Cada unidad requiere al menos tres fotografías completadas, distribuidas entre las categorías del checklist.
+9. Cada unidad requiere al menos diez fotografías completadas, distribuidas entre las categorías del checklist.
 10. Cuando una categoría se marque `Mal`, la observación es obligatoria.
 11. Para finalizar un servicio normal, todas las unidades deben tener:
     - Equipos verificados.
     - Checklist completo.
-    - Al menos tres fotografías por unidad.
+    - Al menos diez fotografías por unidad.
 12. Se requiere una sola firma del cliente por toda la orden.
 13. La firma requiere el nombre de la persona que firma.
 14. Si el IMEI, ID, serie o unidad no coincide, el técnico reporta una discrepancia y continúa.
@@ -378,6 +378,7 @@ SyncStatus:
 - `isHomeService: boolean`.
 - `serviceAddress: string?`.
 - `generalNotes: string?`.
+- Las notas de ejecución son generales de la orden, no independientes por unidad. Pueden capturarse durante la ejecución y se guardan antes del cierre si tienen cambios pendientes.
 - `failedReason: string?`.
 - `version: integer`, para concurrencia optimista.
 - `createdById: UUID`.

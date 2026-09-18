@@ -20,6 +20,7 @@ import {
   useMessage,
 } from 'naive-ui';
 import {
+  MIN_REQUIRED_EVIDENCE_PHOTOS,
   ORDER_SERVICE_LABELS,
   OrderServiceTypeSchema,
   canAddOrderItems,
@@ -729,39 +730,6 @@ const statusColor = orderStatusTagType;
           y comienza con datos de ejecución limpios.
         </n-alert>
 
-        <!-- Sync status banner if applicable -->
-        <n-card
-          v-if="syncInfo && syncInfo.total > 0"
-          class="border-l-4 border-l-indigo-500 shadow-sm"
-          size="small"
-        >
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 class="font-semibold text-slate-800 text-sm">Sincronización con Google Sheets</h3>
-              <p class="text-xs text-slate-500 mt-0.5">
-                Estado:
-                {{
-                  syncInfo.isFullySynced ? 'Completamente sincronizada' : 'Pendiente / en proceso'
-                }}
-                &bull; Operaciones: {{ syncInfo.synced }} / {{ syncInfo.total }}
-                <span v-if="syncInfo.failed > 0" class="text-red-600 font-bold ml-1">
-                  ({{ syncInfo.failed }} fallidas)
-                </span>
-              </p>
-            </div>
-
-            <n-button
-              v-if="syncInfo.failed > 0 && session.user?.role === 'ADMIN'"
-              size="small"
-              type="warning"
-              :loading="mutations.retry.isPending.value"
-              @click="handleRetrySync"
-            >
-              Reintentar Operaciones
-            </n-button>
-          </div>
-        </n-card>
-
         <!-- Service order PDF report -->
         <n-card
           v-if="order.status === 'COMPLETED'"
@@ -1135,7 +1103,11 @@ const statusColor = orderStatusTagType;
                         <div class="flex items-center gap-2">
                           <n-tag
                             size="small"
-                            :type="getUnitAllEvidences(unit).length >= 3 ? 'success' : 'warning'"
+                            :type="
+                              getUnitAllEvidences(unit).length >= MIN_REQUIRED_EVIDENCE_PHOTOS
+                                ? 'success'
+                                : 'warning'
+                            "
                             round
                           >
                             {{ getUnitAllEvidences(unit).length }} fotos registradas
@@ -1331,6 +1303,41 @@ const statusColor = orderStatusTagType;
           <!-- Tab 4: Sincronización con Sheets -->
           <n-tab-pane name="sync" tab="Sincronización Sheets">
             <div class="space-y-4">
+              <n-card
+                v-if="syncInfo && syncInfo.total > 0"
+                class="border-l-4 border-l-indigo-500 shadow-sm"
+                size="small"
+              >
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 class="font-semibold text-slate-800 text-sm">
+                      Estado de sincronización
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                      {{
+                        syncInfo.isFullySynced
+                          ? 'Completamente sincronizada'
+                          : 'Pendiente / en proceso'
+                      }}
+                      &bull; Operaciones: {{ syncInfo.synced }} / {{ syncInfo.total }}
+                      <span v-if="syncInfo.failed > 0" class="text-red-600 font-bold ml-1">
+                        ({{ syncInfo.failed }} fallidas)
+                      </span>
+                    </p>
+                  </div>
+
+                  <n-button
+                    v-if="syncInfo.failed > 0 && session.user?.role === 'ADMIN'"
+                    size="small"
+                    type="warning"
+                    :loading="mutations.retry.isPending.value"
+                    @click="handleRetrySync"
+                  >
+                    Reintentar Operaciones
+                  </n-button>
+                </div>
+              </n-card>
+
               <div class="flex items-center justify-between">
                 <h3 class="text-base font-bold text-slate-800">Operaciones de Sincronización</h3>
                 <n-button

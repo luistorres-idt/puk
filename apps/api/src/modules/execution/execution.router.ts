@@ -12,6 +12,7 @@ import {
   ReportDiscrepancySchema,
   RequireCorrectionSchema,
   SaveChecklistSchema,
+  UpdateExecutionNotesSchema,
   UnitParamsSchema,
 } from '@puk/contracts';
 import { authorize } from '../../auth/authenticate.js';
@@ -201,6 +202,20 @@ export function createExecutionRouter(options: {
     validate({ params: IdParamsSchema }),
     async (request, response) => {
       const result = await options.executionService.validateCompleteness(String(request.params.id));
+      sendSuccess(response, result);
+    },
+  );
+
+  router.patch(
+    '/orders/:id/execution-notes',
+    validate({ body: UpdateExecutionNotesSchema, params: IdParamsSchema }),
+    async (request, response) => {
+      const result = await options.executionService.updateExecutionNotes(
+        request.auth!.userId,
+        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+        String(request.params.id),
+        request.body,
+      );
       sendSuccess(response, result);
     },
   );

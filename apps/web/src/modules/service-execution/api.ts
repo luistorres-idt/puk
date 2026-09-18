@@ -9,6 +9,7 @@ import type {
   ReportDiscrepancy,
   RequireCorrection,
   SaveChecklistItem,
+  UpdateExecutionNotes,
 } from '@puk/contracts';
 import { api, type ApiResponse } from '../../shared/http/client.js';
 
@@ -130,6 +131,14 @@ export async function checkCompleteness(orderId: string) {
   const response = await api.get<
     ApiResponse<{ isComplete: boolean; missingRequirements: string[] }>
   >(`/orders/${orderId}/completeness`);
+  return response.data.data;
+}
+
+export async function updateExecutionNotes(orderId: string, data: UpdateExecutionNotes) {
+  const response = await api.patch<ApiResponse<Record<string, unknown>>>(
+    `/orders/${orderId}/execution-notes`,
+    data,
+  );
   return response.data.data;
 }
 

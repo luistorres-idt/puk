@@ -40,10 +40,18 @@ Para completar normalmente una orden se evalúa la regla de dominio pura mediant
 1. Al menos una unidad registrada.
 2. Todos los equipos verificados (`MATCHED` o `DISCREPANCY_REPORTED`). Una discrepancia documentada no bloquea el cierre.
 3. Checklist completo con las 5 categorías obligatorias (`DASHBOARD`, `WINDOWS`, `ACCESSORIES`, `TRIMS`, `BODYWORK`).
-4. Mínimo 3 fotografías de evidencia completadas por unidad.
+4. Mínimo 10 fotografías de evidencia completadas por unidad.
 5. Firma digital y nombre de conformidad del cliente.
 
 La cita fallida omite checklist, fotos y firma.
+
+### Notas de ejecución
+
+Las notas capturadas durante el trabajo se almacenan en `Order.generalNotes` como una nota general
+de la orden. `PATCH /orders/:id/execution-notes` permite guardarlas mientras la orden está en
+`IN_PROGRESS`, genera la auditoría `EXECUTION_NOTES_UPDATED` y acepta hasta 5000 caracteres. Si la
+vista tiene cambios pendientes al solicitar el cierre, los guarda antes de ejecutar
+`POST /orders/:id/complete`. No existe todavía una nota independiente por unidad.
 
 ## Asignación y sincronización con Sheets
 

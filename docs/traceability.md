@@ -17,6 +17,7 @@ La columna de pruebas identifica el nivel mínimo que debe existir antes de cerr
 | Verificación y discrepancias        | `/order-equipment/:id/verify`, `/orders/:id/discrepancies`    | Discrepancia no bloquea cierre; usuario ajeno recibe denegación       |
 | Checklist por unidad                | `/units/:id/checklist`                                        | Cinco categorías; observación obligatoria en `BAD`                    |
 | Evidencias privadas                 | `/units/:id/evidence`, `/evidence/:id/complete`               | MIME, tamaño, objeto inexistente, propiedad y URL temporal            |
+| Notas de ejecución                 | `PATCH /orders/:id/execution-notes`                            | Nota general por orden, máximo 5000 caracteres y auditoría             |
 | Firma de orden                      | `/orders/:id/signature`                                       | Nombre obligatorio, PNG privado y autorización                        |
 | Cierre normal                       | `POST /orders/:id/complete`                                   | Integración: todos los requisitos e idempotencia                      |
 | Cita fallida                        | `POST /orders/:id/fail-appointment`                           | Solo motivo obligatorio; no exige checklist, fotos ni firma           |

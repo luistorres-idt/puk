@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { NButton, NImage, NPopconfirm, NSpin, useMessage } from 'naive-ui';
-import type { ChecklistCategory } from '@puk/contracts';
+import { MIN_REQUIRED_EVIDENCE_PHOTOS, type ChecklistCategory } from '@puk/contracts';
 import {
   completeEvidence,
   deleteEvidence,
@@ -23,7 +23,7 @@ const props = withDefaults(
     category: 'BODYWORK',
     evidences: () => [],
     disabled: false,
-    minRequired: 3,
+    minRequired: MIN_REQUIRED_EVIDENCE_PHOTOS,
   },
 );
 

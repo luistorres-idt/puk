@@ -143,7 +143,8 @@ flowchart TD
   5. Carrocería (`BODYWORK`)
   - Estados permitidos: `GOOD` (Bien), `BAD` (Mal) o `NOT_APPLICABLE` (No aplica).
   - Si el estado es `BAD`, el campo de observación explicativa es **obligatorio**.
-- **RF-15 (Evidencias Fotográficas Obligatorias):** Cada unidad requiere al menos tres fotografías completadas, distribuidas entre las categorías del checklist y subidas a S3 mediante URL prefirmada.
+- **RF-15 (Evidencias Fotográficas Obligatorias):** Cada unidad requiere al menos diez fotografías completadas, distribuidas entre las categorías del checklist y subidas a S3 mediante URL prefirmada.
+- **Notas de ejecución:** El técnico puede capturar una nota general de la orden durante la ejecución. La nota puede guardarse antes del cierre o automáticamente al solicitar la finalización; no se divide por unidad.
 - **RF-16 (Captura de Firma del Cliente):** La orden finalizada exige la captura digital de una única firma del cliente en pantalla, junto con el nombre completo y documento de la persona firmante.
 - **RF-17 (Cierre de Cita Fallida):** Si la unidad no está disponible o el cliente no se presenta, el técnico puede registrar un cierre como `FAILED_APPOINTMENT` indicando obligatoriamente el motivo, omitiendo fotos, checklist y firma.
 - **RF-18 (Resolución Administrativa de Cita Fallida):** El administrador puede cancelar el

@@ -102,9 +102,14 @@ proyección de respuesta explícita.
 | POST   | `/api/v1/orders/:id/signature/complete?objectKey=...`                   | confirmar firma           |
 | GET    | `/api/v1/orders/:id/signature/url`                                      | URL temporal de firma     |
 | GET    | `/api/v1/orders/:id/completeness`                                       | requisitos pendientes     |
+| PATCH  | `/api/v1/orders/:id/execution-notes`                                   | guardar nota general de ejecución |
 | POST   | `/api/v1/orders/:id/complete`                                           | completar orden           |
 | POST   | `/api/v1/orders/:id/fail-appointment`                                   | registrar cita fallida    |
 | POST   | `/api/v1/orders/:id/require-correction`                                 | solicitar corrección      |
+
+La nota de ejecución pertenece a la orden completa, no a una unidad individual. El endpoint permite
+guardarla durante `IN_PROGRESS`; la vista también la guarda automáticamente antes de solicitar el
+cierre cuando existen cambios pendientes.
 
 Al completar una orden se congelan el precio y su desglose por servicio, se encola nuevamente el
 estado final de cada equipo en `SALIDAS` y se publica el renglón del reporte técnico. Estas tareas

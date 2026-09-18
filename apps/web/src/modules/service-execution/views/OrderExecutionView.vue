@@ -15,20 +15,18 @@ import {
   NTabPane,
   useMessage,
 } from 'naive-ui';
-import type {
-  ChecklistCategory,
-  ChecklistCondition,
-  OrderEvidenceDetail,
-  OrderExecutionDetail,
-  SaveChecklistItem,
+import {
+  MIN_REQUIRED_EVIDENCE_PHOTOS,
+  type ChecklistCategory,
+  type ChecklistCondition,
+  type OrderEvidenceDetail,
+  type OrderExecutionDetail,
+  type SaveChecklistItem,
 } from '@puk/contracts';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { useSessionStore } from '../../../stores/session.js';
-import {
-  fetchOrderExecutionById,
-  formatServiceType,
-} from '../../orders/index.js';
+import { fetchOrderExecutionById, formatServiceType } from '../../orders/index.js';
 import {
   checkCompleteness,
   completeOrder,
@@ -39,6 +37,7 @@ import {
   requireCorrection,
   saveChecklist,
   startOrder,
+  updateExecutionNotes,
   uploadToStorage,
   verifyEquipment,
 } from '../api.js';
@@ -55,6 +54,9 @@ const order = ref<OrderExecutionDetail | null>(null);
 const completeness = ref<{ isComplete: boolean; missingRequirements: string[] } | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
+const executionNotes = ref('');
+const executionNotesDirty = ref(false);
+const savingExecutionNotes = ref(false);
 
 // Discrepancy modal
 const showDiscrepancyModal = ref(false);
@@ -187,6 +189,9 @@ async function loadData() {
     ]);
     order.value = orderData;
     completeness.value = compData;
+    if (!executionNotesDirty.value) {
+      executionNotes.value = orderData.generalNotes ?? '';
+    }
 
     if (orderData.units && orderData.units.length > 0) {
       if (!activeUnitTab.value) {
@@ -306,6 +311,19 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
 }
 
 async function handleCompleteOrder() {
+  if (executionNotesDirty.value) {
+    savingExecutionNotes.value = true;
+    try {
+      await updateExecutionNotes(orderId, { notes: executionNotes.value.trim() || null });
+      executionNotesDirty.value = false;
+    } catch (err: unknown) {
+      message.error(extractApiErrorMessage(err, 'Error al guardar las notas de ejecución'));
+      return;
+    } finally {
+      savingExecutionNotes.value = false;
+    }
+  }
+
   try {
     const res = await completeOrder(orderId);
     const warnings = res.warnings ?? [];
@@ -318,6 +336,20 @@ async function handleCompleteOrder() {
     await loadData();
   } catch (err: unknown) {
     message.error(extractApiErrorMessage(err, 'Error al completar orden'));
+  }
+}
+
+async function handleSaveExecutionNotes() {
+  savingExecutionNotes.value = true;
+  try {
+    await updateExecutionNotes(orderId, { notes: executionNotes.value.trim() || null });
+    executionNotesDirty.value = false;
+    message.success('Notas de ejecución guardadas');
+    await loadData();
+  } catch (err: unknown) {
+    message.error(extractApiErrorMessage(err, 'Error al guardar las notas de ejecución'));
+  } finally {
+    savingExecutionNotes.value = false;
   }
 }
 
@@ -546,14 +578,14 @@ onMounted(() => {
                       </NButton>
                     </div>
 
-                    <!-- Evidence upload for unit (minimum 3 photos) -->
+                    <!-- Evidence upload for unit -->
                     <div class="pt-4 border-t border-slate-200">
                       <EvidenceCapture
                         :order-id="orderId"
                         :unit-id="unit.id"
                         category="BODYWORK"
                         :evidences="getUnitAllEvidences(unit.id)"
-                        :min-required="3"
+                        :min-required="MIN_REQUIRED_EVIDENCE_PHOTOS"
                         :disabled="
                           order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'
                         "
@@ -580,6 +612,32 @@ onMounted(() => {
             :saving="savingSignature"
             @save="handleSaveSignature"
           />
+
+          <NCard title="Notas de ejecución" class="shadow-sm">
+            <div class="space-y-3">
+              <NInput
+                v-model:value="executionNotes"
+                type="textarea"
+                :rows="4"
+                maxlength="5000"
+                show-count
+                placeholder="Agregue observaciones o notas finales del servicio..."
+                :disabled="order.status !== 'IN_PROGRESS' || savingExecutionNotes"
+                @update:value="executionNotesDirty = true"
+              />
+              <div class="flex justify-end">
+                <NButton
+                  type="primary"
+                  secondary
+                  :loading="savingExecutionNotes"
+                  :disabled="order.status !== 'IN_PROGRESS' || !executionNotesDirty"
+                  @click="handleSaveExecutionNotes"
+                >
+                  Guardar notas
+                </NButton>
+              </div>
+            </div>
+          </NCard>
 
           <!-- Completeness & Closure Section -->
           <NCard title="Cierre y Finalización del Servicio" class="shadow-sm">

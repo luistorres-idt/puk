@@ -1,5 +1,7 @@
 import * as v from 'valibot';
 
+export const MIN_REQUIRED_EVIDENCE_PHOTOS = 10;
+
 export const ChecklistCategorySchema = v.picklist([
   'DASHBOARD',
   'WINDOWS',
@@ -61,6 +63,11 @@ export const CompleteSignatureSchema = v.object({
   signerName: v.pipe(v.string(), v.nonEmpty()),
 });
 export type CompleteSignature = v.InferOutput<typeof CompleteSignatureSchema>;
+
+export const UpdateExecutionNotesSchema = v.object({
+  notes: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(5000))),
+});
+export type UpdateExecutionNotes = v.InferOutput<typeof UpdateExecutionNotesSchema>;
 
 export const FailAppointmentSchema = v.object({
   failedReason: v.pipe(v.string(), v.nonEmpty()),
