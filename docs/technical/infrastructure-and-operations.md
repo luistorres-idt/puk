@@ -244,6 +244,52 @@ El workflow `.github/workflows/ci.yml` instala dependencias, valida Prisma, ejec
 
 Los assets Docker de CDK se construyen y publican mediante el bootstrap de CDK. El repositorio no define ECR repositories ni tags de aplicación explícitos.
 
+El workflow de despliegue hace checkout de `github.event.workflow_run.head_sha`, por lo que CI
+despliega la revisión que pasó las validaciones. Un despliegue manual de assets o de CDK debe
+registrar explícitamente el SHA de Git, la revisión de ECS y el operador para conservar la
+trazabilidad de release.
+
+### Rotación de secretos y recuperación
+
+El secreto `puk/staging/runtime` se configura con el script local. Para una rotación explícita:
+
+```bash
+AWS_REGION=us-east-2 node --env-file=.env infra/scripts/configure-staging-secrets.mjs --overwrite
+```
+
+No se deben mostrar valores del secreto. La contraseña de seed se recupera únicamente mediante el
+flujo seguro aprobado para Secrets Manager, sin imprimirla ni copiarla a logs, tickets o chat. Una
+nueva versión de Secrets Manager no cambia tareas ECS ya iniciadas: se debe forzar un nuevo
+despliegue o reiniciar el servicio para que `migration` y `api` reciban los valores actualizados.
+Rotar las claves JWT invalida los tokens firmados con las claves anteriores y puede cerrar sesiones
+activas.
+
+Para un incidente, use primero diagnósticos de sólo lectura:
+
+```bash
+aws cloudformation describe-stacks --region us-east-2 --stack-name PukStagingApplication
+aws ecs describe-services --region us-east-2 --cluster puk-staging --services <service-name>
+aws ecs list-tasks --region us-east-2 --cluster puk-staging --service-name <service-name>
+aws logs tail /puk/staging/migration --region us-east-2 --since 30m
+aws logs tail /puk/staging/api --region us-east-2 --since 30m
+```
+
+Valide la URL resultante sin exponer configuración:
+
+```bash
+TARGET_URL="https://<cloudfront-host>" ./infra/scripts/smoke-test.sh
+```
+
+El script comprueba `/health/live`, `/health/ready`, `/metrics` y `/docs/`. Si falla la migración,
+la API no inicia; conserve logs y revise la migración antes de reintentar. El circuit breaker de
+ECS está configurado para rollback de la aplicación. Para datos, use sólo un respaldo verificado y
+`infra/scripts/restore.sh` con aprobación operativa. RDS y S3 usan `RETAIN`, por lo que un rollback
+no debe destruirlos.
+
+RDS tiene deletion protection y NAT Gateway y RDS mantienen costos aunque no haya tráfico. Los
+recursos `RETAIN` también sobreviven al stack. No destruya el ambiente ni desactive la protección
+de borrado sin confirmar titularidad, respaldos y plan de retención.
+
 ## Desarrollo local
 
 ### Servicios Docker Compose
