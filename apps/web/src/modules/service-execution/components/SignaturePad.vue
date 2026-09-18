@@ -60,7 +60,8 @@ async function loadSignaturePreview() {
 async function initCanvas() {
   await nextTick();
   if (canvasRef.value) {
-    const parentWidth = containerRef.value?.clientWidth || canvasRef.value.parentElement?.clientWidth || 400;
+    const parentWidth =
+      containerRef.value?.clientWidth || canvasRef.value.parentElement?.clientWidth || 400;
     canvasRef.value.width = parentWidth;
     canvasRef.value.height = 180;
     clearCanvas();
@@ -214,8 +215,8 @@ onMounted(() => {
           <NImage
             :src="previewUrl!"
             :alt="`Firma de ${existingSignature.signerName}`"
-            class="max-h-40 max-w-full object-contain rounded bg-white p-2 border border-slate-200 shadow-2xs"
-            :img-props="{ class: 'max-h-40 max-w-full object-contain bg-white' }"
+            class="max-h-40 max-w-full object-contain rounded signature-surface p-2 border border-slate-200 shadow-2xs"
+            :img-props="{ class: 'max-h-40 max-w-full object-contain signature-surface' }"
           />
           <span class="text-[11px] text-slate-400 mt-2">Haz clic sobre la firma para ampliar</span>
         </template>
@@ -260,7 +261,10 @@ onMounted(() => {
         <label class="block text-xs font-semibold text-slate-700 mb-1">
           Firma digital en pantalla *
         </label>
-        <div ref="containerRef" class="border border-slate-300 rounded bg-white overflow-hidden touch-none">
+        <div
+          ref="containerRef"
+          class="border border-slate-300 rounded signature-surface overflow-hidden touch-none"
+        >
           <canvas
             ref="canvasRef"
             class="w-full cursor-crosshair block"
