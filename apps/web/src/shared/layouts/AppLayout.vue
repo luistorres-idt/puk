@@ -27,7 +27,7 @@ async function logout(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-slate-50 text-slate-800">
+  <div class="app-shell flex min-h-screen flex-col bg-slate-50 text-slate-800">
     <!-- Offline disclaimer banner -->
     <div
       v-if="!isOnline"
@@ -39,7 +39,9 @@ async function logout(): Promise<void> {
     </div>
 
     <!-- Header navigation -->
-    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
+    <header
+      class="app-header sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm"
+    >
       <div
         class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6"
       >
@@ -78,10 +80,15 @@ async function logout(): Promise<void> {
           <ThemeToggle />
 
           <!-- Desktop Navigation -->
-          <nav v-if="session.user" class="hidden md:flex items-center gap-2 lg:gap-4">
+          <nav
+            v-if="session.user"
+            aria-label="Navegación principal"
+            class="hidden items-center gap-2 md:flex lg:gap-4"
+          >
             <template v-if="session.user.orderAccessMode === 'SHARED'">
               <router-link
                 class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
                 to="/work-order"
               >
                 Orden de Trabajo
@@ -90,37 +97,50 @@ async function logout(): Promise<void> {
             <template v-else>
               <router-link
                 class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
                 to="/"
               >
                 Inicio
               </router-link>
               <router-link
                 class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
                 to="/orders"
               >
                 {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
               </router-link>
-              <router-link
-                v-if="session.user.role === 'ADMIN'"
-                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                to="/technicians"
-              >
-                Técnicos
-              </router-link>
-              <router-link
-                v-if="session.user.role === 'ADMIN'"
-                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                to="/technical-accounts"
-              >
-                Cuentas Técnicas
-              </router-link>
-              <router-link
-                v-if="session.user.role === 'ADMIN'"
-                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                to="/sync"
-              >
-                Sincronización
-              </router-link>
+              <template v-if="session.user.role === 'ADMIN'">
+                <span
+                  class="mx-1 hidden h-5 border-l border-slate-200 lg:block"
+                  aria-hidden="true"
+                />
+                <span
+                  class="hidden text-[10px] font-bold uppercase tracking-wider text-slate-400 lg:inline"
+                >
+                  Administración
+                </span>
+                <router-link
+                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                  active-class="bg-blue-50 text-blue-900 font-semibold"
+                  to="/technicians"
+                >
+                  Técnicos
+                </router-link>
+                <router-link
+                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                  active-class="bg-blue-50 text-blue-900 font-semibold"
+                  to="/technical-accounts"
+                >
+                  Cuentas Técnicas
+                </router-link>
+                <router-link
+                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                  active-class="bg-blue-50 text-blue-900 font-semibold"
+                  to="/sync"
+                >
+                  Sincronización
+                </router-link>
+              </template>
             </template>
 
             <span class="hidden text-xs text-slate-500 lg:inline">
@@ -166,7 +186,7 @@ async function logout(): Promise<void> {
       <!-- Mobile Navigation Drawer / Dropdown -->
       <div
         v-if="session.user && isMobileMenuOpen"
-        class="border-t border-slate-200 bg-white px-4 py-3 shadow-lg md:hidden"
+        class="app-mobile-menu border-t border-slate-200 bg-white px-4 py-3 shadow-lg md:hidden"
       >
         <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
           <div>
@@ -184,7 +204,7 @@ async function logout(): Promise<void> {
           </n-tag>
         </div>
 
-        <nav class="flex flex-col space-y-1">
+        <nav aria-label="Navegación principal" class="flex flex-col space-y-1">
           <template v-if="session.user.orderAccessMode === 'SHARED'">
             <router-link
               class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
@@ -196,6 +216,9 @@ async function logout(): Promise<void> {
             </router-link>
           </template>
           <template v-else>
+            <p class="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Operación
+            </p>
             <router-link
               class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
               active-class="bg-blue-50 text-blue-900 font-semibold"
@@ -212,33 +235,37 @@ async function logout(): Promise<void> {
             >
               {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
             </router-link>
-            <router-link
-              v-if="session.user.role === 'ADMIN'"
-              class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
-              active-class="bg-blue-50 text-blue-900 font-semibold"
-              to="/technicians"
-              @click="isMobileMenuOpen = false"
-            >
-              Técnicos
-            </router-link>
-            <router-link
-              v-if="session.user.role === 'ADMIN'"
-              class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
-              active-class="bg-blue-50 text-blue-900 font-semibold"
-              to="/technical-accounts"
-              @click="isMobileMenuOpen = false"
-            >
-              Cuentas Técnicas
-            </router-link>
-            <router-link
-              v-if="session.user.role === 'ADMIN'"
-              class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
-              active-class="bg-blue-50 text-blue-900 font-semibold"
-              to="/sync"
-              @click="isMobileMenuOpen = false"
-            >
-              Sincronización
-            </router-link>
+            <template v-if="session.user.role === 'ADMIN'">
+              <p
+                class="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400"
+              >
+                Administración
+              </p>
+              <router-link
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/technicians"
+                @click="isMobileMenuOpen = false"
+              >
+                Técnicos
+              </router-link>
+              <router-link
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/technical-accounts"
+                @click="isMobileMenuOpen = false"
+              >
+                Cuentas Técnicas
+              </router-link>
+              <router-link
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/sync"
+                @click="isMobileMenuOpen = false"
+              >
+                Sincronización
+              </router-link>
+            </template>
           </template>
 
           <div class="border-t border-slate-100 pt-2 mt-1">
