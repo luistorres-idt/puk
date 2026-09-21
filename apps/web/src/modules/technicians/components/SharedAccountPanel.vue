@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { SharedTechnicianAccessConfig } from '@puk/contracts';
-import { NButton, NCard, NSelect, NTag } from 'naive-ui';
+import { NAlert, NButton, NCard, NSelect, NSpin, NTag } from 'naive-ui';
 
 defineProps<{
   config: SharedTechnicianAccessConfig | null;
+  error: string | null;
+  loading: boolean;
   options: Array<{ label: string; value: string }>;
   saving: boolean;
   selectedUserId: string | null;
@@ -11,6 +13,7 @@ defineProps<{
 
 const emit = defineEmits<{
   'update:selectedUserId': [value: string | null];
+  retry: [];
   save: [];
 }>();
 </script>
@@ -37,11 +40,20 @@ const emit = defineEmits<{
         </n-tag>
       </div>
     </template>
-    <p class="text-xs text-slate-600 mb-3">
+    <p class="mb-3 text-xs text-slate-600">
       La cuenta seleccionada aquí tendrá acceso al Tablero de Taller para que los operarios ejecuten
       cualquiera de las órdenes asignadas en paralelo sin requerir autorizaciones 1 a 1.
     </p>
-    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+    <n-alert v-if="error" type="error" class="mb-3" role="alert">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span>{{ error }}</span>
+        <n-button size="small" secondary @click="emit('retry')">Reintentar</n-button>
+      </div>
+    </n-alert>
+    <div v-if="loading" class="grid min-h-16 place-items-center" aria-live="polite">
+      <n-spin size="small" />
+    </div>
+    <div v-else class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
       <n-select
         :value="selectedUserId"
         size="small"

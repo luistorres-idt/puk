@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { AdminUserListItem, SharedTechnicianAccessConfig } from '@puk/contracts';
-import { NButton, NEmpty, NInput, NPopconfirm, NSpin, NTable, NTag } from 'naive-ui';
+import { NAlert, NButton, NEmpty, NInput, NPopconfirm, NSpin, NTable, NTag } from 'naive-ui';
 
 defineProps<{
   config: SharedTechnicianAccessConfig | null;
+  error: string | null;
   filteredTechnicians: AdminUserListItem[];
   loading: boolean;
   search: string;
@@ -11,6 +12,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
+  retry: [];
   'update:search': [value: string];
   edit: [user: AdminUserListItem];
   password: [user: AdminUserListItem];
@@ -34,16 +36,27 @@ const emit = defineEmits<{
       />
     </div>
 
-    <div v-if="loading" class="grid min-h-48 place-items-center">
+    <n-alert v-if="error" type="error" class="mb-4" role="alert">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span>{{ error }}</span>
+        <n-button size="small" secondary @click="emit('retry')">Reintentar</n-button>
+      </div>
+    </n-alert>
+
+    <div
+      v-if="loading && filteredTechnicians.length === 0"
+      class="grid min-h-48 place-items-center"
+      aria-live="polite"
+    >
       <n-spin size="medium" />
     </div>
 
     <n-empty
-      v-else-if="filteredTechnicians.length === 0"
+      v-else-if="!loading && !error && filteredTechnicians.length === 0"
       description="No se encontraron cuentas técnicas"
     />
 
-    <div v-else class="overflow-x-auto">
+    <div v-else-if="filteredTechnicians.length > 0" class="overflow-x-auto">
       <n-table :bordered="false" :single-line="false" size="small">
         <thead>
           <tr class="bg-slate-50 text-slate-600 text-xs">
@@ -74,17 +87,35 @@ const emit = defineEmits<{
             </td>
             <td class="text-right">
               <div class="flex items-center justify-end gap-2">
-                <n-button size="tiny" secondary type="info" @click="emit('password', user)">
-                  Cambiar Contraseña
+                <n-button
+                  size="tiny"
+                  secondary
+                  type="info"
+                  :aria-label="`Cambiar contraseña de ${user.name}`"
+                  @click="emit('password', user)"
+                >
+                  Contraseña
                 </n-button>
-                <n-button size="tiny" secondary @click="emit('edit', user)"> Editar </n-button>
+                <n-button
+                  size="tiny"
+                  secondary
+                  :aria-label="`Editar cuenta de ${user.name}`"
+                  @click="emit('edit', user)"
+                >
+                  Editar
+                </n-button>
                 <n-popconfirm
                   :positive-text="user.active ? 'Desactivar' : 'Activar'"
                   negative-text="Cancelar"
                   @positive-click="emit('toggleActive', user)"
                 >
                   <template #trigger>
-                    <n-button size="tiny" secondary :type="user.active ? 'error' : 'success'">
+                    <n-button
+                      size="tiny"
+                      secondary
+                      :type="user.active ? 'error' : 'success'"
+                      :aria-label="`${user.active ? 'Desactivar' : 'Activar'} cuenta de ${user.name}`"
+                    >
                       {{ user.active ? 'Desactivar' : 'Activar' }}
                     </n-button>
                   </template>

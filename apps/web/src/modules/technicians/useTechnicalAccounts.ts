@@ -12,9 +12,12 @@ import { useMessage } from 'naive-ui';
 export function useTechnicalAccounts() {
   const message = useMessage();
 
-  const loading = ref(true);
+  const loadingConfig = ref(true);
+  const loadingUsers = ref(true);
   const savingShared = ref(false);
   const error = ref<string | null>(null);
+  const configError = ref<string | null>(null);
+  const usersError = ref<string | null>(null);
   const config = ref<SharedTechnicianAccessConfig | null>(null);
   const users = ref<AdminUserListItem[]>([]);
   const search = ref('');
@@ -39,20 +42,37 @@ export function useTechnicalAccounts() {
   const editEmail = ref('');
   const editError = ref<string | null>(null);
 
-  async function loadData(): Promise<void> {
-    loading.value = true;
-    error.value = null;
+  async function loadConfig(): Promise<void> {
+    loadingConfig.value = true;
+    configError.value = null;
     try {
-      const [cfg, userList] = await Promise.all([getSharedTechnicianAccess(), listAdminUsers()]);
+      const cfg = await getSharedTechnicianAccess();
       config.value = cfg;
-      users.value = userList;
       selectedSharedUserId.value = cfg.userId;
     } catch (err) {
-      error.value =
+      configError.value =
+        err instanceof Error ? err.message : 'No se pudo cargar la cuenta compartida del taller.';
+    } finally {
+      loadingConfig.value = false;
+    }
+  }
+
+  async function loadUsers(): Promise<void> {
+    loadingUsers.value = true;
+    usersError.value = null;
+    try {
+      users.value = await listAdminUsers();
+    } catch (err) {
+      usersError.value =
         err instanceof Error ? err.message : 'Error al cargar la información de cuentas técnicas.';
     } finally {
-      loading.value = false;
+      loadingUsers.value = false;
     }
+  }
+
+  async function loadData(): Promise<void> {
+    error.value = null;
+    await Promise.all([loadConfig(), loadUsers()]);
   }
 
   const technicianUsers = computed(() => users.value.filter((user) => user.role === 'TECHNICIAN'));
@@ -90,12 +110,12 @@ export function useTechnicalAccounts() {
       config.value = updated;
       selectedSharedUserId.value = updated.userId;
       message.success('Cuenta técnica compartida actualizada correctamente.');
-      await loadData();
+      await Promise.all([loadConfig(), loadUsers()]);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response
         ?.data?.error?.message;
       error.value = msg || 'Error al guardar la designación de cuenta compartida.';
-      await loadData();
+      await Promise.all([loadConfig(), loadUsers()]);
     } finally {
       savingShared.value = false;
     }
@@ -231,14 +251,19 @@ export function useTechnicalAccounts() {
     editError,
     editName,
     error,
+    configError,
     filteredTechnicians,
     handleCreateUser,
     handleResetPassword,
     handleSaveSharedAccount,
     handleToggleActive,
     handleUpdateUserData,
-    loading,
+    loading: computed(() => loadingConfig.value || loadingUsers.value),
+    loadingConfig,
+    loadingUsers,
     loadData,
+    loadConfig,
+    loadUsers,
     newEmail,
     newName,
     newPassword,
@@ -256,6 +281,7 @@ export function useTechnicalAccounts() {
     showPasswordModal,
     targetUser,
     technicianUsers,
+    usersError,
     updatingPassword,
     updatingUser,
     users,
