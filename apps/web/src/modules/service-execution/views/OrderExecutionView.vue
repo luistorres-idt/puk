@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NButton,
@@ -17,16 +17,18 @@ import {
 } from 'naive-ui';
 import {
   MIN_REQUIRED_EVIDENCE_PHOTOS,
-  type ChecklistCategory,
-  type ChecklistCondition,
   type OrderEvidenceDetail,
   type OrderExecutionDetail,
-  type SaveChecklistItem,
 } from '@puk/contracts';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { useSessionStore } from '../../../stores/session.js';
-import { fetchOrderExecutionById, formatServiceType } from '../../orders/index.js';
+import {
+  fetchOrderExecutionById,
+  formatEquipmentStatus,
+  formatOrderStatus,
+  formatServiceType,
+} from '../../orders/index.js';
 import {
   checkCompleteness,
   completeOrder,
@@ -43,6 +45,7 @@ import {
 } from '../api.js';
 import EvidenceCapture from '../components/EvidenceCapture.vue';
 import SignaturePad from '../components/SignaturePad.vue';
+import { CATEGORIES, CATEGORY_NAMES, useUnitChecklists } from '../composables/useUnitChecklists.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -57,6 +60,11 @@ const error = ref<string | null>(null);
 const executionNotes = ref('');
 const executionNotesDirty = ref(false);
 const savingExecutionNotes = ref(false);
+
+const serviceTypes = computed(() => {
+  if (!order.value) return [];
+  return [...new Set(order.value.units.map((unit) => unit.serviceType))];
+});
 
 // Discrepancy modal
 const showDiscrepancyModal = ref(false);
@@ -75,93 +83,7 @@ const correctionNotes = ref('');
 // Active unit tab
 const activeUnitTab = ref<string>('');
 
-// Unit checklist form states mapped by unitId
-interface LocalChecklistItem {
-  category: ChecklistCategory;
-  condition: ChecklistCondition;
-  notes: string;
-}
-const checklistsByUnit = ref<Record<string, Record<ChecklistCategory, LocalChecklistItem>>>({});
-
-const CATEGORIES: readonly ChecklistCategory[] = [
-  'DASHBOARD',
-  'WINDOWS',
-  'ACCESSORIES',
-  'TRIMS',
-  'BODYWORK',
-];
-
-const CATEGORY_NAMES: Record<ChecklistCategory, string> = {
-  DASHBOARD: 'Tablero e Instrumentos',
-  WINDOWS: 'Vidrios y Cristales',
-  ACCESSORIES: 'Accesorios y Conectores',
-  TRIMS: 'Molduras y Tapicería',
-  BODYWORK: 'Carrocería y Exteriores',
-};
-
-function formatOrderStatus(status?: string | null) {
-  switch (status) {
-    case 'DRAFT':
-      return 'Borrador';
-    case 'ASSIGNED':
-      return 'Asignada';
-    case 'IN_PROGRESS':
-      return 'En Progreso';
-    case 'REQUIRES_CORRECTION':
-      return 'Requiere Corrección';
-    case 'COMPLETED':
-      return 'Completada';
-    case 'FAILED_APPOINTMENT':
-      return 'Cita Fallida';
-    case 'CANCELLED':
-      return 'Cancelada';
-    default:
-      return status || '';
-  }
-}
-
-function formatEquipmentStatus(status?: string | null) {
-  switch (status) {
-    case 'MATCHED':
-      return 'Coincidente';
-    case 'DISCREPANCY_REPORTED':
-      return 'Discrepancia';
-    case 'PENDING':
-    default:
-      return 'Pendiente';
-  }
-}
-
-function initChecklistForUnit(
-  unitId: string,
-  existingItems?: Array<{
-    category: ChecklistCategory;
-    condition?: ChecklistCondition | null;
-    notes?: string | null;
-  }>,
-) {
-  const existingMap = checklistsByUnit.value[unitId];
-  const map = {} as Record<ChecklistCategory, LocalChecklistItem>;
-
-  for (const cat of CATEGORIES) {
-    const fromDb = existingItems?.find((i) => i.category === cat);
-    map[cat] = {
-      category: cat,
-      condition: existingMap?.[cat]?.condition ?? fromDb?.condition ?? 'GOOD',
-      notes: existingMap?.[cat]?.notes ?? fromDb?.notes ?? '',
-    };
-  }
-  checklistsByUnit.value[unitId] = map;
-}
-
-function getUnitItem(unitId: string, category: ChecklistCategory): LocalChecklistItem {
-  let unitChecklist = checklistsByUnit.value[unitId];
-  if (!unitChecklist) {
-    initChecklistForUnit(unitId);
-    unitChecklist = checklistsByUnit.value[unitId]!;
-  }
-  return unitChecklist[category];
-}
+const { createSaveChecklistItems, getUnitItem, initChecklistForUnit } = useUnitChecklists();
 
 function getUnitAllEvidences(unitId: string) {
   const unit = order.value?.units?.find((u) => u.id === unitId);
@@ -257,27 +179,15 @@ async function handleSaveDiscrepancy() {
 }
 
 async function handleSaveUnitChecklist(unitId: string) {
-  const unitForm = checklistsByUnit.value[unitId];
-  if (!unitForm) return;
-
-  const items: SaveChecklistItem[] = Object.values(unitForm).map((item) => ({
-    category: item.category,
-    condition: item.condition,
-    notes: item.condition === 'BAD' ? item.notes.trim() : null,
-  }));
-
-  // Validate BAD notes
-  for (const item of items) {
-    if (item.condition === 'BAD' && (!item.notes || !item.notes.trim())) {
-      message.error(
-        `Debe indicar la observación para la categoría "${CATEGORY_NAMES[item.category]}" marcada como Mal.`,
-      );
-      return;
-    }
+  const result = createSaveChecklistItems(unitId);
+  if (!result) return;
+  if (!result.ok) {
+    message.error(result.message);
+    return;
   }
 
   try {
-    await saveChecklist(orderId, unitId, items);
+    await saveChecklist(orderId, unitId, result.items);
     message.success('Checklist guardado exitosamente');
     await loadData();
   } catch (err: unknown) {
@@ -395,9 +305,23 @@ onMounted(() => {
             </h1>
           </div>
           <p class="text-xs text-slate-500 mt-1">
-            Cliente: <span class="font-bold">{{ order?.clientNameSnapshot }}</span> • Tipo:
-            <span class="font-semibold">{{ formatServiceType(order?.serviceType) }}</span>
+            Cliente: <span class="font-bold">{{ order?.clientNameSnapshot }}</span>
+            <template v-if="order">
+              • {{ order.units.length }} {{ order.units.length === 1 ? 'unidad' : 'unidades' }}
+            </template>
           </p>
+          <div v-if="order" class="flex flex-wrap items-center gap-1.5 mt-2">
+            <span class="text-xs font-medium text-slate-500">Servicios en la orden:</span>
+            <NTag
+              v-for="serviceType in serviceTypes"
+              :key="serviceType"
+              size="small"
+              type="info"
+              :bordered="false"
+            >
+              {{ formatServiceType(serviceType) }}
+            </NTag>
+          </div>
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
@@ -433,24 +357,48 @@ onMounted(() => {
       <NSpin :show="loading">
         <div v-if="order" class="space-y-6">
           <!-- Units Execution Stepper / Tabs -->
-          <NCard title="Unidades del Servicio" class="shadow-sm">
+          <NCard title="Trabajo por unidad" class="shadow-sm">
+            <p class="text-xs text-slate-500 mb-3">
+              Selecciona una unidad. El tipo de servicio indicado corresponde exclusivamente a esa
+              unidad.
+            </p>
             <NTabs v-model:value="activeUnitTab" type="line" animated>
-              <NTabPane
-                v-for="unit in order.units"
-                :key="unit.id"
-                :name="unit.id"
-                :tab="unit.label"
-              >
+              <NTabPane v-for="unit in order.units" :key="unit.id" :name="unit.id">
+                <template #tab>
+                  <span class="inline-flex items-center gap-2">
+                    <span>{{ unit.label }}</span>
+                    <NTag size="small" type="info" :bordered="false">
+                      {{ formatServiceType(unit.serviceType) }}
+                    </NTag>
+                  </span>
+                </template>
+
                 <div class="space-y-6 pt-2">
-                  <div class="p-3 bg-slate-50 rounded text-xs text-slate-700">
-                    <p>
-                      <strong>Vehículo:</strong> {{ unit.makeModel }}
-                      {{ unit.year ? `(${unit.year})` : '' }}
-                    </p>
-                    <p>
-                      <strong>Serie / VIN:</strong>
-                      <span class="font-mono">{{ unit.serialNumber }}</span>
-                    </p>
+                  <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-lg">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <span class="text-xs font-semibold uppercase tracking-wide text-indigo-600">
+                          Servicio a realizar en esta unidad
+                        </span>
+                        <p class="text-lg font-bold text-slate-900 mt-0.5">
+                          {{ formatServiceType(unit.serviceType) }}
+                        </p>
+                      </div>
+                      <NTag type="info" size="medium">{{ unit.label }}</NTag>
+                    </div>
+
+                    <div
+                      class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 mt-3 pt-3 border-t border-indigo-100 text-xs text-slate-700"
+                    >
+                      <p>
+                        <strong>Vehículo:</strong> {{ unit.makeModel }}
+                        {{ unit.year ? `(${unit.year})` : '' }}
+                      </p>
+                      <p>
+                        <strong>Serie / VIN:</strong>
+                        <span class="font-mono">{{ unit.serialNumber }}</span>
+                      </p>
+                    </div>
                   </div>
 
                   <!-- Equipments Verification Section -->
@@ -668,7 +616,9 @@ onMounted(() => {
                 </ul>
               </div>
 
-              <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-2">
+              <div
+                class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-2"
+              >
                 <NButton
                   v-if="order.status === 'IN_PROGRESS' || order.status === 'ASSIGNED'"
                   type="error"
