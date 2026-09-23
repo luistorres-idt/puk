@@ -80,7 +80,7 @@ export interface ReportGeneratorPort {
 
 export class ServiceOrderReportGenerator implements ReportGeneratorPort {
   public constructor(
-    private readonly storage: ObjectStoragePort,
+    private readonly storage: Pick<ObjectStoragePort, 'getObject'>,
     private readonly timeZone = 'America/Hermosillo',
   ) {}
 

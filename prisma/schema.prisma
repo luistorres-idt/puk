@@ -187,6 +187,7 @@ model Order {
   rescheduledOrder                  Order?                       @relation("OrderReschedule")
   units                             OrderUnit[]
   signature                         Signature?
+  driveSignatureUploads             DriveSignatureUpload[]
   discrepancies                     Discrepancy[]
   syncOperations                    SheetSyncOperation[]
   reports                           ServiceOrderReport[]
@@ -217,6 +218,17 @@ model ServiceOrderReport {
   @@unique([orderId, version])
   @@index([orderId, status, createdAt])
   @@index([status, createdAt])
+}
+
+model DriveFolder {
+  logicalKey        String   @id
+  driveFileId       String   @unique
+  parentDriveFileId String
+  name              String
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([parentDriveFileId])
 }
 
 model OrderUnit {
@@ -304,6 +316,7 @@ model Evidence {
   id              String        @id @default(uuid()) @db.Uuid
   checklistItemId String        @db.Uuid
   objectKey       String        @unique
+  idempotencyKey  String?       @unique @db.Uuid
   mimeType        String
   sizeBytes       Int
   checksum        String?
@@ -336,6 +349,22 @@ model Signature {
   capturedBy   User     @relation("SignatureCapturer", fields: [capturedById], references: [id], onDelete: Restrict)
 
   @@index([capturedById])
+}
+
+model DriveSignatureUpload {
+  idempotencyKey    String    @id @db.Uuid
+  orderId           String    @db.Uuid
+  actorUserId       String    @db.Uuid
+  objectKey         String    @unique
+  signerName        String
+  checksum          String
+  sizeBytes         Int
+  previousObjectKey String?
+  completedAt       DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
 }
 
 model Discrepancy {

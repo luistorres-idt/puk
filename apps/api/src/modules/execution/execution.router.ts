@@ -1,4 +1,4 @@
-import { Router, type RequestHandler } from 'express';
+import { Router, raw, type RequestHandler } from 'express';
 import * as v from 'valibot';
 import {
   ChecklistCategorySchema,
@@ -18,7 +18,36 @@ import {
 import { authorize } from '../../auth/authenticate.js';
 import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
+import { AppError } from '../../shared/errors.js';
 import type { ExecutionService } from './execution.service.js';
+
+function binaryParser(limit: number): RequestHandler {
+  const parse = raw({ type: () => true, limit });
+  return (request, response, next) => {
+    parse(request, response, (error?: unknown) => {
+      if (error && (error as { type?: string }).type === 'entity.too.large') {
+        next(new AppError(413, 'FILE_TOO_LARGE', 'El archivo excede el tamaño máximo permitido'));
+      } else {
+        next(error);
+      }
+    });
+  };
+}
+
+function binaryBody(body: unknown): Uint8Array {
+  if (!Buffer.isBuffer(body)) {
+    throw new AppError(415, 'INVALID_BINARY_BODY', 'Se requiere un archivo binario');
+  }
+  return body;
+}
+
+function dimensionHeader(value: string | undefined, field: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^[1-9]\d*$/.test(value) || Number(value) > 100_000) {
+    throw new AppError(400, 'INVALID_IMAGE_DIMENSION', `${field} debe ser un entero positivo`);
+  }
+  return Number(value);
+}
 
 export function createExecutionRouter(options: {
   executionService: ExecutionService;
@@ -26,6 +55,10 @@ export function createExecutionRouter(options: {
 }): Router {
   const router = Router();
   router.use(options.requireAccess);
+
+  router.get('/storage/mode', (_request, response) => {
+    sendSuccess(response, { provider: options.executionService.getStorageMode() });
+  });
 
   // --- Start order ---
   router.post(
@@ -92,6 +125,33 @@ export function createExecutionRouter(options: {
 
   // --- Evidence presign and complete ---
   router.post(
+    '/orders/:id/units/:unitId/checklist/:category/evidence/file',
+    binaryParser(options.executionService.getEvidenceUploadLimit()),
+    async (request, response) => {
+      const rawCategory =
+        typeof request.params.category === 'string'
+          ? request.params.category
+          : request.params.category?.[0];
+      const category = v.parse(ChecklistCategorySchema, rawCategory?.toUpperCase());
+      const result = await options.executionService.uploadEvidenceFile(
+        request.auth!.userId,
+        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+        String(request.params.id),
+        String(request.params.unitId),
+        category,
+        binaryBody(request.body),
+        request.header('Content-Type')?.split(';')[0]?.trim().toLowerCase() ?? '',
+        {
+          width: dimensionHeader(request.header('X-Image-Width'), 'X-Image-Width'),
+          height: dimensionHeader(request.header('X-Image-Height'), 'X-Image-Height'),
+        },
+        v.parse(v.pipe(v.string(), v.uuid()), request.header('Idempotency-Key') ?? ''),
+      );
+      sendSuccess(response, result, 201);
+    },
+  );
+
+  router.post(
     '/orders/:id/units/:unitId/checklist/:category/evidence/presign',
     validate({ body: PresignEvidenceSchema }),
     async (request, response) => {
@@ -140,6 +200,21 @@ export function createExecutionRouter(options: {
   );
 
   router.get(
+    '/evidence/:id/file',
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      const file = await options.executionService.getEvidenceFile(
+        request.auth!.userId,
+        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+        String(request.params.id),
+      );
+      response.setHeader('Content-Type', file.mimeType);
+      response.setHeader('Cache-Control', 'private, no-store');
+      response.send(Buffer.from(file.body));
+    },
+  );
+
+  router.get(
     '/evidence/:id/url',
     validate({ params: IdParamsSchema }),
     async (request, response) => {
@@ -153,6 +228,41 @@ export function createExecutionRouter(options: {
   );
 
   // --- Signatures ---
+  router.put(
+    '/orders/:id/signature/file',
+    binaryParser(options.executionService.getSignatureUploadLimit()),
+    async (request, response) => {
+      const mimeType = request.header('Content-Type')?.split(';')[0]?.trim().toLowerCase();
+      if (mimeType !== 'image/png') {
+        throw new AppError(415, 'UNSUPPORTED_IMAGE_TYPE', 'La firma debe ser PNG');
+      }
+      const result = await options.executionService.uploadSignatureFile(
+        request.auth!.userId,
+        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+        String(request.params.id),
+        binaryBody(request.body),
+        request.header('X-Signer-Name') ?? '',
+        v.parse(v.pipe(v.string(), v.uuid()), request.header('Idempotency-Key') ?? ''),
+      );
+      sendSuccess(response, result);
+    },
+  );
+
+  router.get(
+    '/orders/:id/signature/file',
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      const file = await options.executionService.getSignatureFile(
+        request.auth!.userId,
+        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+        String(request.params.id),
+      );
+      response.setHeader('Content-Type', file.mimeType);
+      response.setHeader('Cache-Control', 'private, no-store');
+      response.send(Buffer.from(file.body));
+    },
+  );
+
   router.post(
     '/orders/:id/signature/presign',
     validate({ body: PresignSignatureSchema, params: IdParamsSchema }),

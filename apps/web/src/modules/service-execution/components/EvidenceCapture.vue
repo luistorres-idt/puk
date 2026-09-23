@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { onUnmounted, ref, watch } from 'vue';
 import { NButton, NImage, NPopconfirm, NSpin, useMessage } from 'naive-ui';
 import { MIN_REQUIRED_EVIDENCE_PHOTOS, type ChecklistCategory } from '@puk/contracts';
 import {
   completeEvidence,
   deleteEvidence,
   getEvidenceUrl,
+  getStorageMode,
   presignEvidence,
+  releasePrivateFileUrl,
+  uploadEvidenceFile,
   uploadToStorage,
 } from '../api.js';
 
@@ -39,6 +42,43 @@ const deletingId = ref<string | null>(null);
 const previewUrls = ref<Record<string, string>>({});
 const loadingUrls = ref<Record<string, boolean>>({});
 const message = useMessage();
+const pendingUploadKeys = new Map<string, string>();
+
+function evidenceRetryKey(file: File): string {
+  return `puk:evidence-upload:${props.orderId}:${props.unitId}:${props.category}:${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function idempotencyKeyFor(file: File): string {
+  const retryKey = evidenceRetryKey(file);
+  let savedKey: string | null = null;
+  try {
+    savedKey = sessionStorage.getItem(retryKey);
+  } catch {
+    // Private browsing may disable session storage; in-memory retry still works.
+  }
+  const key = pendingUploadKeys.get(retryKey) ?? savedKey ?? crypto.randomUUID();
+  pendingUploadKeys.set(retryKey, key);
+  try {
+    sessionStorage.setItem(retryKey, key);
+  } catch {
+    // The server-side reservation remains authoritative.
+  }
+  return key;
+}
+
+function clearIdempotencyKey(file: File): void {
+  const retryKey = evidenceRetryKey(file);
+  pendingUploadKeys.delete(retryKey);
+  try {
+    sessionStorage.removeItem(retryKey);
+  } catch {
+    // No persistent browser state to clear.
+  }
+}
+
+onUnmounted(() => {
+  for (const url of Object.values(previewUrls.value)) releasePrivateFileUrl(url);
+});
 
 async function fetchEvidenceUrl(evidenceId: string) {
   if (previewUrls.value[evidenceId] || loadingUrls.value[evidenceId]) return;
@@ -162,20 +202,25 @@ async function handleFilesSelected(files: File[]) {
       const normalizedFile = await convertHeicIfNeeded(file);
       const { blob, width, height } = await resizeImageIfNeeded(normalizedFile);
 
-      // 1. Presign
-      const presign = await presignEvidence(props.orderId, props.unitId, props.category, {
-        mimeType: 'image/jpeg',
-        sizeBytes: blob.size,
-      });
-
-      // 2. Direct upload to S3/MinIO
-      await uploadToStorage(presign.uploadUrl, blob, 'image/jpeg');
-
-      // 3. Complete
-      await completeEvidence(presign.evidenceId, {
-        width,
-        height,
-      });
+      if ((await getStorageMode()) === 'drive') {
+        await uploadEvidenceFile(
+          props.orderId,
+          props.unitId,
+          props.category,
+          blob,
+          width,
+          height,
+          idempotencyKeyFor(file),
+        );
+        clearIdempotencyKey(file);
+      } else {
+        const presign = await presignEvidence(props.orderId, props.unitId, props.category, {
+          mimeType: 'image/jpeg',
+          sizeBytes: blob.size,
+        });
+        await uploadToStorage(presign.uploadUrl, blob, 'image/jpeg');
+        await completeEvidence(presign.evidenceId, { width, height });
+      }
 
       successCount++;
     } catch (error) {
@@ -220,6 +265,7 @@ async function handleDelete(evidenceId: string) {
   deletingId.value = evidenceId;
   try {
     await deleteEvidence(evidenceId);
+    releasePrivateFileUrl(previewUrls.value[evidenceId]);
     delete previewUrls.value[evidenceId];
     message?.success('Fotografía eliminada');
     emit('updated');

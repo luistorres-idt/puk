@@ -257,6 +257,7 @@ describe('ExecutionService', () => {
       status: OrderStatus.IN_PROGRESS,
       technicianId: 'tech-1',
     });
+    mockPrisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'order-1' });
     mockPrisma.checklist.findUnique.mockResolvedValue({ id: 'cl-1' });
     mockPrisma.checklistItem.findUnique.mockResolvedValue({ id: 'cli-1' });
     mockPrisma.evidence.create.mockResolvedValue({
@@ -304,6 +305,22 @@ describe('ExecutionService', () => {
       height: 1080,
     });
     expect(completed.status).toBe(UploadStatus.COMPLETED);
+  });
+
+  it('rejects presigning evidence for a unit belonging to another order', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.IN_PROGRESS,
+      technicianId: 'tech-1',
+    });
+    mockPrisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'order-2' });
+    await expect(
+      service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', 'DASHBOARD', {
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+      }),
+    ).rejects.toMatchObject({ code: 'UNIT_NOT_FOUND' });
+    expect(mockPrisma.evidence.create).not.toHaveBeenCalled();
   });
 
   it('blocks completing an incomplete order with missing requirements error', async () => {

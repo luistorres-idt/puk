@@ -1,0 +1,137 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { Request, Response } from 'express';
+import type { ExecutionService } from './execution.service.js';
+import { createExecutionRouter } from './execution.router.js';
+
+type Handler = (request: Request, response: Response) => Promise<void> | void;
+type RouteLayer = { route?: { path: string; stack: Array<{ handle: Handler }> } };
+
+function harness() {
+  const service = {
+    getStorageMode: vi.fn(() => 'drive'),
+    getEvidenceUploadLimit: vi.fn(() => 1024),
+    getSignatureUploadLimit: vi.fn(() => 1024),
+    uploadEvidenceFile: vi.fn().mockResolvedValue({ id: 'evidence-1' }),
+    uploadSignatureFile: vi.fn().mockResolvedValue({ id: 'signature-1' }),
+    getEvidenceFile: vi
+      .fn()
+      .mockResolvedValue({ body: Uint8Array.from([1, 2]), mimeType: 'image/jpeg' }),
+  };
+  const router = createExecutionRouter({
+    executionService: service as unknown as ExecutionService,
+    requireAccess: (_request, _response, next) => next(),
+  });
+  const route = (path: string) => {
+    const layer = (router as unknown as { stack: RouteLayer[] }).stack.find(
+      (entry) => entry.route?.path === path,
+    );
+    if (!layer?.route) throw new Error(`Missing route ${path}`);
+    return layer.route.stack.at(-1)!.handle;
+  };
+  const response = {
+    locals: { requestId: 'request-1' },
+    setHeader: vi.fn(),
+    send: vi.fn(),
+    status: vi.fn(),
+    json: vi.fn(),
+  };
+  response.status.mockReturnValue(response);
+  const auth = { userId: 'admin-1', role: 'ADMIN' };
+  return { service, route, response, auth };
+}
+
+describe('Drive execution HTTP handlers', () => {
+  it('reports the active storage provider to authenticated callers', async () => {
+    const { route, response } = harness();
+    await route('/storage/mode')({} as Request, response as unknown as Response);
+    expect(response.json).toHaveBeenCalledWith({
+      data: { provider: 'drive' },
+      meta: { requestId: 'request-1' },
+    });
+  });
+
+  it('passes raw evidence bytes, content type and image dimensions to the service', async () => {
+    const { route, response, service, auth } = harness();
+    const bytes = Buffer.from([1, 2, 3]);
+    const headers = {
+      'content-type': 'image/jpeg',
+      'x-image-width': '2',
+      'x-image-height': '3',
+      'idempotency-key': '234edc7a-d596-4b6b-95e4-34107e78485f',
+    };
+    const request = {
+      auth,
+      params: { id: 'order-1', unitId: 'unit-1', category: 'dashboard' },
+      body: bytes,
+      header: (name: string) => headers[name.toLowerCase() as keyof typeof headers],
+    } as unknown as Request;
+    await route('/orders/:id/units/:unitId/checklist/:category/evidence/file')(
+      request,
+      response as unknown as Response,
+    );
+    expect(service.uploadEvidenceFile).toHaveBeenCalledWith(
+      'admin-1',
+      'ADMIN',
+      'order-1',
+      'unit-1',
+      'DASHBOARD',
+      bytes,
+      'image/jpeg',
+      { width: 2, height: 3 },
+      '234edc7a-d596-4b6b-95e4-34107e78485f',
+    );
+    expect(response.status).toHaveBeenCalledWith(201);
+  });
+
+  it('returns binary evidence with private caching headers', async () => {
+    const { route, response, service, auth } = harness();
+    const request = { auth, params: { id: 'evidence-1' } } as unknown as Request;
+    await route('/evidence/:id/file')(request, response as unknown as Response);
+    expect(service.getEvidenceFile).toHaveBeenCalledWith('admin-1', 'ADMIN', 'evidence-1');
+    expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
+    expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+    expect(response.send).toHaveBeenCalledWith(Buffer.from([1, 2]));
+  });
+
+  it('passes PNG signature bytes and signer name without a client-supplied file ID', async () => {
+    const { route, response, service, auth } = harness();
+    const bytes = Buffer.from([4, 5, 6]);
+    const request = {
+      auth,
+      params: { id: 'order-1' },
+      body: bytes,
+      header: (name: string) => {
+        if (name === 'Content-Type') return 'image/png';
+        if (name === 'X-Signer-Name') return 'Client One';
+        if (name === 'Idempotency-Key') return '234edc7a-d596-4b6b-95e4-34107e78485f';
+        return undefined;
+      },
+    } as unknown as Request;
+    await route('/orders/:id/signature/file')(request, response as unknown as Response);
+    expect(service.uploadSignatureFile).toHaveBeenCalledWith(
+      'admin-1',
+      'ADMIN',
+      'order-1',
+      bytes,
+      'Client One',
+      '234edc7a-d596-4b6b-95e4-34107e78485f',
+    );
+  });
+
+  it('rejects invalid dimension headers before the service sees a file', async () => {
+    const { route, response, service, auth } = harness();
+    const request = {
+      auth,
+      params: { id: 'order-1', unitId: 'unit-1', category: 'DASHBOARD' },
+      body: Buffer.from([1]),
+      header: (name: string) => (name === 'X-Image-Width' ? '0' : 'image/jpeg'),
+    } as unknown as Request;
+    await expect(
+      route('/orders/:id/units/:unitId/checklist/:category/evidence/file')(
+        request,
+        response as unknown as Response,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_IMAGE_DIMENSION' });
+    expect(service.uploadEvidenceFile).not.toHaveBeenCalled();
+  });
+});

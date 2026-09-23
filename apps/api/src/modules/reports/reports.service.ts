@@ -1,18 +1,26 @@
+import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, ReportStatus } from '../../generated/prisma/enums.js';
 import { assertIndividualTechnician } from '../../auth/order-access-policy.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
+import type { GoogleDriveClient } from '../../integrations/google-drive/google-drive.client.js';
+import type { DriveFolderResolver } from '../../integrations/google-drive/drive-folder-resolver.js';
 import { AppError } from '../../shared/errors.js';
 import { type ReportGeneratorPort, ServiceOrderReportGenerator } from './report-generator.js';
 
 export interface ReportsServiceOptions {
   downloadUrlTtlSeconds?: number;
   generator?: ReportGeneratorPort;
+  drive?: {
+    client: Pick<GoogleDriveClient, 'generateId' | 'headFile' | 'uploadFile' | 'getFile'>;
+    folders: Pick<DriveFolderResolver, 'ensureSharedOrderFolder'>;
+  };
 }
 
 export class ReportsService {
   private readonly generator: ReportGeneratorPort;
   private readonly downloadUrlTtlSeconds: number;
+  private readonly drive: ReportsServiceOptions['drive'];
 
   public constructor(
     private readonly prisma: PrismaClient,
@@ -24,7 +32,12 @@ export class ReportsService {
       this.generator = new ServiceOrderReportGenerator(storage);
     } else {
       this.downloadUrlTtlSeconds = options?.downloadUrlTtlSeconds ?? 300;
-      this.generator = options?.generator ?? new ServiceOrderReportGenerator(storage);
+      this.drive = options?.drive;
+      this.generator =
+        options?.generator ??
+        new ServiceOrderReportGenerator(
+          this.drive ? { getObject: (id) => this.drive!.client.getFile(id) } : storage,
+        );
     }
   }
 
@@ -112,6 +125,9 @@ export class ReportsService {
   }
 
   public async getDownloadUrl(orderId: string, userId: string, role: 'ADMIN' | 'TECHNICIAN') {
+    if (this.drive) {
+      throw new AppError(409, 'DRIVE_DOWNLOAD_REQUIRED', 'Descarga el reporte desde la API');
+    }
     await this.assertAccess(orderId, userId, role);
     const report = await this.prisma.serviceOrderReport.findFirst({
       where: { orderId },
@@ -134,6 +150,45 @@ export class ReportsService {
       url,
       expiresInSeconds: this.downloadUrlTtlSeconds,
       fileName: `orden-servicio-${this.safeFileName((await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { folio: true } })).folio)}-v${report.version}.pdf`,
+    };
+  }
+
+  public async getDownloadFile(
+    orderId: string,
+    userId: string,
+    role: 'ADMIN' | 'TECHNICIAN',
+    version?: number,
+  ) {
+    if (!this.drive) {
+      throw new AppError(409, 'S3_DOWNLOAD_REQUIRED', 'Descarga el reporte mediante URL firmada');
+    }
+    await this.assertAccess(orderId, userId, role);
+    const report = await this.prisma.serviceOrderReport.findFirst({
+      where: { orderId, ...(version === undefined ? {} : { version }) },
+      orderBy: { version: 'desc' },
+    });
+    if (!report) throw new AppError(404, 'REPORT_NOT_FOUND', 'El reporte todavía no existe');
+    if (report.status !== ReportStatus.READY || !report.objectKey) {
+      throw new AppError(409, 'REPORT_NOT_READY', 'El reporte todavía no está listo para descarga');
+    }
+    const bytes = await this.drive.client.getFile(report.objectKey);
+    if (!bytes)
+      throw new AppError(404, 'REPORT_FILE_NOT_FOUND', 'El archivo del reporte no existe');
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'SERVICE_ORDER_REPORT_DOWNLOADED',
+        actorUserId: userId,
+        entityType: 'ServiceOrderReport',
+        entityId: report.id,
+      },
+    });
+    const order = await this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { folio: true },
+    });
+    return {
+      bytes,
+      fileName: `orden-servicio-${this.safeFileName(order.folio)}-v${report.version}.pdf`,
     };
   }
 
@@ -217,17 +272,75 @@ export class ReportsService {
     if (order.status !== OrderStatus.COMPLETED)
       throw new Error('La orden dejó de estar completada');
 
-    const generated = await this.generator.generate(order, report.version);
-    const objectKey = `orders/${order.id}/reports/${report.id}.pdf`;
-    await this.storage.putObject(objectKey, generated.bytes, 'application/pdf');
+    let objectKey: string;
+    let bytes: Uint8Array;
+    let checksum: string;
+    if (this.drive) {
+      const parentId = await this.drive.folders.ensureSharedOrderFolder({
+        clientSheetId: order.clientSheetId,
+        clientNameSnapshot: order.clientNameSnapshot,
+        orderId: order.id,
+        folio: order.folio,
+      });
+      if (!report.objectKey) {
+        const reservedId = await this.drive.client.generateId();
+        await this.prisma.serviceOrderReport.updateMany({
+          where: { id: report.id, objectKey: null },
+          data: { objectKey: reservedId },
+        });
+      }
+      const reserved = await this.prisma.serviceOrderReport.findUniqueOrThrow({
+        where: { id: report.id },
+      });
+      objectKey = reserved.objectKey!;
+      const name = `reporte-v${report.version}.pdf`;
+      const existing = await this.drive.client.headFile(objectKey);
+      if (existing) {
+        if (
+          existing.name !== name ||
+          existing.parentId !== parentId ||
+          existing.mimeType !== 'application/pdf'
+        ) {
+          throw new Error(`Google Drive report ID ${objectKey} belongs to a different file.`);
+        }
+        const remoteBytes = await this.drive.client.getFile(objectKey);
+        if (!remoteBytes)
+          throw new Error(`Google Drive report ${objectKey} disappeared during retry.`);
+        bytes = remoteBytes;
+      } else {
+        const generated = await this.generator.generate(order, report.version);
+        const uploaded = await this.drive.client.uploadFile({
+          id: objectKey,
+          parentId,
+          name,
+          body: generated.bytes,
+          mimeType: 'application/pdf',
+        });
+        if (uploaded.reused) {
+          const remoteBytes = await this.drive.client.getFile(objectKey);
+          if (!remoteBytes)
+            throw new Error(`Google Drive report ${objectKey} disappeared during retry.`);
+          bytes = remoteBytes;
+        } else {
+          bytes = generated.bytes;
+        }
+      }
+      checksum = createHash('sha256').update(bytes).digest('hex');
+    } else {
+      const generated = await this.generator.generate(order, report.version);
+      objectKey = `orders/${order.id}/reports/${report.id}.pdf`;
+      await this.storage.putObject(objectKey, generated.bytes, 'application/pdf');
+      bytes = generated.bytes;
+      checksum = generated.checksum;
+    }
     await this.prisma.$transaction([
       this.prisma.serviceOrderReport.update({
         where: { id: report.id },
         data: {
           status: ReportStatus.READY,
           objectKey,
-          sizeBytes: generated.bytes.byteLength,
-          checksum: generated.checksum,
+          sizeBytes: bytes.byteLength,
+          checksum,
           generatedAt: new Date(),
           failureReason: null,
         },
@@ -240,7 +353,7 @@ export class ReportsService {
           after: {
             orderId: order.id,
             version: report.version,
-            checksum: generated.checksum,
+            checksum,
           } as Prisma.InputJsonValue,
         },
       }),

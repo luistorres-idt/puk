@@ -32,12 +32,14 @@ import {
   completeOrder,
   completeSignature,
   failAppointment,
+  getStorageMode,
   presignSignature,
   reportDiscrepancy,
   requireCorrection,
   saveChecklist,
   startOrder,
   updateExecutionNotes,
+  uploadSignatureFile,
   uploadToStorage,
   verifyEquipment,
 } from '../api.js';
@@ -290,16 +292,15 @@ const savingSignature = ref(false);
 async function handleSaveSignature(payload: { signerName: string; blob: Blob }) {
   savingSignature.value = true;
   try {
-    // 1. Presign
-    const presign = await presignSignature(orderId, {
-      sizeBytes: payload.blob.size,
-    });
-
-    // 2. Upload
-    await uploadToStorage(presign.uploadUrl, payload.blob, 'image/png');
-
-    // 3. Complete
-    await completeSignature(orderId, { signerName: payload.signerName }, presign.objectKey);
+    if ((await getStorageMode()) === 'drive') {
+      await uploadSignatureFile(orderId, payload.signerName, payload.blob);
+    } else {
+      const presign = await presignSignature(orderId, {
+        sizeBytes: payload.blob.size,
+      });
+      await uploadToStorage(presign.uploadUrl, payload.blob, 'image/png');
+      await completeSignature(orderId, { signerName: payload.signerName }, presign.objectKey);
+    }
 
     message.success('Firma guardada exitosamente');
     await loadData();
@@ -668,7 +669,9 @@ onMounted(() => {
                 </ul>
               </div>
 
-              <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-2">
+              <div
+                class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-2"
+              >
                 <NButton
                   v-if="order.status === 'IN_PROGRESS' || order.status === 'ASSIGNED'"
                   type="error"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NAlert,
@@ -52,9 +52,16 @@ import {
   useOrderMutations,
   useOrderQuery,
   useOrderReportQuery,
+  useOrderReportVersionsQuery,
   useSyncStatusQuery,
 } from '../queries';
-import { getEvidenceUrl, getSignatureUrl, requireCorrection } from '@/modules/service-execution';
+import {
+  getEvidenceUrl,
+  getSignatureUrl,
+  getStorageMode,
+  releasePrivateFileUrl,
+  requireCorrection,
+} from '@/modules/service-execution';
 import { getDisabledScheduleTimes, isPastCalendarDate } from '../reschedule-schedule.js';
 
 const route = useRoute();
@@ -69,6 +76,7 @@ const orderQuery = useOrderQuery(orderId);
 const syncQuery = useSyncStatusQuery(orderId);
 const auditQuery = useOrderAuditQuery(orderId);
 const reportQuery = useOrderReportQuery(orderId);
+const reportVersionsQuery = useOrderReportVersionsQuery(orderId);
 const mutations = useOrderMutations(orderId);
 
 const order = computed(() => orderQuery.data.value);
@@ -103,6 +111,23 @@ const canCancelOrder = computed(
 const syncInfo = computed(() => syncQuery.data.value);
 const auditLogs = computed(() => auditQuery.data.value ?? []);
 const report = computed(() => reportQuery.data.value);
+const reportVersions = computed(() => reportVersionsQuery.data.value ?? []);
+const driveMode = ref(false);
+
+watch(
+  () => [report.value?.version, report.value?.status],
+  () => {
+    if (report.value?.status === 'READY') void reportVersionsQuery.refetch();
+  },
+);
+
+onMounted(async () => {
+  try {
+    driveMode.value = (await getStorageMode()) === 'drive';
+  } catch {
+    driveMode.value = false;
+  }
+});
 
 const activeTab = ref('units');
 
@@ -466,21 +491,25 @@ async function handleGenerateReport() {
   try {
     await mutations.requestReport.mutateAsync(orderId);
     await reportQuery.refetch();
+    await reportVersionsQuery.refetch();
     message.success('La generación del reporte fue solicitada.');
   } catch (err) {
     message.error(getErrorMessage(err, 'No fue posible solicitar el reporte'));
   }
 }
 
-async function handleDownloadReport() {
+async function handleDownloadReport(version?: number) {
   try {
-    const download = await fetchReportDownload(orderId);
+    const download = await fetchReportDownload(orderId, version);
     const link = document.createElement('a');
     link.href = download.url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.download = download.fileName;
     link.click();
+    if (download.url.startsWith('blob:')) {
+      window.setTimeout(() => releasePrivateFileUrl(download.url), 60_000);
+    }
   } catch (err) {
     message.error(getErrorMessage(err, 'No fue posible descargar el reporte'));
   }
@@ -517,6 +546,7 @@ async function handleRequestCorrection() {
 async function viewEvidence(evidenceId: string, categoryTitle: string) {
   try {
     const res = await getEvidenceUrl(evidenceId);
+    releasePrivateFileUrl(previewImageUrl.value);
     previewImageUrl.value = res.downloadUrl;
     previewImageTitle.value = `Evidencia: ${categoryTitle}`;
     showImageModal.value = true;
@@ -528,6 +558,7 @@ async function viewEvidence(evidenceId: string, categoryTitle: string) {
 async function viewSignature() {
   try {
     const res = await getSignatureUrl(orderId);
+    releasePrivateFileUrl(previewImageUrl.value);
     previewImageUrl.value = res.downloadUrl;
     previewImageTitle.value = `Firma de ${res.signerName || 'Receptor'}`;
     showImageModal.value = true;
@@ -540,6 +571,12 @@ const evidenceUrls = ref<Record<string, string>>({});
 const loadingEvidenceUrls = ref<Record<string, boolean>>({});
 const signatureUrl = ref<string | null>(null);
 const loadingSignature = ref(false);
+
+onUnmounted(() => {
+  releasePrivateFileUrl(previewImageUrl.value);
+  releasePrivateFileUrl(signatureUrl.value);
+  for (const url of Object.values(evidenceUrls.value)) releasePrivateFileUrl(url);
+});
 
 function getUnitAllEvidences(unit: UnitItem): Array<{ id: string; objectKey?: string }> {
   if (!unit?.checklist?.items) return [];
@@ -772,7 +809,7 @@ const statusColor = orderStatusTagType;
                 v-if="report?.status === 'READY'"
                 type="primary"
                 size="small"
-                @click="handleDownloadReport"
+                @click="() => handleDownloadReport()"
               >
                 Descargar PDF
               </n-button>
@@ -792,6 +829,25 @@ const statusColor = orderStatusTagType;
                 @click="() => reportQuery.refetch()"
               >
                 Actualizar
+              </n-button>
+            </div>
+          </div>
+          <div
+            v-if="driveMode && reportVersions.length > 1"
+            class="mt-3 border-t border-slate-100 pt-3"
+          >
+            <p class="text-xs font-semibold text-slate-600 mb-2">Versiones anteriores</p>
+            <div class="flex flex-wrap gap-2">
+              <n-button
+                v-for="previous in reportVersions.filter(
+                  (item) => item.status === 'READY' && item.version !== report?.version,
+                )"
+                :key="previous.id"
+                size="tiny"
+                secondary
+                @click="() => handleDownloadReport(previous.version)"
+              >
+                Descargar versión {{ previous.version }}
               </n-button>
             </div>
           </div>
@@ -1310,9 +1366,7 @@ const statusColor = orderStatusTagType;
               >
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h3 class="font-semibold text-slate-800 text-sm">
-                      Estado de sincronización
-                    </h3>
+                    <h3 class="font-semibold text-slate-800 text-sm">Estado de sincronización</h3>
                     <p class="text-xs text-slate-500 mt-0.5">
                       {{
                         syncInfo.isFullySynced

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import { NButton, NCard, NImage, NInput, NSpin } from 'naive-ui';
-import { getSignatureUrl } from '../api.js';
+import { getSignatureUrl, releasePrivateFileUrl } from '../api.js';
 
 const props = withDefaults(
   defineProps<{
@@ -38,14 +38,18 @@ const isEditing = ref(false);
 const previewUrl = ref<string | null>(null);
 const loadingPreview = ref(false);
 
+onUnmounted(() => releasePrivateFileUrl(previewUrl.value));
+
 async function loadSignaturePreview() {
   if (!props.orderId || !props.existingSignature) {
+    releasePrivateFileUrl(previewUrl.value);
     previewUrl.value = null;
     return;
   }
   loadingPreview.value = true;
   try {
     const res = await getSignatureUrl(props.orderId);
+    releasePrivateFileUrl(previewUrl.value);
     previewUrl.value = res.downloadUrl;
     if (!signerName.value) {
       signerName.value = res.signerName || props.existingSignature.signerName || '';
