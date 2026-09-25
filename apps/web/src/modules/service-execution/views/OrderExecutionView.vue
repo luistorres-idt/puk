@@ -36,7 +36,6 @@ import {
   requireCorrection,
   saveChecklist,
   startOrder,
-  updateExecutionNotes,
   uploadSignatureFile,
   uploadToStorage,
   verifyEquipment,
@@ -44,6 +43,7 @@ import {
 import EvidenceCapture from '../components/EvidenceCapture.vue';
 import SignaturePad from '../components/SignaturePad.vue';
 import { CATEGORIES, CATEGORY_NAMES, useUnitChecklists } from '../composables/useUnitChecklists.js';
+import { useExecutionNotes } from '../composables/useExecutionNotes.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -55,9 +55,8 @@ const order = ref<OrderExecutionDetail | null>(null);
 const completeness = ref<{ isComplete: boolean; missingRequirements: string[] } | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
-const executionNotes = ref('');
-const executionNotesDirty = ref(false);
-const savingExecutionNotes = ref(false);
+const { executionNotes, executionNotesDirty, savingExecutionNotes, saveExecutionNotes } =
+  useExecutionNotes(orderId);
 
 const serviceTypes = computed(() => {
   if (!order.value) return [];
@@ -208,15 +207,11 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
 
 async function handleCompleteOrder() {
   if (executionNotesDirty.value) {
-    savingExecutionNotes.value = true;
     try {
-      await updateExecutionNotes(orderId, { notes: executionNotes.value.trim() || null });
-      executionNotesDirty.value = false;
+      await saveExecutionNotes();
     } catch (err: unknown) {
       message.error(extractApiErrorMessage(err, 'Error al guardar las notas de ejecución'));
       return;
-    } finally {
-      savingExecutionNotes.value = false;
     }
   }
 
@@ -236,16 +231,13 @@ async function handleCompleteOrder() {
 }
 
 async function handleSaveExecutionNotes() {
-  savingExecutionNotes.value = true;
   try {
-    await updateExecutionNotes(orderId, { notes: executionNotes.value.trim() || null });
-    executionNotesDirty.value = false;
-    message.success('Notas de ejecución guardadas');
-    await loadData();
+    await saveExecutionNotes(async () => {
+      message.success('Notas de ejecución guardadas');
+      await loadData();
+    });
   } catch (err: unknown) {
     message.error(extractApiErrorMessage(err, 'Error al guardar las notas de ejecución'));
-  } finally {
-    savingExecutionNotes.value = false;
   }
 }
 
