@@ -1,20 +1,15 @@
-import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, ReportStatus } from '../../generated/prisma/enums.js';
 import { assertIndividualTechnician } from '../../auth/order-access-policy.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
-import type { GoogleDriveClient } from '../../integrations/google-drive/google-drive.client.js';
-import type { DriveFolderResolver } from '../../integrations/google-drive/drive-folder-resolver.js';
 import { AppError } from '../../shared/errors.js';
 import { type ReportGeneratorPort, ServiceOrderReportGenerator } from './report-generator.js';
+import { storeReportPdf, type ReportDrivePort } from './report-storage.js';
 
 export interface ReportsServiceOptions {
   downloadUrlTtlSeconds?: number;
   generator?: ReportGeneratorPort;
-  drive?: {
-    client: Pick<GoogleDriveClient, 'generateId' | 'headFile' | 'uploadFile' | 'getFile'>;
-    folders: Pick<DriveFolderResolver, 'ensureSharedOrderFolder'>;
-  };
+  drive?: ReportDrivePort;
 }
 
 export class ReportsService {
@@ -269,74 +264,21 @@ export class ReportsService {
     if (order.status !== OrderStatus.COMPLETED)
       throw new Error('La orden dejó de estar completada');
 
-    let objectKey: string;
-    let bytes: Uint8Array;
-    let checksum: string;
-    if (this.drive) {
-      const parentId = await this.drive.folders.ensureSharedOrderFolder({
-        clientSheetId: order.clientSheetId,
-        clientNameSnapshot: order.clientNameSnapshot,
-        orderId: order.id,
-        folio: order.folio,
-      });
-      if (!report.objectKey) {
-        const reservedId = await this.drive.client.generateId();
-        await this.prisma.serviceOrderReport.updateMany({
-          where: { id: report.id, objectKey: null },
-          data: { objectKey: reservedId },
-        });
-      }
-      const reserved = await this.prisma.serviceOrderReport.findUniqueOrThrow({
-        where: { id: report.id },
-      });
-      objectKey = reserved.objectKey!;
-      const name = `reporte-v${report.version}.pdf`;
-      const existing = await this.drive.client.headFile(objectKey);
-      if (existing) {
-        if (
-          existing.name !== name ||
-          existing.parentId !== parentId ||
-          existing.mimeType !== 'application/pdf'
-        ) {
-          throw new Error(`Google Drive report ID ${objectKey} belongs to a different file.`);
-        }
-        const remoteBytes = await this.drive.client.getFile(objectKey);
-        if (!remoteBytes)
-          throw new Error(`Google Drive report ${objectKey} disappeared during retry.`);
-        bytes = remoteBytes;
-      } else {
-        const generated = await this.generator.generate(order, report.version);
-        const uploaded = await this.drive.client.uploadFile({
-          id: objectKey,
-          parentId,
-          name,
-          body: generated.bytes,
-          mimeType: 'application/pdf',
-        });
-        if (uploaded.reused) {
-          const remoteBytes = await this.drive.client.getFile(objectKey);
-          if (!remoteBytes)
-            throw new Error(`Google Drive report ${objectKey} disappeared during retry.`);
-          bytes = remoteBytes;
-        } else {
-          bytes = generated.bytes;
-        }
-      }
-      checksum = createHash('sha256').update(bytes).digest('hex');
-    } else {
-      const generated = await this.generator.generate(order, report.version);
-      objectKey = `orders/${order.id}/reports/${report.id}.pdf`;
-      await this.storage.putObject(objectKey, generated.bytes, 'application/pdf');
-      bytes = generated.bytes;
-      checksum = generated.checksum;
-    }
+    const { objectKey, sizeBytes, checksum } = await storeReportPdf({
+      prisma: this.prisma,
+      storage: this.storage,
+      generator: this.generator,
+      drive: this.drive,
+      order,
+      report,
+    });
     await this.prisma.$transaction([
       this.prisma.serviceOrderReport.update({
         where: { id: report.id },
         data: {
           status: ReportStatus.READY,
           objectKey,
-          sizeBytes: bytes.byteLength,
+          sizeBytes,
           checksum,
           generatedAt: new Date(),
           failureReason: null,

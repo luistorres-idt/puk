@@ -1,9 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import {
   isMatchingClient,
   normalizeString,
-  OrderAdministrationDetailSchema,
-  OrderExecutionDetailSchema,
   type AssignEquipment,
   type CreateOrder,
   type CreateUnit,
@@ -14,12 +11,6 @@ import {
   type UpdateOrder,
   type UpdateUnit,
 } from '@puk/contracts';
-import * as v from 'valibot';
-import {
-  assertOrderAccess,
-  getSharedAccess,
-  isSharedAccessStatus,
-} from '../../auth/order-access-policy.js';
 import { domainTransaction } from '../../database/transaction.js';
 import { updateOrderVersion } from '../../database/optimistic-lock.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
@@ -39,211 +30,50 @@ import {
   assertValidOrderTransition,
 } from './order-state-machine.js';
 import { buildEquipmentSheetAssignment } from './equipment-sheet-assignment.js';
-import {
-  administrationOrderSelect,
-  executionOrderSelect,
-  mapAdministrationOrder,
-  mapExecutionOrder,
-} from './order-read-models.js';
+import { createOrderFolio } from './order-folio.js';
+import { rescheduleFailedAppointment } from './reschedule-failed-appointment.js';
+import { assertSelectableTechnician } from './selectable-technician.js';
+import { OrdersQueryService } from './orders-query.service.js';
 
 type OrderWithEquipment = Prisma.OrderGetPayload<{
   include: { units: { include: { equipment: true } } };
 }>;
-type OrderEquipment = OrderWithEquipment['units'][number]['equipment'][number];
-
-const SHARED_LIST_STATUSES = [
-  OrderStatus.ASSIGNED,
-  OrderStatus.IN_PROGRESS,
-  OrderStatus.REQUIRES_CORRECTION,
-] as const;
-
-function createOrderFolio(): string {
-  return `OS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
-}
-
-function buildRescheduledEquipmentInput(
-  equipment: OrderEquipment,
-): Prisma.OrderEquipmentCreateWithoutOrderUnitInput {
-  return {
-    sheetName: equipment.sheetName,
-    sheetRowHint: equipment.sheetRowHint,
-    externalId: equipment.externalId,
-    imei: equipment.imei,
-    externalKey: equipment.externalKey,
-    activeAssignment: false,
-    brandSnapshot: equipment.brandSnapshot,
-    modelSnapshot: equipment.modelSnapshot,
-    lineSnapshot: equipment.lineSnapshot,
-    iccidSnapshot: equipment.iccidSnapshot,
-    carrierSnapshot: equipment.carrierSnapshot,
-    equipmentConditionSnapshot: equipment.equipmentConditionSnapshot,
-    serviceStatusSnapshot: equipment.serviceStatusSnapshot,
-    rawSnapshot: equipment.rawSnapshot as Prisma.InputJsonValue,
-    verificationStatus: 'PENDING',
-  };
-}
-
-function buildRescheduledUnitInputs(
-  order: OrderWithEquipment,
-): Prisma.OrderUnitCreateWithoutOrderInput[] {
-  return order.units.map((unit) => ({
-    label: unit.label,
-    makeModel: unit.makeModel,
-    serialNumber: unit.serialNumber,
-    year: unit.year,
-    serviceType: unit.serviceType,
-    status: 'PENDING',
-    equipment: { create: unit.equipment.map(buildRescheduledEquipmentInput) },
-  }));
-}
 
 export class OrdersService {
   public constructor(
     private readonly prisma: PrismaClient,
     private readonly sheetsCatalogService?: EquipmentCatalogPort,
-  ) {}
+  ) {
+    this.queries = new OrdersQueryService(prisma);
+  }
+
+  private readonly queries: OrdersQueryService;
 
   public async listOrders(
     actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
     query: OrderListQuery,
   ) {
-    const page = Math.max(1, query.page ?? 1);
-    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 25));
-    const skip = (page - 1) * pageSize;
-
-    const where: Prisma.OrderWhereInput = {};
-    const filters: Prisma.OrderWhereInput[] = [];
-    const emptyPage = {
-      data: [],
-      pagination: { page, pageSize, total: 0, totalPages: 0 },
-    };
-
-    if (actor.role === 'TECHNICIAN') {
-      const shared = await getSharedAccess(this.prisma);
-      if (shared?.userId === actor.id) {
-        if (query.status !== undefined && !isSharedAccessStatus(query.status)) {
-          return emptyPage;
-        }
-        where.technicianId = query.technicianId ? query.technicianId : { not: null };
-        where.status = { in: [...SHARED_LIST_STATUSES] };
-      } else {
-        const user = await this.prisma.user.findUnique({
-          where: { id: actor.id },
-          select: { technicianId: true },
-        });
-        if (!user?.technicianId) {
-          return emptyPage;
-        }
-        where.technicianId = user.technicianId;
-      }
-    } else if (query.technicianId) {
-      where.technicianId = query.technicianId;
-    }
-
-    if (query.status) {
-      where.status = query.status as OrderStatus;
-    }
-    if (query.serviceType) {
-      filters.push({
-        OR: [
-          { serviceType: query.serviceType },
-          { units: { some: { serviceType: query.serviceType } } },
-        ],
-      });
-    }
-
-    if (query.search) {
-      const term = query.search.trim();
-      filters.push({
-        OR: [
-          { folio: { contains: term, mode: 'insensitive' } },
-          { clientNameSnapshot: { contains: term, mode: 'insensitive' } },
-        ],
-      });
-    }
-
-    if (query.from || query.to) {
-      where.scheduledAt = {};
-      if (query.from) where.scheduledAt.gte = new Date(query.from);
-      if (query.to) where.scheduledAt.lte = new Date(query.to);
-    }
-
-    if (filters.length > 0) {
-      where.AND = filters;
-    }
-
-    const orderBy: Prisma.OrderOrderByWithRelationInput = {};
-    const sortField = query.sortBy ?? 'scheduledAt';
-    const sortDirection = query.sortOrder ?? 'desc';
-    orderBy[sortField] = sortDirection;
-
-    const [total, orders] = await Promise.all([
-      this.prisma.order.count({ where }),
-      this.prisma.order.findMany({
-        where,
-        orderBy,
-        skip,
-        take: pageSize,
-        include: {
-          technician: { select: { id: true, name: true } },
-          rescheduledOrder: { select: { id: true, folio: true, status: true } },
-          _count: { select: { units: true } },
-        },
-      }),
-    ]);
-
-    return {
-      data: orders,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    return this.queries.listOrders(actor, query);
   }
 
   public async getOrderById(
     orderId: string,
     actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
   ): Promise<OrderAdministrationDetail> {
-    if (actor.role !== 'ADMIN') {
-      throw new AppError(403, 'FORBIDDEN', 'No tienes acceso al detalle administrativo');
-    }
-
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      select: administrationOrderSelect,
-    });
-
-    if (!order) {
-      throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
-    }
-
-    return v.parse(OrderAdministrationDetailSchema, mapAdministrationOrder(order));
+    return this.queries.getOrderById(orderId, actor);
   }
 
   public async getOrderExecutionById(
     orderId: string,
     actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
   ): Promise<OrderExecutionDetail> {
-    await assertOrderAccess(this.prisma, actor, orderId, 'No tienes acceso a esta orden');
-
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      select: executionOrderSelect,
-    });
-    if (!order) {
-      throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
-    }
-
-    return v.parse(OrderExecutionDetailSchema, mapExecutionOrder(order));
+    return this.queries.getOrderExecutionById(orderId, actor);
   }
 
   public async createOrder(actorUserId: string, input: CreateOrder) {
     const primaryServiceType = input.serviceType ?? input.units?.[0]?.serviceType ?? 'INSTALLATION';
     assertServiceConfigurationSupported(primaryServiceType);
-    const tech = await this.assertSelectableTechnician(input.technicianId);
+    const tech = await assertSelectableTechnician(this.prisma, input.technicianId);
 
     if (input.units && input.units.length > 0) {
       const serials = new Set<string>();
@@ -352,7 +182,7 @@ export class OrdersService {
     }
     let techSnapshot: { name: string; externalKey: string | null } | undefined;
     if (input.technicianId !== undefined) {
-      const tech = await this.assertSelectableTechnician(input.technicianId);
+      const tech = await assertSelectableTechnician(this.prisma, input.technicianId);
       techSnapshot = { name: tech.name, externalKey: tech.externalKey ?? null };
     }
 
@@ -693,114 +523,7 @@ export class OrdersService {
     orderId: string,
     input: RescheduleFailedAppointment,
   ) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { units: { include: { equipment: true } } },
-    });
-    if (!order) {
-      throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
-    }
-    if (order.status !== OrderStatus.FAILED_APPOINTMENT) {
-      throw new AppError(
-        400,
-        'INVALID_ORDER_STATE',
-        'Solo se pueden reprogramar órdenes marcadas como cita fallida',
-      );
-    }
-    if (order.failedAppointmentResolution !== null) {
-      throw new AppError(
-        409,
-        'FAILED_APPOINTMENT_ALREADY_RESOLVED',
-        'La cita fallida ya fue resuelta',
-      );
-    }
-
-    const scheduledAt = new Date(input.scheduledAt);
-    if (scheduledAt.getTime() <= Date.now()) {
-      throw new AppError(
-        400,
-        'INVALID_SCHEDULE',
-        'La nueva fecha de la cita debe estar en el futuro',
-      );
-    }
-
-    const technicianId = input.technicianId ?? order.technicianId;
-    if (!technicianId) {
-      throw new AppError(
-        400,
-        'MISSING_TECHNICIAN',
-        'Debe seleccionar un técnico para reprogramar la orden',
-      );
-    }
-    const technician = await this.assertSelectableTechnician(technicianId);
-
-    return domainTransaction(this.prisma, async (tx, effects) => {
-      const resolvedAt = new Date();
-      const resolution = await tx.order.updateMany({
-        where: {
-          id: orderId,
-          version: input.version,
-          status: OrderStatus.FAILED_APPOINTMENT,
-          failedAppointmentResolution: null,
-        },
-        data: {
-          failedAppointmentResolution: FailedAppointmentResolution.RESCHEDULED,
-          failedAppointmentResolvedAt: resolvedAt,
-          failedAppointmentResolvedById: actorUserId,
-          version: { increment: 1 },
-        },
-      });
-      if (resolution.count !== 1) {
-        throw new AppError(
-          409,
-          'ORDER_VERSION_CONFLICT',
-          'La cita fallida fue modificada o resuelta por otra solicitud',
-        );
-      }
-
-      const cloned = await tx.order.create({
-        data: {
-          folio: createOrderFolio(),
-          serviceType: order.serviceType,
-          status: OrderStatus.DRAFT,
-          clientSheetId: order.clientSheetId,
-          clientNameSnapshot: order.clientNameSnapshot,
-          technicianId,
-          technicianNameSnapshot: technician.name,
-          technicianExternalKeySnapshot: technician.externalKey ?? null,
-          scheduledAt,
-          isHomeService: order.isHomeService,
-          serviceAddress: order.serviceAddress,
-          generalNotes: order.generalNotes,
-          createdById: actorUserId,
-          rescheduledFromOrderId: order.id,
-          version: 1,
-          units: { create: buildRescheduledUnitInputs(order) },
-        },
-        include: { units: { include: { equipment: true } }, rescheduledFrom: true },
-      });
-
-      effects.audit({
-        action: 'FAILED_APPOINTMENT_RESCHEDULED',
-        actorUserId,
-        entityType: 'Order',
-        entityId: order.id,
-        before: order as unknown as Prisma.InputJsonValue,
-        after: {
-          failedAppointmentResolution: FailedAppointmentResolution.RESCHEDULED,
-          failedAppointmentResolvedAt: resolvedAt.toISOString(),
-          rescheduledOrderId: cloned.id,
-        },
-      });
-      effects.audit({
-        action: 'ORDER_CREATED_FROM_FAILED_APPOINTMENT',
-        actorUserId,
-        entityType: 'Order',
-        entityId: cloned.id,
-        after: cloned as unknown as Prisma.InputJsonValue,
-      });
-      return cloned;
-    });
+    return rescheduleFailedAppointment(this.prisma, actorUserId, orderId, input);
   }
 
   public async assignAndSyncOrder(
@@ -835,7 +558,7 @@ export class OrdersService {
         'Debe asignar un técnico antes de confirmar la asignación',
       );
     }
-    await this.assertSelectableTechnician(order.technicianId);
+    await assertSelectableTechnician(this.prisma, order.technicianId);
 
     if (order.units.length === 0) {
       throw new AppError(400, 'NO_UNITS', 'La orden debe tener al menos una unidad registrada');
@@ -947,32 +670,6 @@ export class OrdersService {
     });
   }
 
-  private async assertSelectableTechnician(technicianId: string): Promise<{
-    id: string;
-    name: string;
-    externalKey: string | null;
-    active: boolean;
-  }> {
-    if (!technicianId) {
-      throw new AppError(400, 'MISSING_TECHNICIAN', 'Selecciona un técnico para la orden');
-    }
-    const technician = await this.prisma.technician.findUnique({
-      where: { id: technicianId },
-      select: { id: true, name: true, externalKey: true, active: true },
-    });
-    if (!technician) {
-      throw new AppError(404, 'TECHNICIAN_NOT_FOUND', 'El técnico seleccionado no existe');
-    }
-    if (!technician.active) {
-      throw new AppError(
-        400,
-        'TECHNICIAN_INACTIVE',
-        'El técnico seleccionado está inactivo. Recarga el directorio y elige otro técnico.',
-      );
-    }
-    return technician;
-  }
-
   private async cancelFailedAppointment(
     actorUserId: string,
     order: OrderWithEquipment,
@@ -1068,15 +765,7 @@ export class OrdersService {
   }
 
   public async getOrderAuditLogs(orderId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) {
-      throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
-    }
-    return this.prisma.auditLog.findMany({
-      where: { entityId: orderId },
-      orderBy: { createdAt: 'desc' },
-      include: { actor: { select: { id: true, name: true, email: true } } },
-    });
+    return this.queries.getOrderAuditLogs(orderId);
   }
 }
 

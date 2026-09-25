@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue';
+import { ref } from 'vue';
 import { NButton, NImage, NPopconfirm, NSpin, useMessage } from 'naive-ui';
 import { MIN_REQUIRED_EVIDENCE_PHOTOS } from '@puk/contracts';
+import { createEvidenceUploadRetryKeys } from '../evidence-upload-retry.js';
+import { preprocessEvidenceImage } from '../image-preprocessing.js';
+import { useEvidenceGallery } from '../composables/useEvidenceGallery.js';
 import {
   completeEvidence,
   deleteEvidence,
-  getEvidenceUrl,
   getStorageMode,
   presignEvidence,
-  releasePrivateFileUrl,
   uploadEvidenceFile,
   uploadToStorage,
 } from '../api.js';
@@ -37,152 +38,17 @@ const cameraInputRef = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
 const uploadingStatusText = ref('');
 const deletingId = ref<string | null>(null);
-const previewUrls = ref<Record<string, string>>({});
-const loadingUrls = ref<Record<string, boolean>>({});
-const message = useMessage();
-const pendingUploadKeys = new Map<string, string>();
-
-function evidenceRetryKey(file: File): string {
-  return `puk:evidence-upload:${props.orderId}:${props.unitId}:${file.name}:${file.size}:${file.lastModified}`;
-}
-
-function idempotencyKeyFor(file: File): string {
-  const retryKey = evidenceRetryKey(file);
-  let savedKey: string | null = null;
-  try {
-    savedKey = sessionStorage.getItem(retryKey);
-  } catch {
-    // Private browsing may disable session storage; in-memory retry still works.
-  }
-  const key = pendingUploadKeys.get(retryKey) ?? savedKey ?? crypto.randomUUID();
-  pendingUploadKeys.set(retryKey, key);
-  try {
-    sessionStorage.setItem(retryKey, key);
-  } catch {
-    // The server-side reservation remains authoritative.
-  }
-  return key;
-}
-
-function clearIdempotencyKey(file: File): void {
-  const retryKey = evidenceRetryKey(file);
-  pendingUploadKeys.delete(retryKey);
-  try {
-    sessionStorage.removeItem(retryKey);
-  } catch {
-    // No persistent browser state to clear.
-  }
-}
-
-onUnmounted(() => {
-  for (const url of Object.values(previewUrls.value)) releasePrivateFileUrl(url);
+const {
+  previewUrls,
+  loadingUrls,
+  remove: removePreview,
+} = useEvidenceGallery({
+  orderId: () => props.orderId,
+  unitId: () => props.unitId,
+  evidences: () => props.evidences,
 });
-
-async function fetchEvidenceUrl(evidenceId: string) {
-  if (previewUrls.value[evidenceId] || loadingUrls.value[evidenceId]) return;
-  loadingUrls.value[evidenceId] = true;
-  try {
-    const res = await getEvidenceUrl(evidenceId);
-    previewUrls.value[evidenceId] = res.downloadUrl;
-  } catch {
-    // Ignore preview loading errors
-  } finally {
-    loadingUrls.value[evidenceId] = false;
-  }
-}
-
-function syncEvidenceUrls() {
-  if (!props.evidences || props.evidences.length === 0) return;
-  for (const ev of props.evidences) {
-    if (ev.status === 'COMPLETED' && !previewUrls.value[ev.id]) {
-      void fetchEvidenceUrl(ev.id);
-    }
-  }
-}
-
-watch(
-  () => props.evidences,
-  () => {
-    syncEvidenceUrls();
-  },
-  { immediate: true, deep: true },
-);
-
-async function resizeImageIfNeeded(
-  file: File,
-): Promise<{ blob: Blob; width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo de imagen seleccionado'));
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('No se pudo decodificar la imagen seleccionada'));
-      img.onload = () => {
-        const maxDimension = 1920;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            resolve({ blob: blob || file, width, height });
-          },
-          'image/jpeg',
-          0.85,
-        );
-      };
-      img.src = String(e.target?.result);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function isHeicFile(file: File): boolean {
-  const normalizedType = file.type.toLowerCase();
-  const normalizedName = file.name.toLowerCase();
-  return (
-    normalizedType === 'image/heic' ||
-    normalizedType === 'image/heif' ||
-    normalizedName.endsWith('.heic') ||
-    normalizedName.endsWith('.heif')
-  );
-}
-
-async function convertHeicIfNeeded(file: File): Promise<File> {
-  if (!isHeicFile(file)) return file;
-
-  uploadingStatusText.value = 'Convirtiendo foto HEIC a JPEG...';
-  const { default: heic2any } = await import('heic2any');
-  const converted = await heic2any({
-    blob: file,
-    quality: 0.85,
-    toType: 'image/jpeg',
-  });
-  const jpeg = Array.isArray(converted) ? converted[0] : converted;
-  if (!(jpeg instanceof Blob)) {
-    throw new Error('No fue posible convertir la foto HEIC a JPEG');
-  }
-
-  return new File([jpeg], `${file.name.replace(/\.(heic|heif)$/i, '')}.jpg`, {
-    lastModified: file.lastModified,
-    type: 'image/jpeg',
-  });
-}
+const message = useMessage();
+const uploadRetryKeys = createEvidenceUploadRetryKeys();
 
 async function handleFilesSelected(files: File[]) {
   if (!files || files.length === 0) return;
@@ -197,8 +63,9 @@ async function handleFilesSelected(files: File[]) {
     if (!file) continue;
     uploadingStatusText.value = `Subiendo foto ${i + 1} de ${files.length}...`;
     try {
-      const normalizedFile = await convertHeicIfNeeded(file);
-      const { blob, width, height } = await resizeImageIfNeeded(normalizedFile);
+      const { blob, width, height } = await preprocessEvidenceImage(file, () => {
+        uploadingStatusText.value = 'Convirtiendo foto HEIC a JPEG...';
+      });
 
       if ((await getStorageMode()) === 'drive') {
         await uploadEvidenceFile(
@@ -207,9 +74,9 @@ async function handleFilesSelected(files: File[]) {
           blob,
           width,
           height,
-          idempotencyKeyFor(file),
+          uploadRetryKeys.keyFor(props.orderId, props.unitId, file),
         );
-        clearIdempotencyKey(file);
+        uploadRetryKeys.clear(props.orderId, props.unitId, file);
       } else {
         const presign = await presignEvidence(props.orderId, props.unitId, {
           mimeType: 'image/jpeg',
@@ -262,8 +129,7 @@ async function handleDelete(evidenceId: string) {
   deletingId.value = evidenceId;
   try {
     await deleteEvidence(evidenceId);
-    releasePrivateFileUrl(previewUrls.value[evidenceId]);
-    delete previewUrls.value[evidenceId];
+    removePreview(evidenceId);
     message?.success('Fotografía eliminada');
     emit('updated');
   } catch (err: unknown) {

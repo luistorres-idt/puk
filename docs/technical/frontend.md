@@ -43,6 +43,7 @@ flowchart LR
 - El manejo de errores de interfaz utiliza la utilidad `extractApiErrorMessage` (`@/shared/http/client.ts`) para presentar transparentemente al usuario los mensajes de error originados en el backend en lugar de códigos genéricos de Axios.
 - Formularios y modales usan estado local del componente.
 - Tras mutaciones se invalidan órdenes, auditoría, sincronización o reporte según corresponda.
+- En el detalle administrativo, `useOrderMedia` administra el ciclo de vida de las URLs privadas y `useAddOrderUnit` encapsula el formulario de alta; `AddOrderUnitModal`, `OrderEvidenceTab`, `OrderSyncTab`, `OrderReportCard` y `OrderAuditTab` separan la presentación de la orquestación de la vista. La vista conserva las consultas y mutaciones de TanStack Query.
 
 ## Rutas
 
@@ -70,6 +71,8 @@ fiscal y de sincronización. Los técnicos navegan a esa vista también para con
 Al final de la vista, la tarjeta **Notas de ejecución** permite guardar una nota general de la orden
 de hasta 5000 caracteres. Si hay cambios pendientes al pulsar **Finalizar y Cerrar Servicio**, la
 interfaz los guarda automáticamente antes de completar la orden; las notas no se separan por unidad.
+`useExecutionNotes` centraliza el estado y la persistencia; el guardado manual refresca la orden,
+mientras que un error al guardar antes del cierre impide finalizarla.
 
 ## Asistente de creación de órdenes y catálogo de equipos
 
@@ -91,10 +94,15 @@ Equipo aparecen para administradores mientras la orden está en borrador y respe
 seleccionado. La API valida la misma regla. La carga inicial anidada del wizard y las acciones de
 quitar/eliminar conservan sus reglas existentes. Los botones interactivos personalizados responden
 tanto a clic como a teclado.
+`AddOrderUnitModal` y `AttachOrderEquipmentModal` contienen los formularios; sus composables
+administran estado, validación y mutación sin trasladar al componente de detalle el payload de Sheets.
+`OrderUnitsTab` presenta unidades y equipos con propiedades y eventos tipados. El detalle conserva
+las mutaciones y los modales, de modo que la pestaña no crea otra fuente de estado de órdenes.
 
 ## Evidencias y reportes
 
-El navegador comprime fotografías a JPEG antes de solicitar/subir una URL prefirmada, con rechazo explícito de promesas ante imágenes no decodificables para evitar bloqueos en la interfaz. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.
+`image-preprocessing.ts` convierte fotografías HEIC/HEIF a JPEG y limita sus dimensiones a 1920 px antes de solicitar o subir una URL. Las promesas rechazan explícitamente archivos no legibles o imágenes no decodificables para evitar bloqueos en la interfaz. El módulo transforma imágenes; `EvidenceCapture` conserva los protocolos distintos de carga Drive y S3. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.
+`evidence-upload-retry.ts` conserva la identidad de reintento de Drive usando la orden, la unidad y el archivo original. `useEvidenceGallery` libera las URLs privadas cuando una evidencia sale de la lista, cambia el contexto o se desmonta la vista, e ignora respuestas de cargas obsoletas.
 
 ## PWA
 
