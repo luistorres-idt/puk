@@ -181,3 +181,47 @@ for (const serviceType of OrderServiceTypeSchema.options) {
     }
   });
 }
+
+test('order detail keeps extracted tabs and Add Unit modal connected', async ({ page }) => {
+  await mockApi(page);
+  await page.goto(`/orders/${orderId}`);
+
+  await page.getByText('Evidencias y Firma', { exact: true }).click();
+  await expect(page.getByText('Checklist y Evidencias por Unidad')).toBeVisible();
+  await expect(page.getByText('No se ha registrado firma en esta orden.')).toBeVisible();
+
+  await page.getByText('Sincronización Sheets', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Operaciones de Sincronización' })).toBeVisible();
+  await expect(
+    page.getByText('No existen operaciones de sincronización para esta orden.'),
+  ).toBeVisible();
+
+  await page.getByText('Unidades y Equipos', { exact: true }).click();
+  await page.getByRole('button', { name: 'Agregar Unidad' }).first().click();
+  await expect(page.getByText('Agregar Unidad a la Orden', { exact: true })).toBeVisible();
+  await expect(page.getByText('Tipo de Servicio', { exact: true }).last()).toBeVisible();
+});
+
+test('order units tab forwards equipment actions to the parent', async ({ page }) => {
+  await mockApi(page);
+  let removedEquipment = false;
+  await page.route(
+    `**/api/v1/orders/${orderId}/units/${unit.id}/equipment/equipment-demo`,
+    async (route) => {
+      if (route.request().method() === 'DELETE') {
+        removedEquipment = true;
+        await route.fulfill({ json: { data: { deleted: true }, meta: {} } });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+
+  await page.goto(`/orders/${orderId}`);
+  await page.getByRole('button', { name: 'Quitar', exact: true }).click();
+  await expect.poll(() => removedEquipment).toBe(true);
+  await expect(page.getByText('Equipo removido de la unidad.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Asignar Equipo' }).click();
+  await expect(page.getByText('Asignar Equipo desde Google Sheets')).toBeVisible();
+});
