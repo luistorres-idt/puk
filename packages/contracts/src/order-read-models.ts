@@ -29,7 +29,6 @@ export const OrderChecklistItemDetailSchema = v.object({
   category: ChecklistCategorySchema,
   condition: v.nullable(ChecklistConditionSchema),
   notes: v.nullable(v.string()),
-  evidence: v.array(OrderEvidenceDetailSchema),
 });
 export type OrderChecklistItemDetail = v.InferOutput<typeof OrderChecklistItemDetailSchema>;
 
@@ -61,6 +60,7 @@ export const OrderExecutionUnitDetailSchema = v.object({
   serviceType: OrderServiceTypeSchema,
   status: UnitStatusSchema,
   equipment: v.array(OrderExecutionEquipmentDetailSchema),
+  evidence: v.array(OrderEvidenceDetailSchema),
   checklist: v.nullable(OrderChecklistDetailSchema),
 });
 export type OrderExecutionUnitDetail = v.InferOutput<typeof OrderExecutionUnitDetailSchema>;

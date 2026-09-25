@@ -29,6 +29,7 @@ export interface UnitChecklistForCompleteness {
 export interface OrderUnitForCompleteness {
   label: string;
   equipment: UnitEquipmentForCompleteness[];
+  evidence?: ChecklistEvidenceForCompleteness[];
   checklist?: UnitChecklistForCompleteness | null;
 }
 
@@ -81,18 +82,15 @@ export function evaluateOrderCompleteness(
         }
       }
 
-      // Check minimum completed photos per unit
-      const totalEvidence = checklist.items.reduce((sum, item) => {
-        const completedEvidence =
-          item.evidence?.filter((e) => e.status === undefined || e.status === 'COMPLETED') ?? [];
-        return sum + completedEvidence.length;
-      }, 0);
+    }
 
-      if (totalEvidence < MIN_REQUIRED_EVIDENCE_PHOTOS) {
-        missing.push(
-          `Se requieren al menos ${MIN_REQUIRED_EVIDENCE_PHOTOS} fotografías de evidencia en unidad ${unit.label} (actualmente ${totalEvidence}/${MIN_REQUIRED_EVIDENCE_PHOTOS})`,
-        );
-      }
+    // Photos are owned by the unit; they are not attached to checklist sections.
+    const totalEvidence =
+      unit.evidence?.filter((e) => e.status === undefined || e.status === 'COMPLETED').length ?? 0;
+    if (totalEvidence < MIN_REQUIRED_EVIDENCE_PHOTOS) {
+      missing.push(
+        `Se requieren al menos ${MIN_REQUIRED_EVIDENCE_PHOTOS} fotografías de evidencia en unidad ${unit.label} (actualmente ${totalEvidence}/${MIN_REQUIRED_EVIDENCE_PHOTOS})`,
+      );
     }
   }
 

@@ -15,11 +15,7 @@ import {
   NTabPane,
   useMessage,
 } from 'naive-ui';
-import {
-  MIN_REQUIRED_EVIDENCE_PHOTOS,
-  type OrderEvidenceDetail,
-  type OrderExecutionDetail,
-} from '@puk/contracts';
+import { MIN_REQUIRED_EVIDENCE_PHOTOS, type OrderExecutionDetail } from '@puk/contracts';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { useSessionStore } from '../../../stores/session.js';
@@ -34,12 +30,14 @@ import {
   completeOrder,
   completeSignature,
   failAppointment,
+  getStorageMode,
   presignSignature,
   reportDiscrepancy,
   requireCorrection,
   saveChecklist,
   startOrder,
   updateExecutionNotes,
+  uploadSignatureFile,
   uploadToStorage,
   verifyEquipment,
 } from '../api.js';
@@ -87,18 +85,7 @@ const { createSaveChecklistItems, getUnitItem, initChecklistForUnit } = useUnitC
 
 function getUnitAllEvidences(unitId: string) {
   const unit = order.value?.units?.find((u) => u.id === unitId);
-  if (!unit?.checklist?.items) return [];
-  const evidences: OrderEvidenceDetail[] = [];
-  for (const item of unit.checklist.items) {
-    if (item.evidence) {
-      for (const ev of item.evidence) {
-        if (ev.status === 'COMPLETED') {
-          evidences.push(ev);
-        }
-      }
-    }
-  }
-  return evidences;
+  return unit?.evidence?.filter((evidence) => evidence.status === 'COMPLETED') ?? [];
 }
 
 async function loadData() {
@@ -200,16 +187,15 @@ const savingSignature = ref(false);
 async function handleSaveSignature(payload: { signerName: string; blob: Blob }) {
   savingSignature.value = true;
   try {
-    // 1. Presign
-    const presign = await presignSignature(orderId, {
-      sizeBytes: payload.blob.size,
-    });
-
-    // 2. Upload
-    await uploadToStorage(presign.uploadUrl, payload.blob, 'image/png');
-
-    // 3. Complete
-    await completeSignature(orderId, { signerName: payload.signerName }, presign.objectKey);
+    if ((await getStorageMode()) === 'drive') {
+      await uploadSignatureFile(orderId, payload.signerName, payload.blob);
+    } else {
+      const presign = await presignSignature(orderId, {
+        sizeBytes: payload.blob.size,
+      });
+      await uploadToStorage(presign.uploadUrl, payload.blob, 'image/png');
+      await completeSignature(orderId, { signerName: payload.signerName }, presign.objectKey);
+    }
 
     message.success('Firma guardada exitosamente');
     await loadData();
@@ -531,7 +517,6 @@ onMounted(() => {
                       <EvidenceCapture
                         :order-id="orderId"
                         :unit-id="unit.id"
-                        category="BODYWORK"
                         :evidences="getUnitAllEvidences(unit.id)"
                         :min-required="MIN_REQUIRED_EVIDENCE_PHOTOS"
                         :disabled="

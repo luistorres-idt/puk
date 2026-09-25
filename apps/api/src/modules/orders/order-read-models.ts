@@ -40,6 +40,11 @@ export const executionOrderSelect = {
           verificationStatus: true,
         },
       },
+      evidence: {
+        where: { status: UploadStatus.COMPLETED, deletedAt: null },
+        orderBy: { createdAt: 'asc' as const },
+        select: { id: true, status: true },
+      },
       checklist: {
         select: {
           id: true,
@@ -49,11 +54,6 @@ export const executionOrderSelect = {
               category: true,
               condition: true,
               notes: true,
-              evidence: {
-                where: { status: UploadStatus.COMPLETED },
-                orderBy: { createdAt: 'asc' as const },
-                select: { id: true, status: true },
-              },
             },
           },
         },
@@ -127,10 +127,6 @@ function mapChecklist(
       category: item.category,
       condition: item.condition,
       notes: item.notes,
-      evidence: item.evidence.map((evidence) => ({
-        id: evidence.id,
-        status: evidence.status,
-      })),
     })),
   };
 }
@@ -164,6 +160,7 @@ function mapExecutionUnit(unit: ExecutionOrderRecord['units'][number]): OrderExe
       equipmentConditionSnapshot: equipment.equipmentConditionSnapshot,
       verificationStatus: equipment.verificationStatus,
     })),
+    evidence: unit.evidence.map((evidence) => ({ id: evidence.id, status: evidence.status })),
     checklist: mapChecklist(unit.checklist),
   };
 }
@@ -189,6 +186,7 @@ function mapAdministrationUnit(
       verificationStatus: equipment.verificationStatus,
       externalKey: equipment.externalKey,
     })),
+    evidence: unit.evidence.map((evidence) => ({ id: evidence.id, status: evidence.status })),
     checklist: mapChecklist(unit.checklist),
   };
 }

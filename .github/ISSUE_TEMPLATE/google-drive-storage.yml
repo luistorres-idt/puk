@@ -1,0 +1,41 @@
+name: Google Drive storage
+description: Propuestas y seguimiento de almacenamiento privado de evidencias, firmas y reportes en Google Drive.
+title: "[Feature] Google Drive storage"
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Resumen
+      description: Describe el cambio y el problema que resuelve.
+      placeholder: ¿Qué se necesita y por qué?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Alcance
+      description: Indica qué componentes o flujos están incluidos y cuáles quedan fuera.
+      placeholder: API, web, estructura de carpetas, migración, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+      description: Lista resultados verificables para considerar terminado el trabajo.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: checkboxes
+    id: safeguards
+    attributes:
+      label: Salvaguardas
+      options:
+        - label: No se requiere migrar ni borrar físicamente los objetos de prueba de S3.
+          required: true
+        - label: Los archivos de Drive deben permanecer privados y servirse mediante la API autenticada.
+          required: true
+        - label: La estructura debe usar cliente, serie/VIN y folio; firma y PDF pertenecen a la carpeta común de la orden.
+          required: true

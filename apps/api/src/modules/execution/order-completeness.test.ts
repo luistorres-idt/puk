@@ -15,18 +15,18 @@ describe('evaluateOrderCompleteness', () => {
           { externalKey: 'EQ-001', verificationStatus: 'MATCHED' },
           { externalKey: 'EQ-002', verificationStatus: 'DISCREPANCY_REPORTED' },
         ],
+        evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, () => ({
+          status: 'COMPLETED',
+        })),
         checklist: {
           items: [
-            { category: 'DASHBOARD', evidence: [{ status: 'COMPLETED' }] },
             {
-              category: 'WINDOWS',
-              evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS - 1 }, () => ({
-                status: 'COMPLETED',
-              })),
+              category: 'DASHBOARD',
             },
-            { category: 'ACCESSORIES', evidence: [] },
-            { category: 'TRIMS', evidence: [] },
-            { category: 'BODYWORK', evidence: [] },
+            { category: 'WINDOWS' },
+            { category: 'ACCESSORIES' },
+            { category: 'TRIMS' },
+            { category: 'BODYWORK' },
           ],
         },
       },
@@ -36,7 +36,7 @@ describe('evaluateOrderCompleteness', () => {
     },
   };
 
-  it('passes when all units, equipments, checklist items, photos, and signature are present', () => {
+  it('passes with unit-level photos and all checklist sections even when sections have no photos', () => {
     const result = evaluateOrderCompleteness(completeOrder);
     expect(result.isComplete).toBe(true);
     expect(result.missingRequirements).toHaveLength(0);
@@ -90,9 +90,9 @@ describe('evaluateOrderCompleteness', () => {
           equipment: [],
           checklist: {
             items: [
-              { category: 'DASHBOARD', evidence: [{ status: 'COMPLETED' }] },
-              { category: 'WINDOWS', evidence: [{ status: 'COMPLETED' }] },
-              { category: 'ACCESSORIES', evidence: [{ status: 'COMPLETED' }] },
+              { category: 'DASHBOARD' },
+              { category: 'WINDOWS' },
+              { category: 'ACCESSORIES' },
               // Missing TRIMS and BODYWORK
             ],
           },
@@ -116,13 +116,18 @@ describe('evaluateOrderCompleteness', () => {
         {
           label: 'Tracto 101',
           equipment: [],
+          evidence: [
+            { status: 'COMPLETED' },
+            { status: 'PENDING' }, // Not completed!
+            { status: 'COMPLETED' },
+          ],
           checklist: {
             items: [
-              { category: 'DASHBOARD', evidence: [{ status: 'COMPLETED' }] },
-              { category: 'WINDOWS', evidence: [{ status: 'PENDING' }] }, // Not completed!
-              { category: 'ACCESSORIES', evidence: [{ status: 'COMPLETED' }] },
-              { category: 'TRIMS', evidence: [] },
-              { category: 'BODYWORK', evidence: [] },
+              { category: 'DASHBOARD' },
+              { category: 'WINDOWS' },
+              { category: 'ACCESSORIES' },
+              { category: 'TRIMS' },
+              { category: 'BODYWORK' },
             ],
           },
         },

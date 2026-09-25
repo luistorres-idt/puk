@@ -20,6 +20,7 @@ import type {
   UpdateUnit,
 } from '@puk/contracts';
 import { api, type ApiResponse } from '../../shared/http/client.js';
+import { getStorageMode } from '../service-execution/index.js';
 
 export type { ApiResponse };
 
@@ -216,6 +217,11 @@ export async function fetchCurrentReport(orderId: string): Promise<ServiceOrderR
   return response.data.data;
 }
 
+export async function fetchReportVersions(orderId: string): Promise<ServiceOrderReport[]> {
+  const response = await api.get<ApiResponse<ServiceOrderReport[]>>(`/orders/${orderId}/reports`);
+  return response.data.data;
+}
+
 export async function generateReport(orderId: string): Promise<ServiceOrderReport> {
   const response = await api.post<ApiResponse<ServiceOrderReport>>(
     `/orders/${orderId}/report/generate`,
@@ -223,11 +229,32 @@ export async function generateReport(orderId: string): Promise<ServiceOrderRepor
   return response.data.data;
 }
 
-export async function fetchReportDownload(orderId: string): Promise<{
+export async function fetchReportDownload(
+  orderId: string,
+  version?: number,
+): Promise<{
   url: string;
   expiresInSeconds: number;
   fileName: string;
 }> {
+  if ((await getStorageMode()) === 'drive') {
+    const path =
+      version === undefined
+        ? `/orders/${orderId}/report/file`
+        : `/orders/${orderId}/reports/${version}/file`;
+    const response = await api.get<Blob>(path, {
+      responseType: 'blob',
+    });
+    const disposition = response.headers['content-disposition'];
+    const fileName =
+      typeof disposition === 'string'
+        ? (disposition.match(/filename="([^"]+)"/)?.[1] ?? 'service-order.pdf')
+        : 'service-order.pdf';
+    return { url: URL.createObjectURL(response.data), expiresInSeconds: 0, fileName };
+  }
+  if (version !== undefined) {
+    throw new Error('La descarga de versiones anteriores requiere Google Drive');
+  }
   const response = await api.get<
     ApiResponse<{ url: string; expiresInSeconds: number; fileName: string }>
   >(`/orders/${orderId}/report/download`);

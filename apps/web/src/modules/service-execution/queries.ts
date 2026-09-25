@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { unref, type MaybeRef } from 'vue';
 import type {
-  ChecklistCategory,
   CompleteEvidence,
   FailAppointment,
   PresignEvidence,
@@ -104,14 +103,12 @@ export function useExecutionMutations(orderId?: MaybeRef<string>) {
     mutationFn: ({
       id,
       unitId,
-      category,
       data,
     }: {
       id: string;
       unitId: string;
-      category: ChecklistCategory;
       data: PresignEvidence;
-    }) => presignEvidence(id, unitId, category, data),
+    }) => presignEvidence(id, unitId, data),
   });
 
   const confirmEvidence = useMutation({

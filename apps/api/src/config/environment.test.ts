@@ -52,6 +52,7 @@ describe('parseEnvironment', () => {
 
     expect(environment.PORT).toBe(3000);
     expect(environment.COOKIE_DOMAIN).toBeUndefined();
+    expect(environment.STORAGE_PROVIDER).toBe('s3');
     expect(environment.S3_FORCE_PATH_STYLE).toBe(true);
     expect(environment.GOOGLE_TECHNICIANS_SPREADSHEET_ID).toBe('development-only-technicians');
     expect(environment.TECHNICAL_REPORT_CUTOFF_WEEKDAY).toBe(2);
@@ -133,6 +134,39 @@ describe('parseEnvironment', () => {
     expect(environment.COOKIE_DOMAIN).toBeUndefined();
     expect(environment.S3_ACCESS_KEY_ID).toBeUndefined();
     expect(environment.S3_SECRET_ACCESS_KEY).toBeUndefined();
+  });
+
+  it('requires a separate Drive identity and shared drive when Drive storage is selected', () => {
+    expect(() => parseEnvironment({ ...validEnvironment, STORAGE_PROVIDER: 'drive' })).toThrowError(
+      new EnvironmentValidationError([
+        'GOOGLE_DRIVE_CLIENT_EMAIL',
+        'GOOGLE_DRIVE_PRIVATE_KEY',
+        'GOOGLE_DRIVE_SHARED_DRIVE_ID',
+      ]),
+    );
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      STORAGE_PROVIDER: 'drive',
+      GOOGLE_DRIVE_CLIENT_EMAIL: 'drive-service@example.invalid',
+      GOOGLE_DRIVE_PRIVATE_KEY: 'test-only-key',
+      GOOGLE_DRIVE_SHARED_DRIVE_ID: 'shared-drive-id',
+    });
+    expect(environment.STORAGE_PROVIDER).toBe('drive');
+  });
+
+  it('does not require S3 settings in Drive mode', () => {
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      STORAGE_PROVIDER: 'drive',
+      GOOGLE_DRIVE_CLIENT_EMAIL: 'drive-service@example.invalid',
+      GOOGLE_DRIVE_PRIVATE_KEY: 'test-only-key',
+      GOOGLE_DRIVE_SHARED_DRIVE_ID: 'shared-drive-id',
+      S3_BUCKET: undefined,
+      S3_ENDPOINT: undefined,
+      S3_FORCE_PATH_STYLE: undefined,
+      S3_REGION: undefined,
+    });
+    expect(environment.S3_BUCKET).toBeUndefined();
   });
 
   it('defaults to sslmode=no-verify when connecting to an AWS RDS host without explicit sslMode', () => {

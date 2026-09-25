@@ -1,5 +1,4 @@
 import type {
-  ChecklistCategory,
   CompleteEvidence,
   CompleteSignature,
   FailAppointment,
@@ -17,6 +16,24 @@ export type { ApiResponse };
 
 export interface CompleteOrderResult extends Record<string, unknown> {
   warnings?: string[];
+}
+
+let storageModePromise: Promise<'s3' | 'drive'> | undefined;
+const pendingSignatureKeys = new Map<string, string>();
+
+export function getStorageMode(): Promise<'s3' | 'drive'> {
+  storageModePromise ??= api
+    .get<ApiResponse<{ provider: 's3' | 'drive' }>>('/storage/mode')
+    .then((response) => response.data.data.provider)
+    .catch((error: unknown) => {
+      storageModePromise = undefined;
+      throw error;
+    });
+  return storageModePromise;
+}
+
+export function releasePrivateFileUrl(url: string | null | undefined): void {
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
 }
 
 export async function startOrder(orderId: string) {
@@ -55,12 +72,11 @@ export async function saveChecklist(orderId: string, unitId: string, items: Save
 export async function presignEvidence(
   orderId: string,
   unitId: string,
-  category: ChecklistCategory,
   data: PresignEvidence,
 ) {
   const response = await api.post<
     ApiResponse<{ evidenceId: string; uploadUrl: string; objectKey: string }>
-  >(`/orders/${orderId}/units/${unitId}/checklist/${category}/evidence/presign`, data);
+  >(`/orders/${orderId}/units/${unitId}/evidence/presign`, data);
   return response.data.data;
 }
 
@@ -85,6 +101,29 @@ export async function completeEvidence(evidenceId: string, data: CompleteEvidenc
   return response.data.data;
 }
 
+export async function uploadEvidenceFile(
+  orderId: string,
+  unitId: string,
+  blob: Blob,
+  width: number,
+  height: number,
+  idempotencyKey: string,
+) {
+  const response = await api.post<ApiResponse<Record<string, unknown>>>(
+    `/orders/${orderId}/units/${unitId}/evidence/file`,
+    blob,
+    {
+      headers: {
+        'Content-Type': blob.type,
+        'X-Image-Width': String(width),
+        'X-Image-Height': String(height),
+        'Idempotency-Key': idempotencyKey,
+      },
+    },
+  );
+  return response.data.data;
+}
+
 export async function deleteEvidence(evidenceId: string) {
   const response = await api.delete<ApiResponse<Record<string, unknown>>>(
     `/evidence/${evidenceId}`,
@@ -93,9 +132,52 @@ export async function deleteEvidence(evidenceId: string) {
 }
 
 export async function getEvidenceUrl(evidenceId: string) {
+  if ((await getStorageMode()) === 'drive') {
+    const response = await api.get<Blob>(`/evidence/${evidenceId}/file`, {
+      responseType: 'blob',
+    });
+    return { downloadUrl: URL.createObjectURL(response.data) };
+  }
   const response = await api.get<ApiResponse<{ downloadUrl: string }>>(
     `/evidence/${evidenceId}/url`,
   );
+  return response.data.data;
+}
+
+export async function uploadSignatureFile(orderId: string, signerName: string, blob: Blob) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
+  const checksum = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const retryKey = `puk:signature-upload:${orderId}:${signerName.trim()}:${checksum}`;
+  let storedKey: string | null = null;
+  try {
+    storedKey = sessionStorage.getItem(retryKey);
+  } catch {
+    // Private browsing may disable session storage.
+  }
+  const idempotencyKey = pendingSignatureKeys.get(retryKey) ?? storedKey ?? crypto.randomUUID();
+  pendingSignatureKeys.set(retryKey, idempotencyKey);
+  try {
+    sessionStorage.setItem(retryKey, idempotencyKey);
+  } catch {
+    // In-memory retries remain available.
+  }
+  const response = await api.put<ApiResponse<Record<string, unknown>>>(
+    `/orders/${orderId}/signature/file`,
+    blob,
+    {
+      headers: {
+        'Content-Type': 'image/png',
+        'X-Signer-Name': signerName,
+        'Idempotency-Key': idempotencyKey,
+      },
+    },
+  );
+  pendingSignatureKeys.delete(retryKey);
+  try {
+    sessionStorage.removeItem(retryKey);
+  } catch {
+    // A private browsing session may not expose persistent storage.
+  }
   return response.data.data;
 }
 
@@ -121,6 +203,24 @@ export async function completeSignature(
 }
 
 export async function getSignatureUrl(orderId: string) {
+  if ((await getStorageMode()) === 'drive') {
+    const response = await api.get<Blob>(`/orders/${orderId}/signature/file`, {
+      responseType: 'blob',
+    });
+    const encodedSignerName = response.headers['x-signer-name'];
+    let signerName = '';
+    if (typeof encodedSignerName === 'string') {
+      try {
+        signerName = decodeURIComponent(encodedSignerName);
+      } catch {
+        signerName = '';
+      }
+    }
+    return {
+      downloadUrl: URL.createObjectURL(response.data),
+      signerName,
+    };
+  }
   const response = await api.get<ApiResponse<{ downloadUrl: string; signerName: string }>>(
     `/orders/${orderId}/signature/url`,
   );
