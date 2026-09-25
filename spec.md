@@ -94,4 +94,4 @@ Drive compartido de la aplicación/
 ## Trazabilidad
 
 - Plan de integración: [`docs/google-drive-integration-plan.md`](docs/google-drive-integration-plan.md).
-- Issue de GitHub: pendiente de publicación conforme a las reglas del repositorio.
+- Issue de GitHub: [#28 — Google Drive storage](https://github.com/luistorres-idt/puk/issues/28).

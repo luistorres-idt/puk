@@ -1,16 +1,15 @@
 # Plan de integración con Google Drive
 
-**Estado:** implementación local en curso; sin acceso al tenant de Google Workspace ni activación en producción. La implementación se contrasta con [`spec.md`](../spec.md). Las cargas Drive ya reservan identidad persistente e idempotente; falta validar el comportamiento con un tenant real.
+**Estado:** integración implementada en la rama local y trazada en [la issue #28](https://github.com/luistorres-idt/puk/issues/28). El usuario habilitó Drive API y confirmó que una carga de fotos terminó correctamente en las carpetas esperadas usando su configuración local. Esto valida ese flujo en ese entorno, pero **no** equivale a validar todos los tipos de archivo ni a desplegar o activar Drive en producción. La implementación se contrasta con [`spec.md`](../spec.md).
 
 **Alcance:** almacenar en un Drive compartido las nuevas fotografías de evidencia, firmas y reportes PDF de las órdenes de servicio, con acceso privado desde la aplicación. Los archivos actuales de S3 son exclusivamente de prueba: se pueden descartar y **no se migrarán** a Drive.
 
 ## Resumen de la propuesta
 
-1. Validar con TI un Drive compartido propiedad de la organización, su capacidad disponible, sus políticas de acceso y una cuenta de servicio dedicada a la aplicación.
-2. Probar en un entorno aislado la autenticación y la carga, consulta y descarga de un archivo sin hacer públicos los archivos ni entregar credenciales de Google al navegador.
-3. Adaptar las cargas, lecturas y referencias persistidas para usar identificadores de Drive, sin compatibilidad de lectura con los objetos de prueba de S3.
-4. Organizar las evidencias por cliente, serie/VIN y orden; guardar una sola firma y las versiones del PDF en una carpeta de orden compartida por todas sus unidades.
-5. Invalidar de forma controlada las referencias de prueba a S3 y habilitar las escrituras en Drive cuando se cumplan los criterios de aceptación. El borrado físico de objetos de S3 es una operación posterior y separada.
+1. Confirmar con TI el Drive compartido de producción, su capacidad, las políticas de acceso y la identidad de servicio aprobada.
+2. Completar la validación de extremo a extremo de fotografías, firmas, PDF, descargas privadas, reintentos y permisos en un entorno controlado.
+3. Desplegar la configuración de Drive con secretos gestionados fuera del repositorio y verificar referencias de prueba antes del corte.
+4. Activar escrituras en producción solo después de cumplir los criterios de aceptación y acordar observabilidad y reversión. El borrado físico de objetos S3 es una operación posterior y separada.
 
 **No se decide aquí eliminar firmas originales.** Hoy se consultan por separado y se necesitan para generar o regenerar PDF. Además, [el plan de migración desde AppSheet](./appsheet-migration-plan.md#3-políticas-de-retención-de-evidencias-y-firmas) indica conservación indefinida de firmas; cualquier cambio requiere una decisión funcional y de retención explícita.
 
@@ -26,12 +25,12 @@ El contrato [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y su im
 
 ## Requisitos previos de Google Workspace
 
-| Responsable                        | Validación requerida                                                                                                                                                                                                                                                             |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TI / administrador de Workspace    | Confirmar edición, almacenamiento compartido libre, política de miembros externos y posibilidad de usar una identidad `@...iam.gserviceaccount.com` en el Drive compartido.                                                                                                      |
-| TI / administrador de Google Cloud | Habilitar Drive API; crear una cuenta de servicio **dedicada** y conceder solo el acceso necesario al Drive de la aplicación. Validar el alcance OAuth mínimo que permita crear, leer y eliminar los archivos requeridos. No conceder delegación de todo el dominio por defecto. |
-| Seguridad / operación              | Definir el mecanismo de autenticación de la carga en AWS. Preferir credenciales de corta duración si la integración lo permite; si se requiere una clave, custodiarla fuera del repositorio y gestionar su rotación. Definir auditoría, respaldo/exportación y recuperación.     |
-| Negocio / cumplimiento             | Confirmar plazos de conservación de fotografías, firmas y cada versión de PDF, así como los requisitos de borrado definitivo y acceso de personal autorizado.                                                                                                                    |
+| Responsable                        | Validación requerida                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TI / administrador de Workspace    | Confirmar edición, almacenamiento compartido libre, política de miembros externos y posibilidad de usar una identidad `@...iam.gserviceaccount.com` en el Drive compartido.                                                                                                                                                                              |
+| TI / administrador de Google Cloud | Drive API ya fue habilitada para la configuración local usada en la prueba confirmada. Para producción, crear o aprobar una cuenta de servicio **dedicada** y conceder solo el acceso necesario al Drive de la aplicación. Validar el alcance OAuth mínimo para crear, leer y descargar archivos. No conceder delegación de todo el dominio por defecto. |
+| Seguridad / operación              | Definir el mecanismo de autenticación de la carga en AWS. Preferir credenciales de corta duración si la integración lo permite; si se requiere una clave, custodiarla fuera del repositorio y gestionar su rotación. Definir auditoría, respaldo/exportación y recuperación.                                                                             |
+| Negocio / cumplimiento             | Confirmar plazos de conservación de fotografías, firmas y cada versión de PDF, así como los requisitos de borrado definitivo y acceso de personal autorizado.                                                                                                                                                                                            |
 
 Una cuenta de servicio no debe guardar archivos en **Mi unidad**: Google indica que no puede ser propietaria de archivos y que debe usar un Drive compartido o actuar en nombre de un usuario mediante OAuth. El Drive compartido pertenece a la organización y consume su capacidad agrupada. La aplicación ya usa una cuenta de servicio para Sheets, pero con alcance de Sheets; se propone una identidad separada para reducir el impacto de una credencial comprometida.
 
@@ -157,6 +156,8 @@ Google documenta cargas resumibles, descarga de archivos binarios mediante `file
 - Mantenimiento: no ejecutar [`cleanup-orphaned-objects.ts`](../infra/scripts/cleanup-orphaned-objects.ts) como atajo para descartar S3. Hoy considera referencias de evidencia y firma, **pero no las de reportes PDF**; revisar su alcance antes de cualquier limpieza autorizada. No reutilizarlo para Drive sin rediseñar inventario, límites y borrado.
 
 ## Secuencia de trabajo y criterios de salida
+
+La prueba local confirmada cubre una carga de fotos y la ubicación de sus carpetas. No demuestra por sí sola la preparación de producción. Las fases siguientes conservan controles de despliegue y corte; la issue #28 da trazabilidad a la implementación.
 
 | Fase                   | Trabajo                                                                                                                                                                                | Criterio para avanzar                                                                                                                           |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
