@@ -51,6 +51,47 @@ interface MockPrismaExecution {
   };
 }
 
+function completeOrderFixture() {
+  const checklistItems = ['DASHBOARD', 'WINDOWS', 'ACCESSORIES', 'TRIMS', 'BODYWORK'].map(
+    (category) => ({ category, condition: 'GOOD' }),
+  );
+  return {
+    id: 'order-1',
+    folio: 'OS-001',
+    serviceType: 'INSTALLATION',
+    clientNameSnapshot: 'Cliente Demo',
+    scheduledAt: new Date(),
+    status: OrderStatus.IN_PROGRESS,
+    technicianId: 'tech-1',
+    technician: { id: 'tech-1', name: 'Tecnico Demo', installationRate: 500, departureCost: 100 },
+    units: [
+      {
+        id: 'unit-1',
+        label: 'Unidad 01',
+        makeModel: 'Freightliner Cascadia',
+        year: 2025,
+        serialNumber: 'SN-001',
+        serviceType: 'INSTALLATION',
+        equipment: [
+          {
+            id: 'eq-1',
+            externalKey: 'EQ-001',
+            sheetRowHint: 7,
+            serviceStatusSnapshot: 'STOCK TECNICO',
+            verificationStatus: 'MATCHED',
+          },
+        ],
+        evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, (_, evidenceIndex) => ({
+          id: `ev-${evidenceIndex + 1}`,
+          status: UploadStatus.COMPLETED,
+        })),
+        checklist: { items: checklistItems },
+      },
+    ],
+    signature: { signerName: 'Cliente' },
+  };
+}
+
 describe('ExecutionService', () => {
   let mockPrisma: MockPrismaExecution;
   let storagePort: DevMockStorageClient;
@@ -317,6 +358,58 @@ describe('ExecutionService', () => {
     expect(mockPrisma.evidence.create).not.toHaveBeenCalled();
   });
 
+  it('presigns, confirms, and reads a signature through legacy storage', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.IN_PROGRESS,
+      technicianId: 'tech-1',
+    });
+    const presigned = await service.presignSignatureUpload('admin-1', 'ADMIN', 'order-1', {
+      sizeBytes: 100,
+    });
+    expect(presigned.objectKey).toMatch(/^signatures\/order-1\/.*\.png$/);
+    expect(presigned.uploadUrl).toContain('mock-upload');
+
+    mockPrisma.signature.upsert.mockResolvedValue({
+      orderId: 'order-1',
+      objectKey: presigned.objectKey,
+      signerName: 'Client One',
+    });
+    const completed = await service.completeSignature(
+      'admin-1',
+      'ADMIN',
+      'order-1',
+      { signerName: 'Client One' },
+      presigned.objectKey,
+    );
+    expect(completed.objectKey).toBe(presigned.objectKey);
+    expect(mockPrisma.signature.upsert).toHaveBeenCalledWith({
+      where: { orderId: 'order-1' },
+      create: expect.objectContaining({ objectKey: presigned.objectKey, mimeType: 'image/png' }),
+      update: expect.objectContaining({ objectKey: presigned.objectKey, mimeType: 'image/png' }),
+    });
+
+    mockPrisma.signature.findUnique.mockResolvedValue(completed);
+    await expect(service.getSignatureUrl('admin-1', 'ADMIN', 'order-1')).resolves.toEqual({
+      downloadUrl: expect.stringContaining('mock-download'),
+      signerName: 'Client One',
+    });
+  });
+
+  it('does not save a legacy signature if its uploaded object is missing', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({ id: 'order-1', technicianId: 'tech-1' });
+    await expect(
+      service.completeSignature(
+        'admin-1',
+        'ADMIN',
+        'order-1',
+        { signerName: 'Client One' },
+        'missing',
+      ),
+    ).rejects.toMatchObject({ code: 'UPLOAD_NOT_FOUND' });
+    expect(mockPrisma.signature.upsert).not.toHaveBeenCalled();
+  });
+
   it('blocks completing an incomplete order with missing requirements error', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
@@ -347,47 +440,7 @@ describe('ExecutionService', () => {
         getNextScheduledAt: vi.fn().mockResolvedValue(scheduledFor),
       },
     });
-    const checklistItems = ['DASHBOARD', 'WINDOWS', 'ACCESSORIES', 'TRIMS', 'BODYWORK'].map(
-      (category) => ({
-        category,
-        condition: 'GOOD',
-      }),
-    );
-    mockPrisma.order.findUnique.mockResolvedValue({
-      id: 'order-1',
-      folio: 'OS-001',
-      serviceType: 'INSTALLATION',
-      clientNameSnapshot: 'Cliente Demo',
-      scheduledAt: new Date(),
-      status: OrderStatus.IN_PROGRESS,
-      technicianId: 'tech-1',
-      technician: { id: 'tech-1', name: 'Tecnico Demo', installationRate: 500, departureCost: 100 },
-      units: [
-        {
-          id: 'unit-1',
-          label: 'Unidad 01',
-          makeModel: 'Freightliner Cascadia',
-          year: 2025,
-          serialNumber: 'SN-001',
-          serviceType: 'INSTALLATION',
-          equipment: [
-            {
-              id: 'eq-1',
-              externalKey: 'EQ-001',
-              sheetRowHint: 7,
-              serviceStatusSnapshot: 'STOCK TECNICO',
-              verificationStatus: 'MATCHED',
-            },
-          ],
-          evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, (_, evidenceIndex) => ({
-            id: `ev-${evidenceIndex + 1}`,
-            status: UploadStatus.COMPLETED,
-          })),
-          checklist: { items: checklistItems },
-        },
-      ],
-      signature: { signerName: 'Cliente' },
-    });
+    mockPrisma.order.findUnique.mockResolvedValue(completeOrderFixture());
 
     const result = await reportService.completeOrder('admin-1', 'ADMIN', 'order-1');
 
@@ -418,6 +471,31 @@ describe('ExecutionService', () => {
         }),
       ]),
     );
+  });
+
+  it('keeps an order completed when PDF queueing fails after the transaction', async () => {
+    let outboxExistsBeforeGeneration = false;
+    const requestGeneration = vi.fn(async () => {
+      outboxExistsBeforeGeneration = enqueuedOperations.some(
+        (operation) =>
+          operation.idempotencyKey === 'REPORT:order-1:1' &&
+          operation.operationType === 'SHEET_TECHNICAL_REPORT',
+      );
+      throw new Error('Report queue unavailable');
+    });
+    const reportService = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort, {
+      reportGeneration: { requestGeneration },
+    });
+    mockPrisma.order.findUnique.mockResolvedValue(completeOrderFixture());
+
+    await expect(reportService.completeOrder('admin-1', 'ADMIN', 'order-1')).resolves.toMatchObject(
+      {
+        status: OrderStatus.COMPLETED,
+      },
+    );
+    expect(requestGeneration).toHaveBeenCalledWith('order-1', 'admin-1');
+    expect(outboxExistsBeforeGeneration).toBe(true);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('marks an appointment as failed with a reason and releases equipment', async () => {
