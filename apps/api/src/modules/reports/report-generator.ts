@@ -46,6 +46,7 @@ export interface ReportOrder {
     serialNumber: string;
     serviceType?: string | null;
     status: string;
+    evidence: Array<{ id: string; objectKey: string; createdAt: Date }>;
     equipment: Array<{
       id: string;
       brandSnapshot: string | null;
@@ -58,7 +59,6 @@ export interface ReportOrder {
         category: string;
         condition: string | null;
         notes: string | null;
-        evidence: Array<{ id: string; objectKey: string; createdAt: Date }>;
       }>;
     } | null;
     discrepancies: Array<{
@@ -423,11 +423,7 @@ export class ServiceOrderReportGenerator implements ReportGeneratorPort {
     folio: string,
     unit: ReportOrder['units'][number],
   ): Promise<void> {
-    const orderedItems = [...(unit.checklist?.items ?? [])].sort(
-      (left, right) =>
-        CATEGORY_ORDER.indexOf(left.category) - CATEGORY_ORDER.indexOf(right.category),
-    );
-    const evidence = orderedItems.flatMap((item) => item.evidence);
+    const evidence = unit.evidence;
     for (const [index, photo] of evidence.entries()) {
       document.addPage();
       this.drawSectionHeader(

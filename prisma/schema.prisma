@@ -245,6 +245,7 @@ model OrderUnit {
   order         Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   equipment     OrderEquipment[]
   checklist     Checklist?
+  evidence      Evidence[]
   discrepancies Discrepancy[]
 
   @@unique([orderId, serialNumber])
@@ -306,7 +307,6 @@ model ChecklistItem {
   createdAt   DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime            @updatedAt @db.Timestamptz(3)
   checklist   Checklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  evidence    Evidence[]
 
   @@unique([checklistId, category])
   @@index([checklistId])
@@ -314,7 +314,7 @@ model ChecklistItem {
 
 model Evidence {
   id              String        @id @default(uuid()) @db.Uuid
-  checklistItemId String        @db.Uuid
+  orderUnitId     String        @db.Uuid
   objectKey       String        @unique
   idempotencyKey  String?       @unique @db.Uuid
   mimeType        String
@@ -327,10 +327,10 @@ model Evidence {
   createdAt       DateTime      @default(now()) @db.Timestamptz(3)
   completedAt     DateTime?     @db.Timestamptz(3)
   deletedAt       DateTime?     @db.Timestamptz(3)
-  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  orderUnit       OrderUnit     @relation(fields: [orderUnitId], references: [id], onDelete: Cascade)
   uploadedBy      User          @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
 
-  @@index([checklistItemId, status])
+  @@index([orderUnitId, status])
   @@index([uploadedById])
   @@index([status, createdAt])
 }

@@ -4,10 +4,8 @@ import { GoogleDriveClient } from './google-drive.client.js';
 
 const files = {
   generateIds: vi.fn(),
-  list: vi.fn(),
   create: vi.fn(),
   get: vi.fn(),
-  delete: vi.fn(),
 };
 
 const config = {
@@ -40,46 +38,6 @@ describe('GoogleDriveClient', () => {
     files.generateIds.mockResolvedValue({ data: { ids: ['reserved-id'] } });
     await expect(createClient().generateId()).resolves.toBe('reserved-id');
     expect(files.generateIds).toHaveBeenCalledWith({ count: 1, space: 'drive', type: 'files' });
-  });
-
-  it('looks up folders only under the requested parent in the configured shared drive', async () => {
-    files.list.mockResolvedValue({
-      data: {
-        files: [
-          { id: 'folder-id', name: "O'Brien", parents: ['parent-id'], driveId: 'shared-drive-id' },
-        ],
-      },
-    });
-    await expect(createClient().findFolder('parent-id', "O'Brien")).resolves.toEqual({
-      id: 'folder-id',
-      name: "O'Brien",
-      parentId: 'parent-id',
-    });
-    expect(files.list).toHaveBeenCalledWith(
-      expect.objectContaining({
-        corpora: 'drive',
-        driveId: 'shared-drive-id',
-        includeItemsFromAllDrives: true,
-        supportsAllDrives: true,
-        q: "'parent-id' in parents and name = 'O\\'Brien' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-      }),
-    );
-  });
-
-  it('rejects ambiguous visible folder names instead of choosing one ID', async () => {
-    files.list.mockResolvedValueOnce({
-      data: {
-        files: [{ id: 'first', name: 'VIN', parents: ['parent-id'] }],
-        nextPageToken: 'next',
-      },
-    });
-    files.list.mockResolvedValueOnce({
-      data: { files: [{ id: 'second', name: 'VIN', parents: ['parent-id'] }] },
-    });
-    await expect(createClient().findFolder('parent-id', 'VIN')).rejects.toThrow(
-      'Ambiguous Google Drive folder',
-    );
-    expect(files.list).toHaveBeenNthCalledWith(2, expect.objectContaining({ pageToken: 'next' }));
   });
 
   it('creates a folder with the reserved ID and exact parent', async () => {
@@ -176,7 +134,7 @@ describe('GoogleDriveClient', () => {
     );
   });
 
-  it('reads, downloads, and deletes only files in the configured shared drive', async () => {
+  it('reads and downloads only files in the configured shared drive', async () => {
     files.get.mockImplementation(async (_params: unknown, options?: { responseType?: string }) => {
       if (options?.responseType === 'arraybuffer') {
         return { data: Uint8Array.from([4, 5]).buffer };
@@ -192,7 +150,6 @@ describe('GoogleDriveClient', () => {
         },
       };
     });
-    files.delete.mockResolvedValue({});
     const client = createClient();
     await expect(client.headFile('file-id')).resolves.toEqual({
       id: 'file-id',
@@ -202,8 +159,6 @@ describe('GoogleDriveClient', () => {
       sizeBytes: 2,
     });
     await expect(client.getFile('file-id')).resolves.toEqual(Uint8Array.from([4, 5]));
-    await client.deleteFile('file-id');
-    expect(files.delete).toHaveBeenCalledWith({ fileId: 'file-id', supportsAllDrives: true });
     expect(files.get).toHaveBeenCalledWith(
       { fileId: 'file-id', alt: 'media', supportsAllDrives: true },
       { responseType: 'arraybuffer' },
@@ -217,9 +172,6 @@ describe('GoogleDriveClient', () => {
     files.get.mockResolvedValueOnce({
       data: { id: 'foreign', driveId: 'another-drive', mimeType: 'image/png' },
     });
-    await expect(client.deleteFile('foreign')).rejects.toThrow(
-      'outside the configured shared drive',
-    );
-    expect(files.delete).not.toHaveBeenCalled();
+    await expect(client.getFile('foreign')).rejects.toThrow('outside the configured shared drive');
   });
 });

@@ -58,6 +58,7 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(
     cors({
       credentials: true,
+      exposedHeaders: ['X-Signer-Name'],
       origin(origin, callback) {
         callback(null, origin === undefined || allowedOrigins.includes(origin));
       },

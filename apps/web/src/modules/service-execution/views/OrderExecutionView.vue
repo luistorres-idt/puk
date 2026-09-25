@@ -19,7 +19,6 @@ import {
   MIN_REQUIRED_EVIDENCE_PHOTOS,
   type ChecklistCategory,
   type ChecklistCondition,
-  type OrderEvidenceDetail,
   type OrderExecutionDetail,
   type SaveChecklistItem,
 } from '@puk/contracts';
@@ -167,18 +166,7 @@ function getUnitItem(unitId: string, category: ChecklistCategory): LocalChecklis
 
 function getUnitAllEvidences(unitId: string) {
   const unit = order.value?.units?.find((u) => u.id === unitId);
-  if (!unit?.checklist?.items) return [];
-  const evidences: OrderEvidenceDetail[] = [];
-  for (const item of unit.checklist.items) {
-    if (item.evidence) {
-      for (const ev of item.evidence) {
-        if (ev.status === 'COMPLETED') {
-          evidences.push(ev);
-        }
-      }
-    }
-  }
-  return evidences;
+  return unit?.evidence?.filter((evidence) => evidence.status === 'COMPLETED') ?? [];
 }
 
 async function loadData() {
@@ -584,7 +572,6 @@ onMounted(() => {
                       <EvidenceCapture
                         :order-id="orderId"
                         :unit-id="unit.id"
-                        category="BODYWORK"
                         :evidences="getUnitAllEvidences(unit.id)"
                         :min-required="MIN_REQUIRED_EVIDENCE_PHOTOS"
                         :disabled="

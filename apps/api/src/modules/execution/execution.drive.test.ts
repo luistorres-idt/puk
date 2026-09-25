@@ -155,7 +155,6 @@ describe('ExecutionService Drive mode', () => {
       'ADMIN',
       'order-1',
       'unit-1',
-      'DASHBOARD',
       jpeg,
       'image/jpeg',
       { width: 2, height: 2 },
@@ -167,6 +166,14 @@ describe('ExecutionService Drive mode', () => {
       width: 2,
       height: 2,
     });
+    expect(prisma.evidence.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ orderUnitId: 'unit-1' }),
+    });
+    expect(prisma.evidence.create.mock.calls[0]?.[0].data).not.toHaveProperty('checklistItemId');
+    expect(prisma.checklistItem.findUnique).not.toHaveBeenCalled();
+    expect(drive.uploadFile).toHaveBeenCalledWith(
+      expect.objectContaining({ name: `evidencia-${result.id}.jpg` }),
+    );
     expect(folders.ensureEvidenceFolder).toHaveBeenCalledWith({
       clientSheetId: 'client-1',
       clientNameSnapshot: 'Client One',
@@ -179,30 +186,14 @@ describe('ExecutionService Drive mode', () => {
   it('rejects a unit from another order before any Drive write', async () => {
     prisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'other-order' });
     await expect(
-      service.uploadEvidenceFile(
-        'admin-1',
-        'ADMIN',
-        'order-1',
-        'unit-1',
-        'DASHBOARD',
-        jpeg,
-        'image/jpeg',
-      ),
+      service.uploadEvidenceFile('admin-1', 'ADMIN', 'order-1', 'unit-1', jpeg, 'image/jpeg'),
     ).rejects.toMatchObject({ code: 'UNIT_NOT_FOUND' });
     expect(drive.uploadFile).not.toHaveBeenCalled();
   });
 
   it('rejects MIME spoofing, invalid image bytes, dimensions, and oversize input', async () => {
     await expect(
-      service.uploadEvidenceFile(
-        'admin-1',
-        'ADMIN',
-        'order-1',
-        'unit-1',
-        'DASHBOARD',
-        png,
-        'image/jpeg',
-      ),
+      service.uploadEvidenceFile('admin-1', 'ADMIN', 'order-1', 'unit-1', png, 'image/jpeg'),
     ).rejects.toMatchObject({ code: 'INVALID_IMAGE' });
     await expect(
       service.uploadEvidenceFile(
@@ -210,22 +201,14 @@ describe('ExecutionService Drive mode', () => {
         'ADMIN',
         'order-1',
         'unit-1',
-        'DASHBOARD',
         Buffer.from('bad'),
         'image/png',
       ),
     ).rejects.toMatchObject({ code: 'INVALID_IMAGE' });
     await expect(
-      service.uploadEvidenceFile(
-        'admin-1',
-        'ADMIN',
-        'order-1',
-        'unit-1',
-        'DASHBOARD',
-        jpeg,
-        'image/jpeg',
-        { width: 9 },
-      ),
+      service.uploadEvidenceFile('admin-1', 'ADMIN', 'order-1', 'unit-1', jpeg, 'image/jpeg', {
+        width: 9,
+      }),
     ).rejects.toMatchObject({ code: 'IMAGE_DIMENSIONS_MISMATCH' });
     const smallLimit = new ExecutionService(
       prisma as unknown as PrismaClient,
@@ -239,15 +222,7 @@ describe('ExecutionService Drive mode', () => {
       },
     );
     await expect(
-      smallLimit.uploadEvidenceFile(
-        'admin-1',
-        'ADMIN',
-        'order-1',
-        'unit-1',
-        'DASHBOARD',
-        jpeg,
-        'image/jpeg',
-      ),
+      smallLimit.uploadEvidenceFile('admin-1', 'ADMIN', 'order-1', 'unit-1', jpeg, 'image/jpeg'),
     ).rejects.toMatchObject({ code: 'FILE_TOO_LARGE' });
     expect(drive.uploadFile).not.toHaveBeenCalled();
   });
@@ -263,7 +238,6 @@ describe('ExecutionService Drive mode', () => {
         'ADMIN',
         'order-1',
         'unit-1',
-        'DASHBOARD',
         oversizedHeader,
         'image/png',
       ),
@@ -280,7 +254,6 @@ describe('ExecutionService Drive mode', () => {
         'ADMIN',
         'order-1',
         'unit-1',
-        'DASHBOARD',
         jpeg,
         'image/jpeg',
         undefined,
@@ -295,7 +268,6 @@ describe('ExecutionService Drive mode', () => {
         'ADMIN',
         'order-1',
         'unit-1',
-        'DASHBOARD',
         jpeg,
         'image/jpeg',
         undefined,
@@ -312,7 +284,6 @@ describe('ExecutionService Drive mode', () => {
       'ADMIN',
       'order-1',
       'unit-1',
-      'DASHBOARD',
       jpeg,
       'image/jpeg',
       undefined,
@@ -329,7 +300,6 @@ describe('ExecutionService Drive mode', () => {
       'ADMIN',
       'order-1',
       'unit-1',
-      'DASHBOARD',
       jpeg,
       'image/jpeg',
       undefined,
@@ -345,7 +315,6 @@ describe('ExecutionService Drive mode', () => {
         'ADMIN',
         'order-1',
         'unit-1',
-        'DASHBOARD',
         png,
         'image/png',
         undefined,
@@ -363,7 +332,6 @@ describe('ExecutionService Drive mode', () => {
       'ADMIN',
       'order-1',
       'unit-1',
-      'DASHBOARD',
       jpeg,
       'image/jpeg',
       undefined,
@@ -379,7 +347,6 @@ describe('ExecutionService Drive mode', () => {
         'ADMIN',
         'order-1',
         'unit-1',
-        'DASHBOARD',
         jpeg,
         'image/jpeg',
         undefined,
@@ -395,7 +362,6 @@ describe('ExecutionService Drive mode', () => {
       'ADMIN',
       'order-1',
       'unit-1',
-      'DASHBOARD',
       jpeg,
       'image/jpeg',
       undefined,
@@ -414,7 +380,6 @@ describe('ExecutionService Drive mode', () => {
         'ADMIN',
         'order-1',
         'unit-1',
-        'DASHBOARD',
         jpeg,
         'image/jpeg',
         undefined,
@@ -514,11 +479,12 @@ describe('ExecutionService Drive mode', () => {
       deletedAt: null,
       objectKey: 'drive-evidence',
       mimeType: 'image/jpeg',
-      checklistItem: { checklist: { orderUnit: { order: { id: 'order-1' } } } },
+      orderUnit: { order: { id: 'order-1' } },
     });
     prisma.signature.findUnique.mockResolvedValue({
       objectKey: 'drive-signature',
       mimeType: 'image/png',
+      signerName: 'Client One',
     });
     drive.getFile.mockImplementation(async (id: string) => (id === 'drive-evidence' ? jpeg : png));
     await expect(service.getEvidenceFile('admin-1', 'ADMIN', 'evidence-1')).resolves.toEqual({
@@ -528,6 +494,7 @@ describe('ExecutionService Drive mode', () => {
     await expect(service.getSignatureFile('admin-1', 'ADMIN', 'order-1')).resolves.toEqual({
       body: png,
       mimeType: 'image/png',
+      signerName: 'Client One',
     });
     prisma.order.findUnique.mockResolvedValue(null);
     await expect(service.getEvidenceFile('admin-1', 'ADMIN', 'evidence-1')).rejects.toMatchObject({
@@ -539,7 +506,7 @@ describe('ExecutionService Drive mode', () => {
   it('disables legacy presigned URLs and confirmation while Drive mode is active', async () => {
     expect(service.getStorageMode()).toBe('drive');
     await expect(
-      service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', 'DASHBOARD', {
+      service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', {
         mimeType: 'image/jpeg',
         sizeBytes: 1,
       }),

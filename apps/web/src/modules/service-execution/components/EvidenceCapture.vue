@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue';
 import { NButton, NImage, NPopconfirm, NSpin, useMessage } from 'naive-ui';
-import { MIN_REQUIRED_EVIDENCE_PHOTOS, type ChecklistCategory } from '@puk/contracts';
+import { MIN_REQUIRED_EVIDENCE_PHOTOS } from '@puk/contracts';
 import {
   completeEvidence,
   deleteEvidence,
@@ -17,13 +17,11 @@ const props = withDefaults(
   defineProps<{
     orderId: string;
     unitId: string;
-    category?: ChecklistCategory;
     evidences?: Array<{ id: string; status: string }>;
     disabled?: boolean;
     minRequired?: number;
   }>(),
   {
-    category: 'BODYWORK',
     evidences: () => [],
     disabled: false,
     minRequired: MIN_REQUIRED_EVIDENCE_PHOTOS,
@@ -45,7 +43,7 @@ const message = useMessage();
 const pendingUploadKeys = new Map<string, string>();
 
 function evidenceRetryKey(file: File): string {
-  return `puk:evidence-upload:${props.orderId}:${props.unitId}:${props.category}:${file.name}:${file.size}:${file.lastModified}`;
+  return `puk:evidence-upload:${props.orderId}:${props.unitId}:${file.name}:${file.size}:${file.lastModified}`;
 }
 
 function idempotencyKeyFor(file: File): string {
@@ -206,7 +204,6 @@ async function handleFilesSelected(files: File[]) {
         await uploadEvidenceFile(
           props.orderId,
           props.unitId,
-          props.category,
           blob,
           width,
           height,
@@ -214,7 +211,7 @@ async function handleFilesSelected(files: File[]) {
         );
         clearIdempotencyKey(file);
       } else {
-        const presign = await presignEvidence(props.orderId, props.unitId, props.category, {
+        const presign = await presignEvidence(props.orderId, props.unitId, {
           mimeType: 'image/jpeg',
           sizeBytes: blob.size,
         });

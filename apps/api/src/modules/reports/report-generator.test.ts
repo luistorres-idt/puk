@@ -42,19 +42,19 @@ describe('ServiceOrderReportGenerator', () => {
               },
             ],
             discrepancies: [],
+            evidence: [
+              {
+                id: 'evidence-1',
+                objectKey: 'evidence-1.jpg',
+                createdAt: new Date('2026-09-02T17:00:00.000Z'),
+              },
+            ],
             checklist: {
               items: [
                 {
                   category: 'DASHBOARD',
                   condition: 'GOOD',
                   notes: null,
-                  evidence: [
-                    {
-                      id: 'evidence-1',
-                      objectKey: 'evidence-1.jpg',
-                      createdAt: new Date('2026-09-02T17:00:00.000Z'),
-                    },
-                  ],
                 },
               ],
             },
@@ -100,13 +100,13 @@ describe('ServiceOrderReportGenerator', () => {
               status: 'COMPLETED',
               equipment: [],
               discrepancies: [],
+              evidence: [{ id: 'missing', objectKey: 'missing.jpg', createdAt: new Date() }],
               checklist: {
                 items: [
                   {
                     category: 'DASHBOARD',
                     condition: 'GOOD',
                     notes: null,
-                    evidence: [{ id: 'missing', objectKey: 'missing.jpg', createdAt: new Date() }],
                   },
                 ],
               },

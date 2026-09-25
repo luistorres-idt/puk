@@ -1,7 +1,6 @@
 import { Router, raw, type RequestHandler } from 'express';
 import * as v from 'valibot';
 import {
-  ChecklistCategorySchema,
   CompleteEvidenceSchema,
   CompleteSignatureSchema,
   EquipmentParamsSchema,
@@ -125,20 +124,14 @@ export function createExecutionRouter(options: {
 
   // --- Evidence presign and complete ---
   router.post(
-    '/orders/:id/units/:unitId/checklist/:category/evidence/file',
+    '/orders/:id/units/:unitId/evidence/file',
     binaryParser(options.executionService.getEvidenceUploadLimit()),
     async (request, response) => {
-      const rawCategory =
-        typeof request.params.category === 'string'
-          ? request.params.category
-          : request.params.category?.[0];
-      const category = v.parse(ChecklistCategorySchema, rawCategory?.toUpperCase());
       const result = await options.executionService.uploadEvidenceFile(
         request.auth!.userId,
         request.auth!.role as 'ADMIN' | 'TECHNICIAN',
         String(request.params.id),
         String(request.params.unitId),
-        category,
         binaryBody(request.body),
         request.header('Content-Type')?.split(';')[0]?.trim().toLowerCase() ?? '',
         {
@@ -152,20 +145,14 @@ export function createExecutionRouter(options: {
   );
 
   router.post(
-    '/orders/:id/units/:unitId/checklist/:category/evidence/presign',
+    '/orders/:id/units/:unitId/evidence/presign',
     validate({ body: PresignEvidenceSchema }),
     async (request, response) => {
-      const rawCategory =
-        typeof request.params.category === 'string'
-          ? request.params.category
-          : request.params.category?.[0];
-      const category = v.parse(ChecklistCategorySchema, rawCategory?.toUpperCase());
       const result = await options.executionService.presignEvidenceUpload(
         request.auth!.userId,
         request.auth!.role as 'ADMIN' | 'TECHNICIAN',
         String(request.params.id),
         String(request.params.unitId),
-        category,
         request.body,
       );
       sendSuccess(response, result, 201);
@@ -259,6 +246,7 @@ export function createExecutionRouter(options: {
       );
       response.setHeader('Content-Type', file.mimeType);
       response.setHeader('Cache-Control', 'private, no-store');
+      response.setHeader('X-Signer-Name', encodeURIComponent(file.signerName));
       response.send(Buffer.from(file.body));
     },
   );

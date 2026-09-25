@@ -253,16 +253,13 @@ export class ReportsService {
           include: {
             equipment: { orderBy: { createdAt: 'asc' } },
             discrepancies: { orderBy: { reportedAt: 'asc' } },
+            evidence: {
+              where: { status: 'COMPLETED', deletedAt: null },
+              orderBy: { createdAt: 'asc' },
+            },
             checklist: {
               include: {
-                items: {
-                  include: {
-                    evidence: {
-                      where: { status: 'COMPLETED', deletedAt: null },
-                      orderBy: { createdAt: 'asc' },
-                    },
-                  },
-                },
+                items: true,
               },
             },
           },

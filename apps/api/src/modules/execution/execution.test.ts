@@ -267,32 +267,26 @@ describe('ExecutionService', () => {
       status: UploadStatus.PENDING,
     });
 
-    const presigned = await service.presignEvidenceUpload(
-      'admin-1',
-      'ADMIN',
-      'order-1',
-      'unit-1',
-      'DASHBOARD',
-      {
-        mimeType: 'image/jpeg',
-        sizeBytes: 50000,
-      },
-    );
+    const presigned = await service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', {
+      mimeType: 'image/jpeg',
+      sizeBytes: 50000,
+    });
     expect(presigned.uploadUrl).toBeDefined();
     expect(presigned.evidenceId).toBe('ev-1');
+    expect(mockPrisma.evidence.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ orderUnitId: 'unit-1' }),
+    });
+    expect(mockPrisma.evidence.create.mock.calls[0]?.[0].data).not.toHaveProperty(
+      'checklistItemId',
+    );
+    expect(mockPrisma.checklistItem.findUnique).not.toHaveBeenCalled();
 
     // Complete evidence
     mockPrisma.evidence.findUnique.mockResolvedValue({
       id: 'ev-1',
       objectKey: presigned.objectKey,
       mimeType: 'image/jpeg',
-      checklistItem: {
-        checklist: {
-          orderUnit: {
-            order: { id: 'order-1', technicianId: 'tech-1' },
-          },
-        },
-      },
+      orderUnit: { order: { id: 'order-1', technicianId: 'tech-1' } },
     });
 
     mockPrisma.evidence.update.mockResolvedValue({
@@ -315,7 +309,7 @@ describe('ExecutionService', () => {
     });
     mockPrisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'order-2' });
     await expect(
-      service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', 'DASHBOARD', {
+      service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', {
         mimeType: 'image/jpeg',
         sizeBytes: 1024,
       }),
@@ -354,15 +348,9 @@ describe('ExecutionService', () => {
       },
     });
     const checklistItems = ['DASHBOARD', 'WINDOWS', 'ACCESSORIES', 'TRIMS', 'BODYWORK'].map(
-      (category, index) => ({
+      (category) => ({
         category,
         condition: 'GOOD',
-        evidence:
-          index === 0
-            ? Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, (_, evidenceIndex) => ({
-                id: `ev-${evidenceIndex + 1}`,
-              }))
-            : [],
       }),
     );
     mockPrisma.order.findUnique.mockResolvedValue({
@@ -391,6 +379,10 @@ describe('ExecutionService', () => {
               verificationStatus: 'MATCHED',
             },
           ],
+          evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, (_, evidenceIndex) => ({
+            id: `ev-${evidenceIndex + 1}`,
+            status: UploadStatus.COMPLETED,
+          })),
           checklist: { items: checklistItems },
         },
       ],
@@ -491,7 +483,6 @@ describe('ExecutionService', () => {
     const checklistItems = ALL_CHECKLIST_CATEGORIES.map((category) => ({
       category,
       condition: 'GOOD',
-      evidence: Array.from({ length: 2 }, (_, index) => ({ id: `ev-${index + 1}` })),
     }));
 
     mockPrisma.order.findUnique.mockResolvedValue({
@@ -506,6 +497,10 @@ describe('ExecutionService', () => {
           label: 'Unidad 01',
           serialNumber: 'SN-001',
           equipment: [{ externalKey: 'EQ-001', verificationStatus: 'MATCHED' }],
+          evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, (_, index) => ({
+            id: `ev-${index + 1}`,
+            status: UploadStatus.COMPLETED,
+          })),
           checklist: { items: checklistItems },
         },
       ],

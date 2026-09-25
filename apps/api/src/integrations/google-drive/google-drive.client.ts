@@ -47,10 +47,6 @@ function requiredId(id: string | null | undefined, operation: string): string {
   return id;
 }
 
-function escapeQueryLiteral(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
-}
-
 /**
  * Low-level Drive operations. Logical identity and concurrency control belong to the caller's
  * database mapping, not to visible folder names (which Drive does not make unique).
@@ -93,33 +89,6 @@ export class GoogleDriveClient {
       throw new Error(`Google Drive item ${id} is not a folder.`);
     }
     return { id: file.id, name: file.name, parentId: file.parentId };
-  }
-
-  /** Discovery only; callers must persist the returned ID and serialize first creation. */
-  public async findFolder(parentId: string, name: string): Promise<DriveFolder | null> {
-    const q = `'${escapeQueryLiteral(parentId)}' in parents and name = '${escapeQueryLiteral(name)}' and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false`;
-    let pageToken: string | undefined;
-    let found: DriveFolder | null = null;
-    do {
-      const response = await this.drive.files.list({
-        corpora: 'drive',
-        driveId: this.sharedDriveId,
-        includeItemsFromAllDrives: true,
-        supportsAllDrives: true,
-        q,
-        fields: 'nextPageToken,files(id,name,parents,driveId,mimeType)',
-        pageSize: 1000,
-        ...(pageToken ? { pageToken } : {}),
-      });
-      for (const file of response.data.files ?? []) {
-        if (!file.id || file.name !== name || !file.parents?.includes(parentId)) continue;
-        if (file.driveId && file.driveId !== this.sharedDriveId) continue;
-        if (found) throw new Error(`Ambiguous Google Drive folder under parent ${parentId}.`);
-        found = { id: file.id, name, parentId };
-      }
-      pageToken = response.data.nextPageToken ?? undefined;
-    } while (pageToken);
-    return found;
   }
 
   public async createFolder(input: {
@@ -232,15 +201,6 @@ export class GoogleDriveClient {
     } catch (error) {
       if (isHttpError(error, 404)) return null;
       throw error;
-    }
-  }
-
-  public async deleteFile(id: string): Promise<void> {
-    if (!(await this.headFile(id))) return;
-    try {
-      await this.drive.files.delete({ fileId: id, supportsAllDrives: true });
-    } catch (error) {
-      if (!isHttpError(error, 404)) throw error;
     }
   }
 }

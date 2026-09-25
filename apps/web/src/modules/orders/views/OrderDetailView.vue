@@ -579,18 +579,7 @@ onUnmounted(() => {
 });
 
 function getUnitAllEvidences(unit: UnitItem): Array<{ id: string; objectKey?: string }> {
-  if (!unit?.checklist?.items) return [];
-  const evidences: Array<{ id: string; objectKey?: string }> = [];
-  for (const item of unit.checklist.items) {
-    if (item.evidence) {
-      for (const ev of item.evidence) {
-        if (ev.status === 'COMPLETED' || !ev.status) {
-          evidences.push(ev);
-        }
-      }
-    }
-  }
-  return evidences;
+  return unit.evidence?.filter((evidence) => evidence.status === 'COMPLETED' || !evidence.status) ?? [];
 }
 
 async function loadEvidenceUrl(evidenceId: string) {

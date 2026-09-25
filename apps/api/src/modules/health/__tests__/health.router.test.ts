@@ -24,6 +24,15 @@ describe('GET /health/live', () => {
     expect(response.body.meta.requestId).toBe('test-request-42');
   });
 
+  it('exposes the signature signer-name response header to browser clients', async () => {
+    const response = await request(createApp())
+      .get('/health/live')
+      .set('Origin', 'http://localhost:5173')
+      .expect(200);
+
+    expect(response.headers['access-control-expose-headers']).toContain('X-Signer-Name');
+  });
+
   it('reports dependency readiness', async () => {
     await request(createApp({ dependencyCheck: async () => true }))
       .get('/health/ready')

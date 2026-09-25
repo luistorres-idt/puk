@@ -1,5 +1,4 @@
 import type {
-  ChecklistCategory,
   CompleteEvidence,
   CompleteSignature,
   FailAppointment,
@@ -73,12 +72,11 @@ export async function saveChecklist(orderId: string, unitId: string, items: Save
 export async function presignEvidence(
   orderId: string,
   unitId: string,
-  category: ChecklistCategory,
   data: PresignEvidence,
 ) {
   const response = await api.post<
     ApiResponse<{ evidenceId: string; uploadUrl: string; objectKey: string }>
-  >(`/orders/${orderId}/units/${unitId}/checklist/${category}/evidence/presign`, data);
+  >(`/orders/${orderId}/units/${unitId}/evidence/presign`, data);
   return response.data.data;
 }
 
@@ -106,14 +104,13 @@ export async function completeEvidence(evidenceId: string, data: CompleteEvidenc
 export async function uploadEvidenceFile(
   orderId: string,
   unitId: string,
-  category: ChecklistCategory,
   blob: Blob,
   width: number,
   height: number,
   idempotencyKey: string,
 ) {
   const response = await api.post<ApiResponse<Record<string, unknown>>>(
-    `/orders/${orderId}/units/${unitId}/checklist/${category}/evidence/file`,
+    `/orders/${orderId}/units/${unitId}/evidence/file`,
     blob,
     {
       headers: {
@@ -210,10 +207,18 @@ export async function getSignatureUrl(orderId: string) {
     const response = await api.get<Blob>(`/orders/${orderId}/signature/file`, {
       responseType: 'blob',
     });
-    const signerName = response.headers['x-signer-name'];
+    const encodedSignerName = response.headers['x-signer-name'];
+    let signerName = '';
+    if (typeof encodedSignerName === 'string') {
+      try {
+        signerName = decodeURIComponent(encodedSignerName);
+      } catch {
+        signerName = '';
+      }
+    }
     return {
       downloadUrl: URL.createObjectURL(response.data),
-      signerName: typeof signerName === 'string' ? signerName : '',
+      signerName,
     };
   }
   const response = await api.get<ApiResponse<{ downloadUrl: string; signerName: string }>>(

@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type {
-  ChecklistCategory,
   CompleteEvidence,
   CompleteSignature,
   FailAppointment,
@@ -376,7 +375,6 @@ export class ExecutionService {
     role: 'ADMIN' | 'TECHNICIAN',
     orderId: string,
     unitId: string,
-    category: ChecklistCategory,
     body: Uint8Array,
     mimeType: string,
     dimensions?: { width?: number | undefined; height?: number | undefined },
@@ -406,21 +404,6 @@ export class ExecutionService {
       );
     }
 
-    let checklist = await this.prisma.checklist.findUnique({ where: { orderUnitId: unitId } });
-    if (!checklist) {
-      checklist = await this.prisma.checklist.create({
-        data: { orderUnitId: unitId, completedById: userId, completedAt: new Date() },
-      });
-    }
-    let checklistItem = await this.prisma.checklistItem.findUnique({
-      where: { checklistId_category: { checklistId: checklist.id, category } },
-    });
-    if (!checklistItem) {
-      checklistItem = await this.prisma.checklistItem.create({
-        data: { checklistId: checklist.id, category, condition: 'NOT_APPLICABLE' },
-      });
-    }
-
     const parentId = await drive.folders.ensureEvidenceFolder({
       clientSheetId: order.clientSheetId,
       clientNameSnapshot: order.clientNameSnapshot,
@@ -438,7 +421,7 @@ export class ExecutionService {
         evidence = await this.prisma.evidence.create({
           data: {
             id,
-            checklistItemId: checklistItem.id,
+            orderUnitId: unitId,
             idempotencyKey,
             objectKey,
             mimeType,
@@ -457,7 +440,7 @@ export class ExecutionService {
       }
     }
     if (
-      evidence.checklistItemId !== checklistItem.id ||
+      evidence.orderUnitId !== unitId ||
       evidence.uploadedById !== userId ||
       evidence.mimeType !== mimeType ||
       evidence.sizeBytes !== body.byteLength ||
@@ -477,7 +460,7 @@ export class ExecutionService {
     const uploaded = await drive.client.uploadFile({
       id: evidence.objectKey,
       parentId,
-      name: `${category.toLowerCase()}-${evidence.id}.${extension}`,
+      name: `evidencia-${evidence.id}.${extension}`,
       mimeType,
       body,
     });
@@ -507,16 +490,12 @@ export class ExecutionService {
     const drive = this.requireDrive();
     const evidence = await this.prisma.evidence.findUnique({
       where: { id: evidenceId },
-      include: {
-        checklistItem: {
-          include: { checklist: { include: { orderUnit: { include: { order: true } } } } },
-        },
-      },
+      include: { orderUnit: { include: { order: true } } },
     });
     if (!evidence || evidence.status !== UploadStatus.COMPLETED || evidence.deletedAt) {
       throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'Evidencia no disponible');
     }
-    await this.assertOrderAccess(userId, role, evidence.checklistItem.checklist.orderUnit.order.id);
+    await this.assertOrderAccess(userId, role, evidence.orderUnit.order.id);
     const body = await drive.client.getFile(evidence.objectKey);
     if (!body)
       throw new AppError(404, 'EVIDENCE_FILE_NOT_FOUND', 'Archivo de evidencia no disponible');
@@ -655,7 +634,7 @@ export class ExecutionService {
     userId: string,
     role: 'ADMIN' | 'TECHNICIAN',
     orderId: string,
-  ): Promise<{ body: Uint8Array; mimeType: string }> {
+  ): Promise<{ body: Uint8Array; mimeType: string; signerName: string }> {
     const drive = this.requireDrive();
     await this.assertOrderAccess(userId, role, orderId);
     const signature = await this.prisma.signature.findUnique({ where: { orderId } });
@@ -663,7 +642,7 @@ export class ExecutionService {
     const body = await drive.client.getFile(signature.objectKey);
     if (!body)
       throw new AppError(404, 'SIGNATURE_FILE_NOT_FOUND', 'Archivo de firma no disponible');
-    return { body, mimeType: signature.mimeType };
+    return { body, mimeType: signature.mimeType, signerName: signature.signerName };
   }
 
   public async presignEvidenceUpload(
@@ -671,7 +650,6 @@ export class ExecutionService {
     role: 'ADMIN' | 'TECHNICIAN',
     orderId: string,
     unitId: string,
-    category: ChecklistCategory,
     input: PresignEvidence,
   ) {
     this.requireLegacyStorage();
@@ -691,40 +669,9 @@ export class ExecutionService {
       );
     }
 
-    // Ensure checklist & item exist
-    let checklist = await this.prisma.checklist.findUnique({ where: { orderUnitId: unitId } });
-    if (!checklist) {
-      checklist = await this.prisma.checklist.create({
-        data: {
-          orderUnitId: unitId,
-          completedById: userId,
-          completedAt: new Date(),
-        },
-      });
-    }
-
-    let checklistItem = await this.prisma.checklistItem.findUnique({
-      where: {
-        checklistId_category: {
-          checklistId: checklist.id,
-          category,
-        },
-      },
-    });
-
-    if (!checklistItem) {
-      checklistItem = await this.prisma.checklistItem.create({
-        data: {
-          checklistId: checklist.id,
-          category,
-          condition: 'NOT_APPLICABLE',
-        },
-      });
-    }
-
     const extension =
       input.mimeType === 'image/png' ? 'png' : input.mimeType === 'image/webp' ? 'webp' : 'jpg';
-    const objectKey = `evidence/${orderId}/${unitId}/${category.toLowerCase()}/${randomUUID()}.${extension}`;
+    const objectKey = `evidence/${orderId}/${unitId}/${randomUUID()}.${extension}`;
 
     const uploadUrl = await this.storagePort.createUploadUrl(
       objectKey,
@@ -734,7 +681,7 @@ export class ExecutionService {
 
     const evidence = await this.prisma.evidence.create({
       data: {
-        checklistItemId: checklistItem.id,
+        orderUnitId: unitId,
         objectKey,
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
@@ -759,22 +706,14 @@ export class ExecutionService {
     this.requireLegacyStorage();
     const evidence = await this.prisma.evidence.findUnique({
       where: { id: evidenceId },
-      include: {
-        checklistItem: {
-          include: {
-            checklist: {
-              include: { orderUnit: { include: { order: true } } },
-            },
-          },
-        },
-      },
+      include: { orderUnit: { include: { order: true } } },
     });
 
     if (!evidence) {
       throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'Registro de evidencia no encontrado');
     }
 
-    await this.assertOrderAccess(userId, role, evidence.checklistItem.checklist.orderUnit.order.id);
+    await this.assertOrderAccess(userId, role, evidence.orderUnit.order.id);
 
     // Validate object exists in storage
     const head = await this.storagePort.headObject(evidence.objectKey);
@@ -809,22 +748,14 @@ export class ExecutionService {
   public async deleteEvidence(userId: string, role: 'ADMIN' | 'TECHNICIAN', evidenceId: string) {
     const evidence = await this.prisma.evidence.findUnique({
       where: { id: evidenceId },
-      include: {
-        checklistItem: {
-          include: {
-            checklist: {
-              include: { orderUnit: { include: { order: true } } },
-            },
-          },
-        },
-      },
+      include: { orderUnit: { include: { order: true } } },
     });
 
     if (!evidence) {
       throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'Evidencia no encontrada');
     }
 
-    await this.assertOrderAccess(userId, role, evidence.checklistItem.checklist.orderUnit.order.id);
+    await this.assertOrderAccess(userId, role, evidence.orderUnit.order.id);
 
     return this.prisma.evidence.update({
       where: { id: evidenceId },
@@ -839,22 +770,14 @@ export class ExecutionService {
     this.requireLegacyStorage();
     const evidence = await this.prisma.evidence.findUnique({
       where: { id: evidenceId },
-      include: {
-        checklistItem: {
-          include: {
-            checklist: {
-              include: { orderUnit: { include: { order: true } } },
-            },
-          },
-        },
-      },
+      include: { orderUnit: { include: { order: true } } },
     });
 
     if (!evidence || evidence.status !== UploadStatus.COMPLETED) {
       throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'Evidencia no disponible');
     }
 
-    await this.assertOrderAccess(userId, role, evidence.checklistItem.checklist.orderUnit.order.id);
+    await this.assertOrderAccess(userId, role, evidence.orderUnit.order.id);
 
     const downloadUrl = await this.storagePort.createDownloadUrl(
       evidence.objectKey,
@@ -952,15 +875,10 @@ export class ExecutionService {
         units: {
           include: {
             equipment: true,
+            evidence: { where: { status: UploadStatus.COMPLETED, deletedAt: null } },
             checklist: {
               include: {
-                items: {
-                  include: {
-                    evidence: {
-                      where: { status: UploadStatus.COMPLETED },
-                    },
-                  },
-                },
+                items: true,
               },
             },
           },

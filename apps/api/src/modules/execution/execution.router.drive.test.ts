@@ -4,7 +4,13 @@ import type { ExecutionService } from './execution.service.js';
 import { createExecutionRouter } from './execution.router.js';
 
 type Handler = (request: Request, response: Response) => Promise<void> | void;
-type RouteLayer = { route?: { path: string; stack: Array<{ handle: Handler }> } };
+type RouteLayer = {
+  route?: {
+    methods?: Record<string, boolean>;
+    path: string;
+    stack: Array<{ handle: Handler }>;
+  };
+};
 
 function harness() {
   const service = {
@@ -16,14 +22,21 @@ function harness() {
     getEvidenceFile: vi
       .fn()
       .mockResolvedValue({ body: Uint8Array.from([1, 2]), mimeType: 'image/jpeg' }),
+    getSignatureFile: vi.fn().mockResolvedValue({
+      body: Uint8Array.from([3, 4]),
+      mimeType: 'image/png',
+      signerName: 'María O’Neil',
+    }),
   };
   const router = createExecutionRouter({
     executionService: service as unknown as ExecutionService,
     requireAccess: (_request, _response, next) => next(),
   });
-  const route = (path: string) => {
+  const route = (path: string, method?: 'get' | 'put' | 'post' | 'delete') => {
     const layer = (router as unknown as { stack: RouteLayer[] }).stack.find(
-      (entry) => entry.route?.path === path,
+      (entry) =>
+        entry.route?.path === path &&
+        (method === undefined || Boolean(entry.route.methods?.[method])),
     );
     if (!layer?.route) throw new Error(`Missing route ${path}`);
     return layer.route.stack.at(-1)!.handle;
@@ -61,11 +74,11 @@ describe('Drive execution HTTP handlers', () => {
     };
     const request = {
       auth,
-      params: { id: 'order-1', unitId: 'unit-1', category: 'dashboard' },
+      params: { id: 'order-1', unitId: 'unit-1' },
       body: bytes,
       header: (name: string) => headers[name.toLowerCase() as keyof typeof headers],
     } as unknown as Request;
-    await route('/orders/:id/units/:unitId/checklist/:category/evidence/file')(
+    await route('/orders/:id/units/:unitId/evidence/file')(
       request,
       response as unknown as Response,
     );
@@ -74,7 +87,6 @@ describe('Drive execution HTTP handlers', () => {
       'ADMIN',
       'order-1',
       'unit-1',
-      'DASHBOARD',
       bytes,
       'image/jpeg',
       { width: 2, height: 3 },
@@ -91,6 +103,17 @@ describe('Drive execution HTTP handlers', () => {
     expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
     expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
     expect(response.send).toHaveBeenCalledWith(Buffer.from([1, 2]));
+  });
+
+  it('returns the signer name with the private signature preview', async () => {
+    const { route, response, service, auth } = harness();
+    const request = { auth, params: { id: 'order-1' } } as unknown as Request;
+    await route('/orders/:id/signature/file', 'get')(request, response as unknown as Response);
+    expect(service.getSignatureFile).toHaveBeenCalledWith('admin-1', 'ADMIN', 'order-1');
+    expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png');
+    expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+    expect(response.setHeader).toHaveBeenCalledWith('X-Signer-Name', 'Mar%C3%ADa%20O%E2%80%99Neil');
+    expect(response.send).toHaveBeenCalledWith(Buffer.from([3, 4]));
   });
 
   it('passes PNG signature bytes and signer name without a client-supplied file ID', async () => {
@@ -122,12 +145,12 @@ describe('Drive execution HTTP handlers', () => {
     const { route, response, service, auth } = harness();
     const request = {
       auth,
-      params: { id: 'order-1', unitId: 'unit-1', category: 'DASHBOARD' },
+      params: { id: 'order-1', unitId: 'unit-1' },
       body: Buffer.from([1]),
       header: (name: string) => (name === 'X-Image-Width' ? '0' : 'image/jpeg'),
     } as unknown as Request;
     await expect(
-      route('/orders/:id/units/:unitId/checklist/:category/evidence/file')(
+      route('/orders/:id/units/:unitId/evidence/file')(
         request,
         response as unknown as Response,
       ),
