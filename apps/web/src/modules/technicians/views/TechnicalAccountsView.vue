@@ -47,19 +47,24 @@ onMounted(() => {
 
       <shared-account-panel
         :config="accounts.config"
+        :error="accounts.configError"
+        :loading="accounts.loadingConfig"
         :options="accounts.sharedSelectOptions"
         :saving="accounts.savingShared"
         :selected-user-id="accounts.selectedSharedUserId"
+        @retry="accounts.loadConfig"
         @save="accounts.handleSaveSharedAccount"
         @update:selected-user-id="accounts.selectedSharedUserId = $event"
       />
 
       <technical-account-table
         :config="accounts.config"
+        :error="accounts.usersError"
         :filtered-technicians="accounts.filteredTechnicians"
         :loading="accounts.loading"
         :search="accounts.search"
         :technician-count="accounts.technicianUsers.length"
+        @retry="accounts.loadUsers"
         @edit="accounts.openEditModal"
         @password="accounts.openPasswordModal"
         @toggle-active="accounts.handleToggleActive"

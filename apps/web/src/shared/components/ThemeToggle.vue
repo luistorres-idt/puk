@@ -8,7 +8,7 @@ const theme = useThemeStore();
   <button
     type="button"
     role="switch"
-    aria-label="Modo oscuro"
+    :aria-label="theme.isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
     :aria-checked="theme.isDark"
     :title="theme.isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
     class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"

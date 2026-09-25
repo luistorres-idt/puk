@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   NSteps,
@@ -15,30 +15,18 @@ import {
   NTag,
   NEmpty,
 } from 'naive-ui';
-import {
-  ORDER_SERVICE_LABELS,
-  OrderServiceTypeSchema,
-  isServiceConfigurationSupported,
-  type ExternalClient,
-  type ExternalEquipment,
-  type OrderServiceType,
-  type TechnicianOption,
-} from '@puk/contracts';
-import {
-  ClientSelect,
-  EquipmentSelect,
-  extractUnitFromEquipment,
-  toEquipmentAssignment,
-} from '../../external-catalogs/index.js';
+import { ORDER_SERVICE_LABELS, type ExternalClient, type TechnicianOption } from '@puk/contracts';
+import { ClientSelect, EquipmentSelect } from '../../external-catalogs/index.js';
 import { TechnicianSelect } from '../../technicians/index.js';
-import { extractApiErrorMessage } from '@/shared/http/client.js';
-import { createOrder } from '../api.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
+import { useEquipmentReplacementConfiguration } from '../composables/useEquipmentReplacementConfiguration.js';
+import { useExistingEquipmentUnitConfiguration } from '../composables/useExistingEquipmentUnitConfiguration.js';
+import { useManualUnitConfiguration } from '../composables/useManualUnitConfiguration.js';
+import { useOrderServiceBlocks } from '../composables/useOrderServiceBlocks.js';
+import { useOrderCreationSubmission } from '../composables/useOrderCreationSubmission.js';
 
 const router = useRouter();
-
 const currentStep = ref(1);
-const loading = ref(false);
 const error = ref<string | null>(null);
 
 // Step 1: Client
@@ -47,261 +35,50 @@ const selectedClient = ref<ExternalClient | null>(null);
 
 function handleClientSelect(client: ExternalClient | null) {
   if (selectedClient.value?.id !== client?.id) {
-    configuredUnits.value = [];
+    clearConfiguredUnits();
   }
   selectedClient.value = client;
 }
 
 // Step 2: Units & Services (grouped by service type)
-export interface ConfiguredUnitItem {
-  id: string;
-  serviceType: OrderServiceType;
-  label: string;
-  makeModel: string;
-  serialNumber: string;
-  year: number | null;
-  equipment: ExternalEquipment | null;
-  replacementEquipment?: ExternalEquipment | null;
-}
+const {
+  activeServiceType,
+  clearConfiguredUnits,
+  configuredUnits,
+  removeBlock,
+  removeConfiguredUnit,
+  selectServiceBlockForAdding,
+  serviceBlocks,
+  serviceTypeOptions,
+} = useOrderServiceBlocks(error);
 
-const configuredUnits = ref<ConfiguredUnitItem[]>([]);
+const {
+  handleAddManualUnit,
+  handleInstallationEquipmentSelect,
+  installationEquipment,
+  installationEquipmentKey,
+  unitForm,
+} = useManualUnitConfiguration(configuredUnits, error);
 
-export interface ServiceBlock {
-  serviceType: OrderServiceType;
-  label: string;
-  units: ConfiguredUnitItem[];
-}
+const {
+  handleAddReviewEquipment,
+  handleReviewEquipmentSelect,
+  reviewSelectedEquipment,
+  reviewSelectedEquipmentKey,
+} = useExistingEquipmentUnitConfiguration(configuredUnits, error);
 
-const serviceBlocks = computed<ServiceBlock[]>(() => {
-  const blocksMap = new Map<OrderServiceType, ConfiguredUnitItem[]>();
-  for (const unit of configuredUnits.value) {
-    if (!blocksMap.has(unit.serviceType)) {
-      blocksMap.set(unit.serviceType, []);
-    }
-    blocksMap.get(unit.serviceType)!.push(unit);
-  }
-  return Array.from(blocksMap.entries()).map(([serviceType, units]) => ({
-    serviceType,
-    label: ORDER_SERVICE_LABELS[serviceType] ?? serviceType,
-    units,
-  }));
-});
-
-// Currently selected service to add units to
-const activeServiceType = ref<OrderServiceType>('INSTALLATION');
-
-const serviceTypeOptions = OrderServiceTypeSchema.options
-  .filter((value) => value !== 'FAILED_APPOINTMENT')
-  .map((value) => ({
-    label: `${ORDER_SERVICE_LABELS[value]}${isServiceConfigurationSupported(value) ? '' : ' (próximamente)'}`,
-    value,
-    disabled: !isServiceConfigurationSupported(value),
-  }));
-
-// Form for Installation / Fuel Sensor / Equipment Replacement
-const unitForm = ref({
-  label: '',
-  makeModel: '',
-  serialNumber: '',
-  year: new Date().getFullYear() as number | null,
-});
-const installationEquipmentKey = ref<string | null>(null);
-const installationEquipment = ref<ExternalEquipment | null>(null);
-
-function handleInstallationEquipmentSelect(eq: ExternalEquipment | null) {
-  installationEquipment.value = eq;
-}
-
-function handleAddManualUnit(targetServiceType: OrderServiceType) {
-  const { label, makeModel, serialNumber, year } = unitForm.value;
-  if (!label.trim() || !makeModel.trim() || !serialNumber.trim()) {
-    error.value = 'Por favor completa la etiqueta, marca/modelo y número de serie de la unidad.';
-    return;
-  }
-
-  if (
-    configuredUnits.value.some(
-      (u) => u.serialNumber.trim().toLowerCase() === serialNumber.trim().toLowerCase(),
-    )
-  ) {
-    error.value = 'Ya existe una unidad con ese número de serie en la orden.';
-    return;
-  }
-
-  if (
-    installationEquipment.value &&
-    configuredUnits.value.some(
-      (u) => u.equipment?.externalKey === installationEquipment.value?.externalKey,
-    )
-  ) {
-    error.value = 'Ese equipo ya fue asignado a otra unidad en esta orden.';
-    return;
-  }
-
-  error.value = null;
-
-  configuredUnits.value.push({
-    id: crypto.randomUUID(),
-    serviceType: targetServiceType,
-    label: label.trim(),
-    makeModel: makeModel.trim(),
-    serialNumber: serialNumber.trim(),
-    year: typeof year === 'number' && year >= 1900 && year <= 2100 ? year : null,
-    equipment: installationEquipment.value,
-  });
-
-  unitForm.value = {
-    label: '',
-    makeModel: '',
-    serialNumber: '',
-    year: new Date().getFullYear(),
-  };
-  installationEquipmentKey.value = null;
-  installationEquipment.value = null;
-}
-
-// For Review / Uninstallation selection:
-const reviewSelectedEquipmentKey = ref<string | null>(null);
-const reviewSelectedEquipment = ref<ExternalEquipment | null>(null);
-
-function handleReviewEquipmentSelect(eq: ExternalEquipment | null) {
-  reviewSelectedEquipment.value = eq;
-}
-
-function handleAddReviewEquipment(targetServiceType: OrderServiceType) {
-  if (!reviewSelectedEquipment.value) return;
-
-  const eq = reviewSelectedEquipment.value;
-
-  if (configuredUnits.value.some((u) => u.equipment?.externalKey === eq.externalKey)) {
-    error.value = `El equipo ${eq.externalKey} ya fue agregado a la orden.`;
-    return;
-  }
-  error.value = null;
-
-  const extracted = extractUnitFromEquipment(eq);
-  configuredUnits.value.push({
-    id: crypto.randomUUID(),
-    serviceType: targetServiceType,
-    label: extracted.label,
-    makeModel: extracted.makeModel,
-    serialNumber: extracted.serialNumber,
-    year: extracted.year,
-    equipment: eq,
-  });
-
-  reviewSelectedEquipmentKey.value = null;
-  reviewSelectedEquipment.value = null;
-}
-
-// For Equipment Replacement:
-const replacementOldEquipmentKey = ref<string | null>(null);
-const replacementOldEquipment = ref<ExternalEquipment | null>(null);
-const replacementNewEquipmentKey = ref<string | null>(null);
-const replacementNewEquipment = ref<ExternalEquipment | null>(null);
-
-const assignedEquipmentKeys = computed<string[]>(() => {
-  const keys: string[] = [];
-  for (const u of configuredUnits.value) {
-    if (u.equipment?.externalKey) {
-      keys.push(u.equipment.externalKey);
-    }
-    if (u.replacementEquipment?.externalKey) {
-      keys.push(u.replacementEquipment.externalKey);
-    }
-  }
-  return keys;
-});
-
-const excludeKeysForReplacementOld = computed(() => {
-  const keys = [...assignedEquipmentKeys.value];
-  if (replacementNewEquipmentKey.value) {
-    keys.push(replacementNewEquipmentKey.value);
-  }
-  return keys;
-});
-
-const excludeKeysForReplacementNew = computed(() => {
-  const keys = [...assignedEquipmentKeys.value];
-  if (replacementOldEquipmentKey.value) {
-    keys.push(replacementOldEquipmentKey.value);
-  }
-  return keys;
-});
-
-function handleReplacementOldSelect(eq: ExternalEquipment | null) {
-  replacementOldEquipment.value = eq;
-}
-
-function handleReplacementNewSelect(eq: ExternalEquipment | null) {
-  replacementNewEquipment.value = eq;
-}
-
-function handleAddEquipmentReplacement() {
-  if (!replacementOldEquipment.value || !replacementNewEquipment.value) {
-    error.value = 'Selecciona el equipo instalado y el equipo nuevo de reemplazo.';
-    return;
-  }
-  const oldEq = replacementOldEquipment.value;
-  const newEq = replacementNewEquipment.value;
-
-  if (
-    configuredUnits.value.some(
-      (u) =>
-        u.equipment?.externalKey === oldEq.externalKey ||
-        u.replacementEquipment?.externalKey === oldEq.externalKey,
-    )
-  ) {
-    error.value = `El equipo instalado ${oldEq.externalKey} ya fue agregado a la orden.`;
-    return;
-  }
-
-  if (
-    configuredUnits.value.some(
-      (u) =>
-        u.replacementEquipment?.externalKey === newEq.externalKey ||
-        u.equipment?.externalKey === newEq.externalKey,
-    )
-  ) {
-    error.value = `El equipo de reemplazo ${newEq.externalKey} ya fue seleccionado en otra unidad.`;
-    return;
-  }
-
-  error.value = null;
-  const extracted = extractUnitFromEquipment(oldEq);
-
-  configuredUnits.value.push({
-    id: crypto.randomUUID(),
-    serviceType: 'EQUIPMENT_REPLACEMENT',
-    label: extracted.label,
-    makeModel: extracted.makeModel,
-    serialNumber: extracted.serialNumber,
-    year: extracted.year,
-    equipment: oldEq,
-    replacementEquipment: newEq,
-  });
-
-  replacementOldEquipmentKey.value = null;
-  replacementOldEquipment.value = null;
-  replacementNewEquipmentKey.value = null;
-  replacementNewEquipment.value = null;
-}
-
-function removeConfiguredUnit(unitId: string) {
-  const index = configuredUnits.value.findIndex((u) => u.id === unitId);
-  if (index >= 0) {
-    configuredUnits.value.splice(index, 1);
-  }
-}
-
-function removeBlock(serviceType: OrderServiceType) {
-  configuredUnits.value = configuredUnits.value.filter((u) => u.serviceType !== serviceType);
-}
-
-function selectServiceBlockForAdding(serviceType: OrderServiceType) {
-  activeServiceType.value = serviceType;
-  error.value = null;
-}
+const {
+  assignedEquipmentKeys,
+  excludeKeysForReplacementNew,
+  excludeKeysForReplacementOld,
+  handleAddEquipmentReplacement,
+  handleReplacementNewSelect,
+  handleReplacementOldSelect,
+  replacementNewEquipment,
+  replacementNewEquipmentKey,
+  replacementOldEquipment,
+  replacementOldEquipmentKey,
+} = useEquipmentReplacementConfiguration(configuredUnits, error);
 
 // Step 3: Schedule & Details
 const scheduledAtTimestamp = ref<number>(Date.now() + 86400000);
@@ -317,7 +94,20 @@ function handleTechnicianSelect(technician: TechnicianOption | null) {
   selectedTechnician.value = technician;
 }
 
-const hasValidTechnician = computed(() => Boolean(technicianId.value && selectedTechnician.value));
+const { handleFinish, hasValidTechnician, loading } = useOrderCreationSubmission({
+  activeServiceType,
+  configuredUnits,
+  currentStep,
+  error,
+  generalNotes,
+  isHomeService,
+  scheduledAtTimestamp,
+  selectedClient,
+  selectedClientId,
+  selectedTechnician,
+  serviceAddress,
+  technicianId,
+});
 
 function canProceed(): boolean {
   if (currentStep.value === 1) {
@@ -339,56 +129,6 @@ function canProceed(): boolean {
   }
   return true;
 }
-
-async function handleFinish() {
-  if (loading.value) return;
-  if (!selectedClientId.value || !selectedClient.value) return;
-  const technician = selectedTechnician.value;
-  if (!hasValidTechnician.value || !technician) {
-    error.value = 'Selecciona un técnico válido antes de crear la orden.';
-    currentStep.value = 4;
-    return;
-  }
-
-  loading.value = true;
-  error.value = null;
-
-  try {
-    const unitsPayload = configuredUnits.value.map((u) => {
-      const equipments = [u.equipment, u.replacementEquipment]
-        .filter((equipment): equipment is ExternalEquipment => Boolean(equipment))
-        .map(toEquipmentAssignment);
-      return {
-        label: u.label.trim(),
-        makeModel: u.makeModel.trim(),
-        serialNumber: u.serialNumber.trim(),
-        year: u.year,
-        serviceType: u.serviceType,
-        equipment: equipments.length > 0 ? equipments : undefined,
-      };
-    });
-
-    const primaryService = configuredUnits.value[0]?.serviceType ?? activeServiceType.value;
-
-    const created = await createOrder({
-      clientSheetId: selectedClientId.value,
-      clientNameSnapshot: selectedClient.value.name,
-      serviceType: primaryService,
-      scheduledAt: new Date(scheduledAtTimestamp.value).toISOString(),
-      isHomeService: isHomeService.value,
-      serviceAddress: serviceAddress.value || null,
-      generalNotes: generalNotes.value || null,
-      technicianId: technician.id,
-      units: unitsPayload.length > 0 ? unitsPayload : undefined,
-    });
-
-    router.push(`/orders/${created.id}`);
-  } catch (err: unknown) {
-    error.value = extractApiErrorMessage(err, 'Error al crear la orden de servicio');
-  } finally {
-    loading.value = false;
-  }
-}
 </script>
 
 <template>
@@ -409,7 +149,9 @@ async function handleFinish() {
       </NSteps>
 
       <!-- Mobile Compact Step Progress (below sm) -->
-      <div class="flex sm:hidden flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+      <div
+        class="flex sm:hidden flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs"
+      >
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-blue-900 uppercase tracking-wider">
             Paso {{ currentStep }} de 5
