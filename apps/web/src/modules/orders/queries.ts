@@ -20,6 +20,7 @@ import {
   fetchOrderAudit,
   fetchOrderById,
   fetchCurrentReport,
+  fetchReportVersions,
   fetchOrders,
   fetchSyncStatus,
   generateReport,
@@ -87,6 +88,16 @@ export function useOrderReportQuery(orderId: MaybeRef<string>, enabled?: MaybeRe
   });
 }
 
+export function useOrderReportVersionsQuery(orderId: MaybeRef<string>) {
+  const session = useSessionStore();
+  return useQuery({
+    queryKey: ['order-report-versions', orderId],
+    queryFn: () => fetchReportVersions(unref(orderId)),
+    enabled: () => Boolean(unref(orderId)) && session.user?.orderAccessMode !== 'SHARED',
+    retry: false,
+  });
+}
+
 export function useOrderMutations(orderId?: MaybeRef<string>) {
   const queryClient = useQueryClient();
 
@@ -139,6 +150,7 @@ export function useOrderMutations(orderId?: MaybeRef<string>) {
     mutationFn: (id: string) => generateReport(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['order-report', id] });
+      queryClient.invalidateQueries({ queryKey: ['order-report-versions', id] });
       queryClient.invalidateQueries({ queryKey: ['order-audit', id] });
     },
   });

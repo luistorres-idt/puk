@@ -187,6 +187,7 @@ model Order {
   rescheduledOrder                  Order?                       @relation("OrderReschedule")
   units                             OrderUnit[]
   signature                         Signature?
+  driveSignatureUploads             DriveSignatureUpload[]
   discrepancies                     Discrepancy[]
   syncOperations                    SheetSyncOperation[]
   reports                           ServiceOrderReport[]
@@ -219,6 +220,17 @@ model ServiceOrderReport {
   @@index([status, createdAt])
 }
 
+model DriveFolder {
+  logicalKey        String   @id
+  driveFileId       String   @unique
+  parentDriveFileId String
+  name              String
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([parentDriveFileId])
+}
+
 model OrderUnit {
   id            String           @id @default(uuid()) @db.Uuid
   orderId       String           @db.Uuid
@@ -233,6 +245,7 @@ model OrderUnit {
   order         Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   equipment     OrderEquipment[]
   checklist     Checklist?
+  evidence      Evidence[]
   discrepancies Discrepancy[]
 
   @@unique([orderId, serialNumber])
@@ -294,7 +307,6 @@ model ChecklistItem {
   createdAt   DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime            @updatedAt @db.Timestamptz(3)
   checklist   Checklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  evidence    Evidence[]
 
   @@unique([checklistId, category])
   @@index([checklistId])
@@ -302,8 +314,9 @@ model ChecklistItem {
 
 model Evidence {
   id              String        @id @default(uuid()) @db.Uuid
-  checklistItemId String        @db.Uuid
+  orderUnitId     String        @db.Uuid
   objectKey       String        @unique
+  idempotencyKey  String?       @unique @db.Uuid
   mimeType        String
   sizeBytes       Int
   checksum        String?
@@ -314,10 +327,10 @@ model Evidence {
   createdAt       DateTime      @default(now()) @db.Timestamptz(3)
   completedAt     DateTime?     @db.Timestamptz(3)
   deletedAt       DateTime?     @db.Timestamptz(3)
-  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  orderUnit       OrderUnit     @relation(fields: [orderUnitId], references: [id], onDelete: Cascade)
   uploadedBy      User          @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
 
-  @@index([checklistItemId, status])
+  @@index([orderUnitId, status])
   @@index([uploadedById])
   @@index([status, createdAt])
 }
@@ -336,6 +349,22 @@ model Signature {
   capturedBy   User     @relation("SignatureCapturer", fields: [capturedById], references: [id], onDelete: Restrict)
 
   @@index([capturedById])
+}
+
+model DriveSignatureUpload {
+  idempotencyKey    String    @id @db.Uuid
+  orderId           String    @db.Uuid
+  actorUserId       String    @db.Uuid
+  objectKey         String    @unique
+  signerName        String
+  checksum          String
+  sizeBytes         Int
+  previousObjectKey String?
+  completedAt       DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
 }
 
 model Discrepancy {
