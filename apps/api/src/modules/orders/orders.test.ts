@@ -1168,6 +1168,7 @@ describe('failed appointment administrative resolution', () => {
     return {
       create,
       findUniqueOrThrow,
+      prisma,
       service: new OrdersService(prisma as unknown as PrismaClient),
       tx,
       updateMany,
@@ -1222,7 +1223,77 @@ describe('failed appointment administrative resolution', () => {
     expect(createdData).not.toHaveProperty('completedAt');
     expect(createdData).not.toHaveProperty('pricingTotal');
     expect(result).toMatchObject({ id: 'order-rescheduled', status: OrderStatus.DRAFT });
+    expect(harness.prisma.$transaction).toHaveBeenCalledOnce();
+    expect(harness.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.create.mock.invocationCallOrder[0]!,
+    );
+    expect(harness.create.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.tx.auditLog.createMany.mock.invocationCallOrder[0]!,
+    );
     expect(harness.tx.auditLog.createMany).toHaveBeenCalledOnce();
+    expect(harness.tx.auditLog.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          action: 'FAILED_APPOINTMENT_RESCHEDULED',
+          entityId: failedOrder.id,
+          after: expect.objectContaining({ rescheduledOrderId: 'order-rescheduled' }),
+        }),
+        expect.objectContaining({
+          action: 'ORDER_CREATED_FROM_FAILED_APPOINTMENT',
+          entityId: 'order-rescheduled',
+        }),
+      ],
+    });
+    expect(harness.tx.sheetSyncOperation.createMany).not.toHaveBeenCalled();
+  });
+
+  it('copies equipment snapshots without reactivating its assignment and uses the selected technician', async () => {
+    const harness = createResolutionHarness();
+    harness.prisma.technician.findUnique.mockResolvedValue({
+      id: 'tech-2',
+      name: 'Técnico Dos',
+      externalKey: 'TECH-2',
+      active: true,
+    });
+
+    await harness.service.rescheduleFailedAppointment('admin-1', failedOrder.id, {
+      scheduledAt: '2099-09-15T18:00:00.000Z',
+      technicianId: 'tech-2',
+      version: 4,
+    });
+
+    expect(harness.prisma.technician.findUnique).toHaveBeenCalledWith({
+      where: { id: 'tech-2' },
+      select: { id: true, name: true, externalKey: true, active: true },
+    });
+    const createdData = harness.create.mock.calls[0]?.[0]?.data;
+    expect(createdData).toMatchObject({
+      technicianId: 'tech-2',
+      technicianNameSnapshot: 'Técnico Dos',
+      technicianExternalKeySnapshot: 'TECH-2',
+      units: {
+        create: [
+          {
+            label: 'Unidad 1',
+            serialNumber: 'SERIAL-1',
+            status: 'PENDING',
+            equipment: {
+              create: [
+                {
+                  externalKey: 'EQ-1',
+                  sheetRowHint: 10,
+                  brandSnapshot: 'Marca',
+                  modelSnapshot: 'Modelo',
+                  rawSnapshot: { A: 'valor' },
+                  activeAssignment: false,
+                  verificationStatus: 'PENDING',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
   });
 
   it('resolves cancellation without changing the failed outcome or its pricing', async () => {
@@ -1260,5 +1331,6 @@ describe('failed appointment administrative resolution', () => {
       }),
     ).rejects.toMatchObject({ code: 'ORDER_VERSION_CONFLICT', status: 409 });
     expect(harness.create).not.toHaveBeenCalled();
+    expect(harness.tx.auditLog.createMany).not.toHaveBeenCalled();
   });
 });
