@@ -1,5 +1,6 @@
 export { createOrdersRouter } from './orders.router.js';
 export { OrdersService } from './orders.service.js';
+export { OrderPricingService, type OrderPricingServiceOptions } from './order-pricing.service.js';
 export { SyncService } from './sync.service.js';
 export {
   calculateTechnicalReportSyncAt,

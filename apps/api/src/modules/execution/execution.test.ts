@@ -593,6 +593,52 @@ describe('ExecutionService', () => {
     expect(result.warnings[0]).toContain('no tiene configurada una tarifa válida');
   });
 
+  it('completes order applying pricingOverrides when present on the order', async () => {
+    const checklistItems = ALL_CHECKLIST_CATEGORIES.map((category) => ({
+      category,
+      condition: 'GOOD',
+    }));
+
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.IN_PROGRESS,
+      serviceType: 'INSTALLATION',
+      technicianId: 'tech-1',
+      technician: {
+        id: 'tech-1',
+        name: 'Tecnico Demo',
+        installationRate: '500.00',
+        departureCost: '200.00',
+      },
+      isHomeService: false,
+      pricingOverrides: {
+        rates: { INSTALLATION: '800.00' },
+        travelExpenses: '300.00',
+      },
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Unidad 01',
+          serialNumber: 'SN-001',
+          equipment: [{ externalKey: 'EQ-001', verificationStatus: 'MATCHED' }],
+          evidence: Array.from({ length: MIN_REQUIRED_EVIDENCE_PHOTOS }, (_, index) => ({
+            id: `ev-${index + 1}`,
+            status: UploadStatus.COMPLETED,
+          })),
+          checklist: { items: checklistItems },
+        },
+      ],
+      signature: { signerName: 'Cliente' },
+    });
+
+    const result = await service.completeOrder('admin-1', 'ADMIN', 'order-1');
+    expect(result.status).toBe(OrderStatus.COMPLETED);
+    expect(result.pricingBaseCost?.toString()).toBe('800');
+    expect(result.pricingTravelExpenses?.toString()).toBe('300');
+    expect(result.pricingTotal?.toString()).toBe('1100');
+    expect(result.warnings ?? []).toHaveLength(0);
+  });
+
   it('allows failing appointment with 0.00 pricing when technician rate is unconfigured', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',

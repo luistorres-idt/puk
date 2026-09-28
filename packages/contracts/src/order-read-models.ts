@@ -5,6 +5,7 @@ import {
   FailedAppointmentResolutionSchema,
   OrderServiceTypeSchema,
   OrderStatusSchema,
+  OrderPricingOverridesSchema,
   PricingBreakdownSchema,
   UnitStatusSchema,
 } from './orders.js';
@@ -154,5 +155,6 @@ export const OrderAdministrationDetailSchema = v.object({
   pricingTravelExpenses: v.nullable(v.string()),
   pricingTotal: v.nullable(v.string()),
   pricingBreakdown: v.nullable(PricingBreakdownSchema),
+  pricingOverrides: v.nullable(OrderPricingOverridesSchema),
 });
 export type OrderAdministrationDetail = v.InferOutput<typeof OrderAdministrationDetailSchema>;

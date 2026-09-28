@@ -130,7 +130,7 @@ describe('Technical Report Formatter', () => {
     expect(row.notas).toBe('Motivo cita fallida: Acceso denegado');
   });
 
-  it('formats mixed services in servicio column matching multiline units', () => {
+  it('formats mixed services in servicio and costo columns matching multiline units', () => {
     const order: ReportOrderSource = {
       folio: 'OS-MIXED-001',
       clientNameSnapshot: 'Logistica Del Norte',
@@ -139,6 +139,12 @@ describe('Technical Report Formatter', () => {
       pricingBaseCost: '1100.00',
       pricingTravelExpenses: '350.00',
       pricingTotal: '1450.00',
+      pricingBreakdown: {
+        breakdown: [
+          { serviceType: 'INSTALLATION', rate: '800.00', quantity: 1, subtotal: '800.00' },
+          { serviceType: 'REVIEW', rate: '300.00', quantity: 1, subtotal: '300.00' },
+        ],
+      },
       units: [
         {
           id: 'u-1',
@@ -164,7 +170,47 @@ describe('Technical Report Formatter', () => {
     expect(row.serie).toBe('SN-101\nSN-202');
     expect(row.imeiId).toBe('111111111111111\n222222222222222');
     expect(row.servicio).toBe('Instalación\nRevisión');
-    expect(row.costo).toBe('1100.00');
+    expect(row.costo).toBe('800.00\n300.00');
     expect(row.total).toBe('1450.00');
+  });
+
+  it('formats multiple units with same service with multiline costs', () => {
+    const order: ReportOrderSource = {
+      folio: 'OS-SAME-001',
+      clientNameSnapshot: 'Transportes Express',
+      scheduledAt: '2026-09-09T18:00:00.000Z',
+      technicianNameSnapshot: 'Carlos Lopez',
+      pricingBaseCost: '1400.00',
+      pricingTravelExpenses: '0.00',
+      pricingTotal: '1400.00',
+      pricingBreakdown: {
+        breakdown: [
+          { serviceType: 'INSTALLATION', rate: '700.00', quantity: 2, subtotal: '1400.00' },
+        ],
+      },
+      units: [
+        {
+          id: 'u-1',
+          label: 'Eco-01',
+          serialNumber: 'SN-01',
+          serviceType: 'INSTALLATION',
+          createdAt: '2026-09-09T10:00:00.000Z',
+          equipment: [{ imei: '111' }],
+        },
+        {
+          id: 'u-2',
+          label: 'Eco-02',
+          serialNumber: 'SN-02',
+          serviceType: 'INSTALLATION',
+          createdAt: '2026-09-09T10:05:00.000Z',
+          equipment: [{ imei: '222' }],
+        },
+      ],
+    };
+
+    const row = formatTechnicalReportRow(order);
+    expect(row.servicio).toBe('Instalación\nInstalación');
+    expect(row.costo).toBe('700.00\n700.00');
+    expect(row.total).toBe('1400.00');
   });
 });

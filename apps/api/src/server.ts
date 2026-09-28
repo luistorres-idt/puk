@@ -6,6 +6,7 @@ import { DevMockSheetsClient } from './integrations/google-sheets/dev-mock-sheet
 import { GoogleSheetsClient } from './integrations/google-sheets/google-sheets.client.js';
 import { GoogleSheetsCatalogService } from './integrations/google-sheets/google-sheets.service.js';
 import {
+  OrderPricingService,
   OrdersService,
   SyncService,
   TechnicalReportSyncScheduleService,
@@ -98,6 +99,9 @@ const technicalReportSyncSchedule = new TechnicalReportSyncScheduleService(prism
   syncTime: environment.TECHNICAL_REPORT_SYNC_TIME,
   syncWeekday: environment.TECHNICAL_REPORT_SYNC_WEEKDAY,
   timeZone: environment.TECHNICAL_REPORT_SYNC_TIMEZONE,
+});
+const orderPricingService = new OrderPricingService(prisma, {
+  technicalReportScheduling: technicalReportSyncSchedule,
 });
 await technicalReportSyncSchedule.scheduleUnplannedOperations();
 
@@ -196,6 +200,7 @@ const server = createApp({
   },
   catalogsService,
   ordersService,
+  orderPricingService,
   syncService,
   executionService,
   reportsService,
