@@ -21,6 +21,7 @@ import AttachOrderEquipmentModal from '../components/AttachOrderEquipmentModal.v
 import OrderUnitsTab from '../components/OrderUnitsTab.vue';
 import OrderAuditTab from '../components/OrderAuditTab.vue';
 import OrderEvidenceTab from '../components/OrderEvidenceTab.vue';
+import OrderPricingModal from '../components/OrderPricingModal.vue';
 import OrderReportCard from '../components/OrderReportCard.vue';
 import OrderSyncTab from '../components/OrderSyncTab.vue';
 import { useOrderMedia } from '../composables/useOrderMedia.js';
@@ -88,6 +89,21 @@ const canCancelOrder = computed(
     order.value.status !== 'CANCELLED' &&
     !order.value.failedAppointmentResolution,
 );
+const canManagePricing = computed(
+  () => isAdmin.value && !!order.value && order.value.status !== 'CANCELLED',
+);
+const isOrderFinalized = computed(
+  () =>
+    order.value?.status === 'COMPLETED' ||
+    order.value?.status === 'FAILED_APPOINTMENT',
+);
+const hasPricingOverrides = computed(() => {
+  const o = order.value?.pricingOverrides;
+  if (!o) return false;
+  const hasRates = Boolean(o.rates && Object.keys(o.rates).length > 0);
+  const hasTravel = o.travelExpenses !== undefined && o.travelExpenses !== null;
+  return hasRates || hasTravel;
+});
 const syncInfo = computed(() => syncQuery.data.value);
 const auditLogs = computed(() => auditQuery.data.value ?? []);
 const report = computed(() => reportQuery.data.value);
@@ -114,9 +130,14 @@ const activeTab = ref('units');
 // Modal states
 const addUnitModalRef = ref<InstanceType<typeof AddOrderUnitModal> | null>(null);
 const attachEquipmentModalRef = ref<InstanceType<typeof AttachOrderEquipmentModal> | null>(null);
+const orderPricingModalRef = ref<InstanceType<typeof OrderPricingModal> | null>(null);
 const showCancelModal = ref(false);
 const showCorrectionModal = ref(false);
 const showRescheduleModal = ref(false);
+
+function openPricingModal() {
+  orderPricingModalRef.value?.openPricingModal();
+}
 const {
   showImageModal,
   previewImageUrl,
@@ -376,6 +397,15 @@ const statusColor = orderStatusTagType;
             </n-button>
 
             <n-button
+              v-if="canManagePricing"
+              type="primary"
+              secondary
+              @click="openPricingModal"
+            >
+              {{ isOrderFinalized ? 'Ajustar Precios' : 'Configurar Tarifas' }}
+            </n-button>
+
+            <n-button
               v-if="canResolveFailedAppointment"
               type="warning"
               secondary
@@ -509,7 +539,21 @@ const statusColor = orderStatusTagType;
             </div>
 
             <div class="flex justify-between items-center mb-1">
-              <strong class="text-slate-700">Desglose de Liquidación Técnica:</strong>
+              <div class="flex items-center gap-2">
+                <strong class="text-slate-700">Desglose de Liquidación Técnica:</strong>
+                <n-tag v-if="hasPricingOverrides" size="tiny" type="success" round>
+                  Tarifas personalizadas
+                </n-tag>
+                <n-button
+                  v-if="canManagePricing"
+                  size="tiny"
+                  type="primary"
+                  secondary
+                  @click="openPricingModal"
+                >
+                  {{ isOrderFinalized ? 'Ajustar Precios' : 'Configurar Tarifas' }}
+                </n-button>
+              </div>
               <span class="font-bold text-slate-800 text-sm">
                 Total: ${{ Number(order.pricingTotal ?? 0).toFixed(2) }} MXN
               </span>
@@ -553,6 +597,28 @@ const statusColor = orderStatusTagType;
                 </div>
               </div>
             </div>
+          </div>
+          <div
+            v-else-if="canManagePricing"
+            class="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600 flex justify-between items-center"
+          >
+            <div class="flex items-center gap-2">
+              <strong class="text-slate-700">Tarifas del Técnico:</strong>
+              <n-tag v-if="hasPricingOverrides" size="tiny" type="success" round>
+                Tarifas personalizadas configuradas
+              </n-tag>
+              <span v-else class="text-slate-400 italic">
+                Tarifas base del catálogo
+              </span>
+            </div>
+            <n-button
+              size="tiny"
+              type="primary"
+              secondary
+              @click="openPricingModal"
+            >
+              Configurar Tarifas Acordadas
+            </n-button>
           </div>
           <div
             v-if="order.generalNotes"
@@ -759,6 +825,16 @@ const statusColor = orderStatusTagType;
           />
         </div>
       </n-modal>
+
+      <!-- Modal: Order Pricing Adjustment / Configuration -->
+      <order-pricing-modal
+        ref="orderPricingModalRef"
+        :order-id="orderId"
+        :order="order"
+        :update-pricing="mutations.updatePricing.mutateAsync"
+        :update-pricing-pending="mutations.updatePricing.isPending.value"
+        @saved="() => orderQuery.refetch()"
+      />
     </div>
   </app-layout>
 </template>

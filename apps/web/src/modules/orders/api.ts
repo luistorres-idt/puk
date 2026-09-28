@@ -12,6 +12,7 @@ import type {
   OrderEvidenceDetail,
   OrderExecutionDetail,
   OrderListQuery,
+  OrderPricingOverrides,
   OrderServiceType,
   OrderSignatureDetail,
   OrderStatus,
@@ -83,6 +84,14 @@ export async function createOrder(data: CreateOrder): Promise<OrderDetail> {
 
 export async function updateOrder(id: string, data: UpdateOrder): Promise<OrderDetail> {
   const response = await api.patch<ApiResponse<OrderDetail>>(`/orders/${id}`, data);
+  return response.data.data;
+}
+
+export async function updateOrderPricing(
+  id: string,
+  overrides: OrderPricingOverrides,
+): Promise<OrderDetail> {
+  const response = await api.patch<ApiResponse<OrderDetail>>(`/orders/${id}/pricing`, overrides);
   return response.data.data;
 }
 

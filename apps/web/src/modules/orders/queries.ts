@@ -6,6 +6,7 @@ import type {
   CreateOrder,
   CreateUnit,
   OrderListQuery,
+  OrderPricingOverrides,
   RescheduleFailedAppointment,
   UpdateOrder,
   UpdateUnit,
@@ -28,6 +29,7 @@ import {
   retrySync,
   rescheduleFailedAppointment,
   updateOrder,
+  updateOrderPricing,
   updateUnit,
 } from './api.js';
 
@@ -121,6 +123,12 @@ export function useOrderMutations(orderId?: MaybeRef<string>) {
     onSuccess: (_, vars) => invalidate(vars.id),
   });
 
+  const updatePricing = useMutation({
+    mutationFn: ({ id, overrides }: { id: string; overrides: OrderPricingOverrides }) =>
+      updateOrderPricing(id, overrides),
+    onSuccess: (_, vars) => invalidate(vars.id),
+  });
+
   const assign = useMutation({
     mutationFn: (id: string) => assignOrder(id),
     onSuccess: (_, id) => invalidate(id),
@@ -203,5 +211,6 @@ export function useOrderMutations(orderId?: MaybeRef<string>) {
     retry,
     requestReport,
     update,
+    updatePricing,
   };
 }
