@@ -162,6 +162,7 @@ model Order {
   pricingSnapshotAt                 DateTime?                    @db.Timestamptz(3)
   pricingVersion                    Int?                         @default(1)
   pricingBreakdown                  Json?                        @db.JsonB
+  pricingOverrides                  Json?                        @db.JsonB
   scheduledAt                       DateTime                     @db.Timestamptz(3)
   isHomeService                     Boolean                      @default(false)
   serviceAddress                    String?

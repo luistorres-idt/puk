@@ -1,4 +1,5 @@
 import {
+  OrderPricingOverridesSchema,
   PricingBreakdownSchema,
   type OrderAdministrationDetail,
   type OrderAdministrationUnitDetail,
@@ -109,6 +110,7 @@ export const administrationOrderSelect = {
   pricingTravelExpenses: true,
   pricingTotal: true,
   pricingBreakdown: true,
+  pricingOverrides: true,
 } satisfies Prisma.OrderSelect;
 
 type ExecutionOrderRecord = Prisma.OrderGetPayload<{ select: typeof executionOrderSelect }>;
@@ -255,6 +257,11 @@ export function mapAdministrationOrder(
     pricingBaseCost: order.pricingBaseCost?.toString() ?? null,
     pricingTravelExpenses: order.pricingTravelExpenses?.toString() ?? null,
     pricingTotal: order.pricingTotal?.toString() ?? null,
-    pricingBreakdown: v.parse(v.nullable(PricingBreakdownSchema), order.pricingBreakdown),
+    pricingBreakdown: order.pricingBreakdown
+      ? v.parse(PricingBreakdownSchema, order.pricingBreakdown)
+      : null,
+    pricingOverrides: order.pricingOverrides
+      ? v.parse(OrderPricingOverridesSchema, order.pricingOverrides)
+      : null,
   };
 }

@@ -57,6 +57,20 @@ export const PricingBreakdownSchema = v.object({
 });
 export type PricingBreakdown = v.InferOutput<typeof PricingBreakdownSchema>;
 
+export const PricingRateOverrideSchema = v.pipe(
+  v.string(),
+  v.regex(/^\d+(\.\d{1,2})?$/, 'Debe ser un importe válido con hasta 2 decimales'),
+);
+export type PricingRateOverride = v.InferOutput<typeof PricingRateOverrideSchema>;
+
+export const OrderPricingOverridesSchema = v.object({
+  rates: v.optional(v.record(OrderServiceTypeSchema, PricingRateOverrideSchema)),
+  travelExpenses: v.optional(v.nullable(PricingRateOverrideSchema)),
+  departureCost: v.optional(v.nullable(PricingRateOverrideSchema)),
+  reason: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(500)))),
+});
+export type OrderPricingOverrides = v.InferOutput<typeof OrderPricingOverridesSchema>;
+
 export const OrderPricingSnapshotSchema = v.object({
   appliedQuantity: v.number(),
   baseCost: v.string(),
