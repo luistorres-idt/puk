@@ -49,11 +49,24 @@ jobs:
       - name: Deploy CDK stacks
         run: pnpm infra:deploy
 
-      - name: Read staging URL
+      - name: Read staging public IPv4
         id: staging
         run: |
-          url=$(aws cloudformation describe-stacks --stack-name PukStagingApplication --query "Stacks[0].Outputs[?OutputKey=='StagingUrl'].OutputValue" --output text)
-          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          asg_name=$(aws cloudformation describe-stacks \
+            --stack-name PukStagingApplication \
+            --query "Stacks[0].Outputs[?OutputKey=='EcsHostAutoScalingGroupName'].OutputValue" \
+            --output text)
+          instance_id=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$asg_name" \
+            --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService'].InstanceId | [0]" \
+            --output text)
+          public_ip=$(aws ec2 describe-instances --instance-ids "$instance_id" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+          if [[ -z "$public_ip" || "$public_ip" == "None" ]]; then
+            echo "Could not determine the staging EC2 public IPv4" >&2
+            exit 1
+          fi
+          echo "url=http://${public_ip}" >> "$GITHUB_OUTPUT"
 
       - name: Run smoke tests
         env:

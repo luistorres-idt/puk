@@ -5,10 +5,9 @@ import {
   Stack,
   type StackProps,
   aws_ec2 as ec2,
-  aws_cloudfront as cloudfront,
-  aws_cloudfront_origins as origins,
   aws_ecs as ecs,
-  aws_elasticloadbalancingv2 as elbv2,
+  aws_iam as iam,
+  aws_autoscaling as autoscaling,
   aws_logs as logs,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
@@ -26,74 +25,56 @@ export class PukStagingApplicationStack extends Stack {
     const { foundation } = props;
     const cluster = new ecs.Cluster(this, 'Cluster', {
       clusterName: 'puk-staging',
-      containerInsightsV2: ecs.ContainerInsights.ENABLED,
+      containerInsightsV2: ecs.ContainerInsights.DISABLED,
       vpc: foundation.vpc,
     });
-    const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
-      internetFacing: true,
-      securityGroup: foundation.loadBalancerSecurityGroup,
+    const ecsHostRole = new iam.Role(this, 'EcsHostRole', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      description: 'Allows the ECS agent to register and communicate with ECS.',
+    });
+    ecsHostRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'ecs:DeregisterContainerInstance',
+          'ecs:DiscoverPollEndpoint',
+          'ecs:Poll',
+          'ecs:RegisterContainerInstance',
+          'ecs:StartTelemetrySession',
+          'ecs:Submit*',
+          'ecs:UpdateContainerInstancesState',
+        ],
+        resources: ['*'],
+      }),
+    );
+    const ecsHostUserData = ec2.UserData.forLinux();
+    ecsHostUserData.addCommands('echo ECS_CLUSTER=puk-staging >> /etc/ecs/ecs.config');
+    const ecsHostLaunchTemplate = new ec2.LaunchTemplate(this, 'EcsHostLaunchTemplate', {
+      associatePublicIpAddress: true,
+      cpuCredits: ec2.CpuCredits.STANDARD,
+      httpPutResponseHopLimit: 1,
+      instanceType: new ec2.InstanceType('t3a.medium'),
+      machineImage: ecs.EcsOptimizedImage.amazonLinux2023(ecs.AmiHardwareType.STANDARD),
+      requireImdsv2: true,
+      role: ecsHostRole,
+      securityGroup: foundation.applicationSecurityGroup,
+      userData: ecsHostUserData,
+    });
+    const ecsHostGroup = new autoscaling.AutoScalingGroup(this, 'EcsHostGroup', {
+      launchTemplate: ecsHostLaunchTemplate,
+      maxCapacity: 1,
+      minCapacity: 1,
       vpc: foundation.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
     });
-    const originVerifyHeaderName = 'X-Origin-Verify';
-    const originVerifyHeaderValue = `puk-staging-${this.account}-${this.region}-origin-verify`;
-
-    const webTargetGroup = new elbv2.ApplicationTargetGroup(this, 'WebTargetGroup', {
-      deregistrationDelay: Duration.seconds(15),
-      healthCheck: {
-        healthyHttpCodes: '200',
-        healthyThresholdCount: 2,
-        interval: Duration.seconds(15),
-        path: '/',
-        timeout: Duration.seconds(5),
-        unhealthyThresholdCount: 3,
-      },
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targetType: elbv2.TargetType.IP,
-      vpc: foundation.vpc,
+    const ecsCapacityProvider = new ecs.AsgCapacityProvider(this, 'EcsCapacityProvider', {
+      autoScalingGroup: ecsHostGroup,
+      enableManagedDraining: true,
+      enableManagedScaling: false,
+      enableManagedTerminationProtection: false,
     });
-    const apiTargetGroup = new elbv2.ApplicationTargetGroup(this, 'ApiTargetGroup', {
-      deregistrationDelay: Duration.seconds(15),
-      healthCheck: {
-        healthyHttpCodes: '200',
-        healthyThresholdCount: 2,
-        interval: Duration.seconds(15),
-        path: '/health/ready',
-        timeout: Duration.seconds(5),
-        unhealthyThresholdCount: 3,
-      },
-      port: 3000,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targetType: elbv2.TargetType.IP,
-      vpc: foundation.vpc,
-    });
-    const listener = loadBalancer.addListener('HttpListener', {
-      defaultAction: elbv2.ListenerAction.fixedResponse(403, {
-        contentType: 'text/plain',
-        messageBody: 'Access denied: Requests must originate from CloudFront.',
-      }),
-      port: 80,
-    });
-    listener.addAction('ApiRoutes', {
-      action: elbv2.ListenerAction.forward([apiTargetGroup]),
-      conditions: [
-        elbv2.ListenerCondition.httpHeader(originVerifyHeaderName, [originVerifyHeaderValue]),
-        elbv2.ListenerCondition.pathPatterns(['/api*', '/health*', '/metrics', '/docs*']),
-      ],
-      priority: 10,
-    });
-    listener.addAction('WebRoutes', {
-      action: elbv2.ListenerAction.forward([webTargetGroup]),
-      conditions: [
-        elbv2.ListenerCondition.httpHeader(originVerifyHeaderName, [originVerifyHeaderValue]),
-      ],
-      priority: 20,
-    });
-
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
-      cpu: 1024,
-      memoryLimitMiB: 2048,
+    cluster.addAsgCapacityProvider(ecsCapacityProvider);
+    const taskDefinition = new ecs.Ec2TaskDefinition(this, 'TaskDefinition', {
+      networkMode: ecs.NetworkMode.BRIDGE,
     });
     const databaseEnvironment = {
       PUK_DATABASE_HOST: foundation.database.dbInstanceEndpointAddress,
@@ -113,6 +94,7 @@ export class PukStagingApplicationStack extends Stack {
       ],
       environment: databaseEnvironment,
       essential: false,
+      memoryLimitMiB: 512,
       image: ecs.ContainerImage.fromAsset('../..', {
         file: 'infra/docker/migrate.Dockerfile',
       }),
@@ -141,85 +123,17 @@ export class PukStagingApplicationStack extends Stack {
       },
     });
 
-    const albOrigin = new origins.LoadBalancerV2Origin(loadBalancer, {
-      customHeaders: {
-        [originVerifyHeaderName]: originVerifyHeaderValue,
-      },
-      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-    });
-
-    const distribution = new cloudfront.Distribution(this, 'Distribution', {
-      additionalBehaviors: {
-        '/api/*': {
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          compress: true,
-          origin: albOrigin,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        },
-        '/assets/*': {
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          compress: true,
-          origin: albOrigin,
-          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        },
-        '/docs*': {
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          compress: true,
-          origin: albOrigin,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        },
-        '/health/*': {
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          compress: true,
-          origin: albOrigin,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        },
-        '/metrics': {
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          compress: true,
-          origin: albOrigin,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        },
-      },
-      comment: 'Bull Dog Solution - Staging Distribution',
-      defaultBehavior: {
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        compress: true,
-        origin: albOrigin,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-        responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      },
-      enabled: true,
-      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
-    });
-    const publicOrigin = `https://${distribution.distributionDomainName}`;
     const api = taskDefinition.addContainer('api', {
       environment: {
         ...databaseEnvironment,
-        API_ORIGIN: publicOrigin,
-        APP_ORIGIN: publicOrigin,
+        API_ORIGIN: 'http://localhost',
+        APP_ORIGIN: 'http://localhost',
         CATALOG_CACHE_TTL_SECONDS: '60',
         CIRCUIT_BREAKER_ERROR_THRESHOLD: '50',
         CIRCUIT_BREAKER_RESET_TIMEOUT_MS: '30000',
         COOKIE_DOMAIN: '',
         COOKIE_SAME_SITE: 'lax',
-        COOKIE_SECURE: 'true',
+        COOKIE_SECURE: 'false',
         GOOGLE_CLIENTS_SHEET: 'Clientes',
         GOOGLE_EQUIPMENT_SHEET: 'SALIDAS',
         JWT_ACCESS_TTL: '15m',
@@ -257,6 +171,7 @@ export class PukStagingApplicationStack extends Stack {
         timeout: Duration.seconds(5),
       },
       image: ecs.ContainerImage.fromAsset('../..', { file: 'infra/docker/api.Dockerfile' }),
+      memoryLimitMiB: 1024,
       logging: ecs.LogDrivers.awsLogs({
         logGroup: new logs.LogGroup(this, 'ApiLogs', {
           logGroupName: '/puk/staging/api',
@@ -305,10 +220,11 @@ export class PukStagingApplicationStack extends Stack {
       condition: ecs.ContainerDependencyCondition.SUCCESS,
       container: migration,
     });
-    api.addPortMappings({ containerPort: 3000, protocol: ecs.Protocol.TCP });
+    api.addPortMappings({ containerPort: 3000, hostPort: 3000, protocol: ecs.Protocol.TCP });
 
     const web = taskDefinition.addContainer('web', {
       image: ecs.ContainerImage.fromAsset('../..', { file: 'infra/docker/web.Dockerfile' }),
+      memoryLimitMiB: 256,
       logging: ecs.LogDrivers.awsLogs({
         logGroup: new logs.LogGroup(this, 'WebLogs', {
           logGroupName: '/puk/staging/web',
@@ -322,28 +238,34 @@ export class PukStagingApplicationStack extends Stack {
       condition: ecs.ContainerDependencyCondition.HEALTHY,
       container: api,
     });
-    web.addPortMappings({ containerPort: 80, protocol: ecs.Protocol.TCP });
+    web.addPortMappings({ containerPort: 80, hostPort: 80, protocol: ecs.Protocol.TCP });
+
+    // CDK does not expose the ECS bridge-mode links field on ContainerDefinitionOptions.
+    const cfnTaskDefinition = taskDefinition.node.defaultChild as ecs.CfnTaskDefinition;
+    cfnTaskDefinition.addPropertyOverride('Cpu', '1024');
+    cfnTaskDefinition.addPropertyOverride('Memory', '2048');
+    cfnTaskDefinition.addPropertyOverride('ContainerDefinitions.2.Links', ['api']);
 
     foundation.bucket.grantReadWrite(taskDefinition.taskRole);
-    const service = new ecs.FargateService(this, 'Service', {
-      assignPublicIp: false,
+    new ecs.Ec2Service(this, 'Service', {
       circuitBreaker: { rollback: true },
       cluster,
       desiredCount: 1,
+      capacityProviderStrategies: [
+        { capacityProvider: ecsCapacityProvider.capacityProviderName, weight: 1 },
+      ],
       healthCheckGracePeriod: Duration.seconds(120),
-      maxHealthyPercent: 200,
-      minHealthyPercent: 100,
-      securityGroups: [foundation.applicationSecurityGroup],
+      maxHealthyPercent: 100,
+      minHealthyPercent: 0,
       taskDefinition,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
     });
-    webTargetGroup.addTarget(
-      service.loadBalancerTarget({ containerName: web.containerName, containerPort: 80 }),
-    );
-    apiTargetGroup.addTarget(
-      service.loadBalancerTarget({ containerName: api.containerName, containerPort: 3000 }),
-    );
-
-    new CfnOutput(this, 'StagingUrl', { value: publicOrigin });
+    new CfnOutput(this, 'EcsHostAutoScalingGroupName', {
+      value: ecsHostGroup.autoScalingGroupName,
+    });
+    // Preserve the old cross-stack export for this first update; remove it only after the
+    // Application stack has deployed and CloudFormation no longer has the legacy import in use.
+    new CfnOutput(this, 'LegacyLoadBalancerSecurityGroupReference', {
+      value: foundation.loadBalancerSecurityGroup.securityGroupId,
+    });
   }
 }

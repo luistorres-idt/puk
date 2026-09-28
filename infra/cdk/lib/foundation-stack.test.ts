@@ -38,6 +38,34 @@ function assertDeployTrust(template: Template, providerArn: unknown): void {
 
 test('creates a native GitHub OIDC provider by default without thumbprints', () => {
   const template = foundationTemplate();
+  template.resourceCountIs('AWS::EC2::NatGateway', 0);
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: Match.objectLike({
+      Statement: Match.arrayWith([
+        Match.objectLike({
+          Action: ['autoscaling:DescribeAutoScalingGroups', 'ec2:DescribeInstances'],
+          Effect: 'Allow',
+          Resource: '*',
+        }),
+      ]),
+    }),
+  });
+  const applicationSecurityGroup = Object.values(
+    template.findResources('AWS::EC2::SecurityGroup'),
+  ).find(
+    (resource) =>
+      resource.Properties.GroupDescription === 'Network access for the PUK staging ECS task',
+  );
+  assert.ok(applicationSecurityGroup);
+  assert.deepEqual(applicationSecurityGroup.Properties.SecurityGroupIngress, [
+    {
+      CidrIp: '0.0.0.0/0',
+      Description: 'Public HTTP traffic to the web container',
+      FromPort: 80,
+      IpProtocol: 'tcp',
+      ToPort: 80,
+    },
+  ]);
   template.resourceCountIs('AWS::IAM::OIDCProvider', 1);
   template.hasResourceProperties('AWS::IAM::OIDCProvider', {
     Url: 'https://token.actions.githubusercontent.com',

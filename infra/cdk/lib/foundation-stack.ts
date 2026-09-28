@@ -26,7 +26,7 @@ export class PukStagingFoundationStack extends Stack {
     this.vpc = new ec2.Vpc(this, 'Vpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.42.0.0/16'),
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: 0,
       subnetConfiguration: [
         { cidrMask: 24, name: 'public', subnetType: ec2.SubnetType.PUBLIC },
         {
@@ -43,22 +43,18 @@ export class PukStagingFoundationStack extends Stack {
       description: 'Network access for the PUK staging ECS task',
       vpc: this.vpc,
     });
+    this.applicationSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Public HTTP traffic to the web container',
+    );
+    // Keep this cross-stack resource until the application stack has released its old import.
     this.loadBalancerSecurityGroup = new ec2.SecurityGroup(this, 'LoadBalancerSecurityGroup', {
       allowAllOutbound: true,
-      description: 'Public HTTP access to PUK staging',
+      description: 'Legacy security group retained for safe cross-stack reference removal',
       vpc: this.vpc,
     });
     this.loadBalancerSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
-    this.applicationSecurityGroup.addIngressRule(
-      this.loadBalancerSecurityGroup,
-      ec2.Port.tcp(80),
-      'Web traffic from the load balancer',
-    );
-    this.applicationSecurityGroup.addIngressRule(
-      this.loadBalancerSecurityGroup,
-      ec2.Port.tcp(3000),
-      'API traffic from the load balancer',
-    );
 
     const databaseSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       allowAllOutbound: false,
@@ -148,6 +144,12 @@ export class PukStagingFoundationStack extends Stack {
     deployRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['cloudformation:DescribeStacks'],
+        resources: ['*'],
+      }),
+    );
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['autoscaling:DescribeAutoScalingGroups', 'ec2:DescribeInstances'],
         resources: ['*'],
       }),
     );

@@ -6,6 +6,8 @@ Sistema web responsivo para preparar, asignar, ejecutar y auditar órdenes multi
 
 La documentación del estado técnico implementado, incluidos los diagramas de arquitectura y entidad-relación, está disponible en [docs/technical/README.md](./docs/technical/README.md).
 
+> **Estado de AWS (2026-09-28):** staging está completamente eliminado. No hay URL ni IP pública ni quedan base de datos, archivos o secretos de staging; los datos anteriores se borraron sin respaldo recuperable. `infra/cdk` describe sólo la arquitectura prevista para un futuro redeploy. Consultá [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) antes de usar los procedimientos de despliegue.
+
 ## Descripción
 
 La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un solo lugar el trabajo administrativo y de campo:
@@ -307,7 +309,7 @@ El producto se despliega con entornos separados de desarrollo, staging y producc
 
 El pipeline ejecuta instalación reproducible, lint, typecheck, pruebas, generación de OpenAPI, builds, escaneos, migraciones controladas, despliegue y smoke tests.
 
-Staging está implementado en AWS `us-east-2` con CloudFront, ALB, ECS Fargate, RDS PostgreSQL, S3, Secrets Manager y CloudWatch. Producción aún no tiene stacks IaC en la rama actual. Consulte [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) para los diagramas, límites de red, persistencia, CI/CD y brechas antes de producción, y [Staging y despliegue](./docs/staging-and-deployment.md) para el procedimiento operativo.
+La IaC define staging en AWS `us-east-2` con ECS sobre un host EC2, RDS PostgreSQL, almacenamiento de objetos, Secrets Manager y CloudWatch, pero el ambiente fue eliminado y no está desplegado. No hay URL/IP ni datos persistentes; la arquitectura prevista usa HTTP a una IPv4 efímera sin CloudFront ni ALB. Producción aún no tiene stacks IaC en la rama actual. Consulte [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) para el estado, diagramas objetivo, persistencia, CI/CD y brechas antes de producción, y [Staging y despliegue](./docs/staging-and-deployment.md) para recrearlo desde cero.
 
 ## Alcance del MVP
 

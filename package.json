@@ -21,6 +21,7 @@
     "infra:diff": "pnpm --filter @puk/infra diff",
     "infra:foundation": "pnpm --filter @puk/infra run deploy:foundation",
     "infra:synth": "pnpm --filter @puk/infra synth",
+    "infra:test": "pnpm --filter @puk/infra test",
     "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
