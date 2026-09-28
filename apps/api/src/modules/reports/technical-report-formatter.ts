@@ -1,4 +1,10 @@
-import { ORDER_SERVICE_LABELS, type OrderServiceType, type OrderStatus } from '@puk/contracts';
+import {
+  ORDER_SERVICE_LABELS,
+  type OrderPricingOverrides,
+  type OrderServiceType,
+  type OrderStatus,
+  type PricingBreakdown,
+} from '@puk/contracts';
 
 export interface ReportOrderSource {
   readonly folio: string;
@@ -9,9 +15,22 @@ export interface ReportOrderSource {
   readonly generalNotes?: string | null;
   readonly failedReason?: string | null;
   readonly technicianNameSnapshot?: string | null;
+  readonly pricingUnitRate?: { toFixed(digits: number): string } | number | string | null;
   readonly pricingBaseCost?: { toFixed(digits: number): string } | number | string | null;
   readonly pricingTravelExpenses?: { toFixed(digits: number): string } | number | string | null;
   readonly pricingTotal?: { toFixed(digits: number): string } | number | string | null;
+  readonly pricingBreakdown?:
+    | PricingBreakdown
+    | {
+        breakdown?: ReadonlyArray<{
+          serviceType: OrderServiceType;
+          rate: string;
+          quantity?: number;
+          subtotal?: string;
+        }>;
+      }
+    | unknown;
+  readonly pricingOverrides?: OrderPricingOverrides | unknown;
   readonly units?: ReadonlyArray<{
     readonly id: string;
     readonly label: string;
@@ -92,6 +111,84 @@ function formatDecimalString(
   return num.toFixed(2);
 }
 
+function resolveUnitCost(
+  unit: NonNullable<ReportOrderSource['units']>[number],
+  order: ReportOrderSource,
+  totalUnitsCount: number,
+): string {
+  const serviceType = unit.serviceType ?? order.serviceType;
+  const eqCount =
+    serviceType === 'EQUIPMENT_REPLACEMENT'
+      ? 1
+      : unit.equipment && unit.equipment.length > 0
+        ? unit.equipment.length
+        : 1;
+
+  // 1. Try to extract from pricingBreakdown snapshot
+  let breakdownItems:
+    | Array<{ serviceType: string; rate: string; quantity?: number; subtotal?: string }>
+    | undefined;
+
+  if (order.pricingBreakdown) {
+    if (typeof order.pricingBreakdown === 'string') {
+      try {
+        const parsed = JSON.parse(order.pricingBreakdown);
+        breakdownItems = parsed?.breakdown;
+      } catch {
+        // ignore JSON parse error
+      }
+    } else if (typeof order.pricingBreakdown === 'object') {
+      breakdownItems = (
+        order.pricingBreakdown as {
+          breakdown?: Array<{
+            serviceType: string;
+            rate: string;
+            quantity?: number;
+            subtotal?: string;
+          }>;
+        }
+      ).breakdown;
+    }
+  }
+
+  if (breakdownItems && Array.isArray(breakdownItems) && serviceType) {
+    const item = breakdownItems.find((b) => b.serviceType === serviceType);
+    if (item && item.rate !== undefined && item.rate !== null) {
+      const rateNum = Number(item.rate);
+      if (Number.isFinite(rateNum)) {
+        return (rateNum * eqCount).toFixed(2);
+      }
+    }
+  }
+
+  // 2. Try to extract from pricingOverrides rates
+  const overrides = order.pricingOverrides as OrderPricingOverrides | undefined;
+  if (serviceType && overrides?.rates?.[serviceType]) {
+    const overrideRate = Number(overrides.rates[serviceType]);
+    if (Number.isFinite(overrideRate)) {
+      return (overrideRate * eqCount).toFixed(2);
+    }
+  }
+
+  // 3. Try pricingUnitRate
+  if (order.pricingUnitRate !== undefined && order.pricingUnitRate !== null) {
+    const unitRateNum = Number(formatDecimalString(order.pricingUnitRate));
+    if (Number.isFinite(unitRateNum) && unitRateNum > 0) {
+      return (unitRateNum * eqCount).toFixed(2);
+    }
+  }
+
+  // 4. Fallback if pricingBaseCost exists
+  if (order.pricingBaseCost !== undefined && order.pricingBaseCost !== null) {
+    const baseCostNum = Number(formatDecimalString(order.pricingBaseCost));
+    if (Number.isFinite(baseCostNum) && totalUnitsCount > 0) {
+      return (baseCostNum / totalUnitsCount).toFixed(2);
+    }
+  }
+
+  return '0.00';
+}
+
 export function formatTechnicalReportRow(
   order: ReportOrderSource,
   timeZone = 'America/Hermosillo',
@@ -140,7 +237,12 @@ export function formatTechnicalReportRow(
   }
   const imeiId = imeiIdParts.join('\n');
 
-  const costo = formatDecimalString(order.pricingBaseCost);
+  let costo: string;
+  if (!isFailedAppointment && servicio.includes('\n') && sortedUnits.length > 1) {
+    costo = sortedUnits.map((u) => resolveUnitCost(u, order, sortedUnits.length)).join('\n');
+  } else {
+    costo = formatDecimalString(order.pricingBaseCost);
+  }
   const viaticos = formatDecimalString(order.pricingTravelExpenses);
   const total = formatDecimalString(order.pricingTotal);
 
