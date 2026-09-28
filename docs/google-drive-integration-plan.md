@@ -15,13 +15,13 @@
 
 ## Estado actual y alcance técnico
 
-| Archivo     | Flujo actual                                                                                                                                                             | Cambio necesario                                                                                                             |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Fotografías | La web convierte HEIC cuando corresponde, reduce a JPEG de hasta 1920 px, recibe una URL firmada, sube con `PUT` directo a S3/MinIO y confirma la existencia del objeto. | Sustituir la carga directa por un flujo compatible con Drive y conservar autorización, límites, confirmación y vista previa. |
-| Firmas      | La web sube un PNG de forma similar; la base de datos guarda la referencia y la interfaz ofrece vista previa independiente.                                              | Aplicar el mismo cambio de carga y consulta; preservar la firma original mientras sea necesaria.                             |
-| PDF         | Un proceso en la API lee fotografías y firma, genera una versión del reporte, la guarda en S3 y entrega una URL firmada para descarga.                                   | Leer las nuevas fuentes desde Drive y guardar/descargar allí las nuevas versiones.                                           |
+| Archivo     | Estado implementado                                                                                                                                                                             | Consideración operativa                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Fotografías | La web prepara JPEG y, en modo Drive, envía la carga autenticada a la API; la API valida, persiste y confirma la referencia privada. El adaptador de objetos conserva su protocolo alternativo. | Validar los tipos de archivo, permisos y rendimiento de extremo a extremo antes de activar Drive en producción. |
+| Firmas      | En modo Drive, la API recibe PNG autenticado, registra la referencia y mantiene una vista previa privada.                                                                                       | Preservar la firma original conforme a la política de retención.                                                |
+| PDF         | El worker genera la versión del reporte; `report-storage.ts` la persiste en Drive o en el adaptador de objetos seleccionado.                                                                    | Comprobar lectura de evidencias/firma, regeneración y descarga privada para cada modo configurado.              |
 
-El contrato [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y su implementación [`S3StorageClient`](../apps/api/src/integrations/object-storage/s3.client.ts) asumen URLs firmadas de `PUT` y `GET`. El navegador también asume ese contrato en [`service-execution/api.ts`](../apps/web/src/modules/service-execution/api.ts). Drive utiliza identificadores de archivo y autorización propia: **no basta con cambiar el cliente S3 por uno de Drive**. Las referencias `objectKey` se guardan actualmente en los modelos `Evidence`, `Signature` y `ServiceOrderReport` de [`prisma/schema.prisma`](../prisma/schema.prisma). Como esos registros apuntan a archivos de prueba descartables, el corte debe eliminar o invalidar sus referencias de forma controlada; no se necesita lectura dual ni migración histórica.
+El adaptador de objetos implementa [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y utiliza URLs temporales; Drive usa IDs de archivo, referencias persistidas y autorización propia. La selección se configura por entorno y ambos protocolos permanecen explícitos. Las referencias de evidencia, firma y reporte se guardan en PostgreSQL; no se debe interpretar una referencia de un proveedor como ID/ruta de otro. Los registros antiguos de prueba no requieren migración histórica a Drive.
 
 ## Requisitos previos de Google Workspace
 
@@ -58,39 +58,12 @@ La firma y el PDF son recursos de la **orden completa**, no de una unidad. Se gu
 
 ### Carga y lectura privadas
 
-Los diagramas comparan el contrato actual con la **propuesta inicial para el piloto**. Las URLs firmadas de S3 autorizan operaciones directas y caducan; un enlace normal de Drive depende de los permisos del archivo y no sustituye ese contrato. Drive ofrece sesiones de carga resumible, pero requieren otro flujo y no se adoptan en esta propuesta inicial.
+La integración con Drive ya está implementada. En ese modo la aplicación conserva la autorización:
+el navegador no recibe credenciales ni enlaces públicos del proveedor. El adaptador de
+almacenamiento de objetos mantiene su propio protocolo alternativo; no es el modelo conceptual
+único de almacenamiento.
 
-#### Flujo actual: navegador y S3/MinIO
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Usuario
-    participant Web
-    participant API
-    participant BD as Base de datos
-    participant S3 as S3/MinIO
-
-    Usuario->>Web: Adjunta fotografía o firma
-    Web->>API: Solicita carga autenticada
-    API->>BD: Registra carga pendiente
-    API-->>Web: URL firmada temporal para PUT
-    Web->>S3: PUT del archivo con la URL firmada
-    S3-->>Web: Carga recibida
-    Web->>API: Confirma la carga
-    API->>S3: Verifica que el objeto existe
-    API->>BD: Marca el archivo como completado
-    Usuario->>Web: Abre fotografía, firma o PDF
-    Web->>API: Solicita URL de descarga
-    API->>BD: Comprueba acceso y referencia
-    API-->>Web: URL firmada temporal para GET
-    Web->>S3: GET directo con la URL firmada
-    S3-->>Web: Contenido del archivo
-```
-
-El PDF se genera en la API y se guarda en S3; no se carga desde el navegador. Su descarga sí usa una URL firmada temporal.
-
-#### Flujo propuesto: carga privada en Drive
+#### Flujo implementado: carga privada en Drive
 
 ```mermaid
 sequenceDiagram
@@ -118,7 +91,7 @@ sequenceDiagram
 
 Si Drive falla, la API no debe marcar la carga como completada. Los PDF generados por la API se guardarán en la carpeta común de la orden mediante el mismo tramo API → Drive, sin pasar por el navegador.
 
-#### Flujo propuesto: lectura privada desde Drive
+#### Flujo implementado: lectura privada desde Drive
 
 ```mermaid
 sequenceDiagram

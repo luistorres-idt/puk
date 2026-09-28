@@ -15,7 +15,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Los técnicos pueden guardar una nota general de ejecución antes del cierre; las notas no se separan por unidad.
 - Google Sheets conserva la autoridad sobre los catálogos de clientes y equipos.
 - PostgreSQL mantiene los datos transaccionales, el historial y el estado de sincronización.
-- Las fotografías y firmas se almacenan de forma privada en un servicio compatible con Amazon S3.
+- Las fotografías, firmas y reportes se almacenan de forma privada mediante el proveedor de archivos configurado. Google Drive está integrado; PostgreSQL conserva únicamente sus referencias y metadatos.
 
 ## Funcionalidades principales
 
@@ -77,24 +77,24 @@ El proyecto utiliza un monolito modular en un monorepo. El frontend y la API se 
 flowchart TD
     Web[Vue 3 PWA] --> API[Express 5 API]
     API --> DB[(PostgreSQL)]
-    API --> S3[Almacenamiento S3]
+    API --> Storage[Almacenamiento privado de archivos]
     API --> Sheets[Google Sheets API]
     Worker[Worker de sincronización] --> DB
     Worker --> Sheets
 ```
 
-| Capa            | Tecnologías                                     |
-| --------------- | ----------------------------------------------- |
-| Lenguaje        | TypeScript                                      |
-| Frontend        | Vue 3, Vite, Vue Router, Pinia, TanStack Query  |
-| Interfaz        | Naive UI, Tailwind CSS, VueUse                  |
-| API             | Node.js, Express 5, Valibot                     |
-| Persistencia    | PostgreSQL, Prisma                              |
-| Autenticación   | JWT, Argon2id                                   |
-| Integraciones   | Google Sheets API, API compatible con Amazon S3 |
-| Documentación   | OpenAPI 3.1, Swagger UI                         |
-| Pruebas         | Vitest, Supertest, Playwright                   |
-| Infraestructura | Docker Compose local; AWS CDK para staging      |
+| Capa            | Tecnologías                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| Lenguaje        | TypeScript                                                                                          |
+| Frontend        | Vue 3, Vite, Vue Router, Pinia, TanStack Query                                                      |
+| Interfaz        | Naive UI, Tailwind CSS, VueUse                                                                      |
+| API             | Node.js, Express 5, Valibot                                                                         |
+| Persistencia    | PostgreSQL, Prisma                                                                                  |
+| Autenticación   | JWT, Argon2id                                                                                       |
+| Integraciones   | Google Sheets API, almacenamiento privado configurable (Google Drive y proveedor compatible con S3) |
+| Documentación   | OpenAPI 3.1, Swagger UI                                                                             |
+| Pruebas         | Vitest, Supertest, Playwright                                                                       |
+| Infraestructura | Docker Compose local; AWS CDK para staging                                                          |
 
 ## Estructura del repositorio
 
@@ -121,7 +121,7 @@ flowchart TD
 └── SPECS.md
 ```
 
-Los módulos siguen slicing vertical. Cada dominio contiene sus rutas, controladores, servicios, persistencia, contratos y pruebas. Las integraciones con Google Sheets y S3 se consumen a través de interfaces reemplazables.
+Los módulos siguen slicing vertical. Cada dominio contiene sus rutas, controladores, servicios, persistencia, contratos y pruebas. Google Sheets y los proveedores de almacenamiento se consumen a través de interfaces/adaptadores reemplazables.
 
 ## Estados de una orden
 
@@ -186,7 +186,7 @@ consultar con el filtro de tipo y no deben interpretarse como órdenes adicional
 - pnpm 11.9.0 mediante Corepack.
 - Docker y Docker Compose.
 - Documento de Google Sheets de desarrollo compartido con una cuenta de servicio.
-- Credenciales de Google Sheets y almacenamiento S3 para entornos no locales.
+- Credenciales de Google Sheets y del proveedor de almacenamiento elegido para entornos no locales.
 
 ## Puesta en marcha local
 
@@ -245,7 +245,7 @@ La aplicación valida su configuración al iniciar y se detiene si falta una var
 | Base de datos | `DATABASE_URL`, `DIRECT_URL`                                  |
 | JWT           | Claves pública/privada, issuer, audience y TTL de cada token  |
 | Cookies       | Dominio, modo seguro y política SameSite                      |
-| Objetos       | Endpoint, región, bucket y credenciales S3                    |
+| Objetos       | Configuración y credenciales del proveedor de almacenamiento  |
 | Google Sheets | IDs de catálogos y técnicos, cuenta de servicio y pestañas    |
 | Límites       | Tamaños de evidencia/firma, TTL de URLs y caché de catálogos  |
 | Resiliencia   | Timeouts, reintentos, circuit breaker y frecuencia del outbox |

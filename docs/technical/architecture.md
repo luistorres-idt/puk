@@ -4,7 +4,7 @@
 
 Bull Dog Solution es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
 
-PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuente externa de clientes y equipos. Las fotografías, firmas y PDFs viven en almacenamiento compatible con S3; PostgreSQL guarda únicamente metadatos y claves de objeto.
+PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuente externa de clientes y equipos. Las fotografías, firmas y PDFs viven en el proveedor privado de archivos configurado (Google Drive o almacenamiento de objetos); PostgreSQL conserva únicamente metadatos y referencias.
 
 ## Diagrama de contexto
 
@@ -14,7 +14,7 @@ flowchart LR
     Tech[Técnico] --> Web
     Web -->|HTTPS / JSON| API[Bull Dog Solution API]
     API --> DB[(PostgreSQL)]
-    API --> S3[(S3 / MinIO privado)]
+    API --> Storage[(Almacenamiento privado de archivos)]
     API --> Sheets[Google Sheets API]
     API --> Metrics[Prometheus / colector]
 ```
@@ -44,11 +44,11 @@ flowchart TB
     Browser --> Nginx
     Nginx -->|/api/v1| Express
     Domain --> Postgres[(PostgreSQL)]
-    Domain --> ObjectStore[(S3 / MinIO)]
+    Domain --> ObjectStore[(Proveedor de almacenamiento configurado)]
     Domain --> Google[Google Sheets]
 ```
 
-En AWS, Nginx y Express viven en la misma tarea Fargate y Nginx puede alcanzar la API en `127.0.0.1:3000`. En Docker Compose viven en contenedores distintos; PostgreSQL y MinIO usan volúmenes persistentes y `minio-init` crea el bucket y bloquea el acceso anónimo. La topología detallada y la divergencia conocida del proxy local están documentadas en [Infraestructura y operación](./infrastructure-and-operations.md).
+En AWS, Nginx y Express viven en la misma tarea Fargate y Nginx puede alcanzar la API en `127.0.0.1:3000`. Docker Compose ofrece un proveedor de objetos local mediante MinIO y un volumen persistente; es una configuración de desarrollo, no el modelo arquitectónico del almacenamiento. La topología detallada y la divergencia conocida del proxy local están documentadas en [Infraestructura y operación](./infrastructure-and-operations.md).
 
 ## Capas lógicas
 
@@ -61,7 +61,7 @@ flowchart TD
     Service[Servicios de aplicación y dominio]
     Port[Puertos de integración]
     Prisma[Prisma Client]
-    Adapter[Adaptadores Sheets y S3]
+    Adapter[Adaptadores Sheets y almacenamiento]
 
     View --> Query --> Http --> Router --> Service
     Service --> Prisma --> DB[(PostgreSQL)]
@@ -102,17 +102,17 @@ docs/                    requisitos, decisiones y documentación técnica
 - Monolito modular antes que microservicios.
 - Catálogos externos con snapshots locales dentro de la orden.
 - Escrituras a Sheets mediante outbox persistente y reintentos.
-- Carga directa de evidencias a S3 usando URLs prefirmadas.
+- Almacenamiento privado de evidencias, firmas y reportes detrás de adaptadores de proveedor.
 - Reportes PDF generados en segundo plano y versionados mediante abstracción `ReportGeneratorPort`.
 - Ciclo de vida y transiciones de orden gobernados por una máquina de estados de dominio explícita (`order-state-machine`).
 - Validación de cierre y completitud técnica desacoplada mediante patrón de especificación pura (`order-completeness`).
-- Tolerancia a fallos en adaptadores externos (Sheets y S3) protegida por Circuit Breaker con estados CLOSED, OPEN y HALF-OPEN.
+- Tolerancia a fallos en adaptadores externos (Sheets y almacenamiento) protegida por Circuit Breaker con estados CLOSED, OPEN y HALF-OPEN.
 - JWT de acceso en memoria del navegador; refresh token en cookie HTTP-only.
 - TanStack Query para estado remoto; Pinia se limita a sesión y estado global de UI.
 - Mocks de Sheets, almacenamiento y claves JWT únicamente en desarrollo con valores `development-only`.
 - Staging definido como infraestructura inmutable en dos stacks CDK: foundation para estado/red y application para cómputo/entrega.
 
-## Estado implementado al 2026-09-17
+## Estado implementado al 2026-09-25
 
 - El acceso técnico compartido se modela como configuración versionada y auditable; las políticas
   distinguen ejecución individual de tablero multiorden.
@@ -122,5 +122,12 @@ docs/                    requisitos, decisiones y documentación técnica
   detalle operativo tienen selects, mapeadores y contratos separados.
 - La web reconcilia la identidad con `/auth/me` al navegar, recuperar foco y actualizar el tablero;
   las APIs de cuentas técnicas viven fuera del módulo `orders`.
+- Las consultas de órdenes, la reprogramación de citas fallidas, la finalización y los medios de
+  ejecución, el almacenamiento de reportes y varios flujos de la web tienen límites dedicados; sus
+  servicios/vistas públicas conservan fachadas y contratos compatibles. El alcance y la deuda
+  residual se detallan en la [auditoría de mantenibilidad](../maintainability-audit.md).
+- Evidencias, firmas y reportes usan el proveedor configurado; Google Drive está integrado y el
+  adaptador de objetos se conserva para entornos que lo seleccionen. Cada proveedor mantiene sus
+  protocolos de permisos, reintento y confirmación.
 
 La secuencia histórica de implementación y sus commits está en la [línea de tiempo del proyecto](../project-timeline.md).

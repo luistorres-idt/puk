@@ -1,9 +1,9 @@
 # Línea de tiempo del proyecto
 
-Esta línea de tiempo resume la evolución implementada en el repositorio y el plan UX inmediato. Las
-fechas históricas se obtienen del historial Git; el trabajo UX del 21 de septiembre todavía está en
-la rama activa y aún no tiene commit. El plan restante cubre únicamente días laborales: lunes 21 a
-viernes 25 de septiembre, sin sábado ni domingo.
+Esta línea de tiempo resume la evolución implementada en el repositorio hasta el 25 de septiembre
+de 2026. Las fechas históricas y los commits representativos se obtienen del historial Git. El
+trabajo UX de cuentas técnicas y la limpieza de mantenibilidad ya están integrados en la rama
+actual; no queda un plan laboral pendiente reflejado aquí.
 
 ## Diagrama de Gantt
 
@@ -36,15 +36,15 @@ gantt
     Administración de cuentas y reconciliación web :done, shared-web, 2026-09-14, 1d
     Seguridad viva, read models y límites de módulos :done, hardening, 2026-09-17, 2d
 
-    section UX y estabilización
+    section UX, integraciones y estabilización
     Tema claro/oscuro persistente, hardening y documentación :done, staging-ux, 2026-09-18, 1d
     Auditoría UX y mockup de cuentas técnicas              :done, ux-audit, 2026-09-21, 1d
     Feedback parcial, reintentos y acciones accesibles    :done, ux-accounts, 2026-09-21, 1d
     Shell administrativo y tokens dark mode                :done, ux-shell, 2026-09-21, 1d
-    Validación responsive y ajustes visuales               :active, ux-validation, 2026-09-22, 1d
-    Pruebas de accesibilidad e interacción                 :ux-a11y, 2026-09-23, 1d
-    Tokens y superficies del resto de administración       :ux-admin, 2026-09-24, 1d
-    Estabilización y revisión de entrega UX                :ux-handoff, 2026-09-25, 1d
+    Catálogo por unidad y composición del wizard            :done, order-wizard, 2026-09-22, 1d
+    Integración de evidencias y reportes con Drive          :done, drive, 2026-09-23, 2d
+    Refactor de límites de órdenes, ejecución y web         :done, maintainability, 2026-09-25, 1d
+    Estabilización de pruebas E2E de tema                   :done, theme-tests, 2026-09-25, 1d
 ```
 
 El Gantt muestra fases por día laboral. Los fines de semana quedan fuera del calendario de trabajo y
@@ -62,16 +62,10 @@ no se agregan tareas para esos días.
 | 2026-09-14 | Acceso compartido               | `5cefdbe`, `1acd4ed`, `39e7b19`, `b65621c`, `34d9cb2`, `7b9a9c3`, `6df839a` | Cuenta técnica compartida, tablero multiorden, permisos y administración de cuentas.                      |
 | 2026-09-17 | Endurecimiento y mantenibilidad | `6fb7580`                                                                   | Principal vigente, read models seguros, reconciliación de sesión, límites de módulos y refactor frontend. |
 | 2026-09-18 | Staging y tema                 | `2abece9`, `46ffb5e`, `bf285db`                                             | Tema persistente claro/oscuro, hardening de despliegue y documentación operativa.                         |
-| 2026-09-21 | UX de cuentas técnicas         | Rama activa, sin commit todavía                                            | Auditoría, mockup, estados parciales, reintentos, acciones accesibles, navegación agrupada y tokens del shell. |
-
-## Plan laboral restante
-
-| Fecha      | Trabajo previsto                                | Resultado esperado                                      |
-| ---------- | ----------------------------------------------- | ------------------------------------------------------- |
-| 2026-09-22 | Validación responsive y ajustes visuales        | Cuentas técnicas verificadas en desktop y mobile.      |
-| 2026-09-23 | Pruebas de accesibilidad e interacción          | Teclado, foco, errores, reintentos y estados validados. |
-| 2026-09-24 | Tokens y superficies del resto de administración | Tema oscuro consistente en pantallas administrativas.  |
-| 2026-09-25 | Estabilización y revisión de entrega UX         | Diff acotado, tests verdes y entrega lista para review. |
+| 2026-09-21 | UX de cuentas técnicas         | `48d127d`, `1754850`, `6508887`                                             | Auditoría y mockup, feedback/reintentos, acciones accesibles y superficies administrativas del tema.         |
+| 2026-09-22 | UX del asistente de órdenes    | `82cfe23`, `8f1a98b`                                                        | Estado del wizard en composables y explicación de ejecución por unidad.                                      |
+| 2026-09-23 | Google Drive                   | `0f7c455`, `820b47f`, `a6e386d`                                             | Evidencias, firmas y reportes privados en Drive, organización y documentación/benchmark.                     |
+| 2026-09-25 | Mantenibilidad y estabilización| `68b769b`, `365c7b4`, `24b91fd`–`cfd7856`                                  | Separación de consultas, flujos y presentación; auditoría actualizada y aserciones E2E de tema estabilizadas. |
 
 ## Hitos actuales
 
@@ -82,8 +76,10 @@ no se agregan tareas para esos días.
   operativas sin datos administrativos.
 - **Calidad:** contratos compartidos, pruebas unitarias/integración/E2E, OpenAPI validado, build y
   auditoría de dependencias de producción sin vulnerabilidades conocidas.
-- **UX en curso:** primera tajada de cuentas técnicas implementada; quedan validación visual,
-  accesibilidad y extensión de tokens administrativos.
+- **UX y estabilización:** los cambios de cuentas técnicas y del asistente están integrados; las
+  pruebas E2E del tema fueron ajustadas para tolerar diferencias de Chromium.
+- **Mantenibilidad:** limpieza prioritaria reportada y verificada; las limitaciones y deuda residual
+  permanecen explícitas en `docs/maintainability-audit.md`.
 
 ## Criterio de lectura
 

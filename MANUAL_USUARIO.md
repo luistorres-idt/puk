@@ -283,7 +283,7 @@ Al terminar los trabajos mecánicos/eléctricos, debes realizar la inspección d
 
 1. Pulsa sobre el icono de cámara en la categoría correspondiente.
 2. Toma una foto clara y bien iluminada desde tu teléfono.
-3. La foto se sube automáticamente a almacenamiento privado seguro (S3).
+3. La foto se carga automáticamente al almacenamiento privado mediante la aplicación.
 4. El sistema mostrará una miniatura con confirmación verde.
 5. Si alguna unidad no tiene las diez fotos requeridas, la aplicación indicará el requisito pendiente y no permitirá finalizar.
 
