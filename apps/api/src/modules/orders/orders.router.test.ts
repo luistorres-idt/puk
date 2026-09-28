@@ -49,6 +49,9 @@ describe('order HTTP validation', () => {
     orderUnit: { findUnique: vi.fn() },
     orderEquipment: { findFirst: vi.fn() },
   };
+  const mockOrderPricingService = {
+    updateOrderPricing: vi.fn(),
+  };
   const app = express();
   app.use(express.json());
   app.use(
@@ -58,6 +61,7 @@ describe('order HTTP validation', () => {
         resolve: resolvePrincipal,
       }),
       ordersService: new OrdersService(database as unknown as PrismaClient),
+      orderPricingService: mockOrderPricingService as any,
     }),
   );
   app.use(errorHandler);
@@ -177,4 +181,51 @@ describe('order HTTP validation', () => {
       }
     },
   );
+
+  it('updates order pricing overrides via PATCH /orders/:id/pricing as ADMIN', async () => {
+    mockOrderPricingService.updateOrderPricing.mockResolvedValue({
+      id: orderId,
+      pricingOverrides: {
+        rates: { INSTALLATION: '850.00' },
+        travelExpenses: '400.00',
+      },
+    });
+
+    const response = await request(app)
+      .patch(`/orders/${orderId}/pricing`)
+      .set('Authorization', 'Bearer test-session')
+      .send({
+        rates: { INSTALLATION: '850.00' },
+        travelExpenses: '400.00',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.pricingOverrides).toEqual({
+      rates: { INSTALLATION: '850.00' },
+      travelExpenses: '400.00',
+    });
+    expect(mockOrderPricingService.updateOrderPricing).toHaveBeenCalledWith(
+      'admin-demo',
+      orderId,
+      {
+        rates: { INSTALLATION: '850.00' },
+        travelExpenses: '400.00',
+      },
+    );
+  });
+
+  it('rejects pricing update via PATCH /orders/:id/pricing from non-admin role', async () => {
+    verifyAccessToken.mockResolvedValue({ role: 'TECHNICIAN', sub: 'tech-demo' });
+    resolvePrincipal.mockImplementation(async (userId) => ({ id: userId, role: 'TECHNICIAN' }));
+
+    const response = await request(app)
+      .patch(`/orders/${orderId}/pricing`)
+      .set('Authorization', 'Bearer test-session')
+      .send({
+        rates: { INSTALLATION: '850.00' },
+      });
+
+    expect(response.status).toBe(403);
+    expect(mockOrderPricingService.updateOrderPricing).not.toHaveBeenCalled();
+  });
 });

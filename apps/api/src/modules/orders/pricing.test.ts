@@ -269,5 +269,102 @@ describe('Pricing Calculation Module', () => {
         }),
       ]);
     });
+
+    describe('pricing overrides', () => {
+      it('applies custom service rate override over technician default', () => {
+        const pricing = calculateOrderPricing({
+          technician: mockTech,
+          serviceType: 'INSTALLATION',
+          equipmentCount: 2,
+          isHomeService: false,
+          overrides: {
+            rates: { INSTALLATION: '850.00' },
+          },
+        });
+
+        // 850 * 2 = 1700
+        expect(pricing.unitRate?.toFixed(2)).toBe('850.00');
+        expect(pricing.baseCost.toFixed(2)).toBe('1700.00');
+        expect(pricing.total.toFixed(2)).toBe('1700.00');
+        expect(pricing.warnings).toHaveLength(0);
+      });
+
+      it('applies custom travel expenses override regardless of isHomeService', () => {
+        const pricing = calculateOrderPricing({
+          technician: mockTech,
+          serviceType: 'INSTALLATION',
+          equipmentCount: 1,
+          isHomeService: false, // normally 0.00
+          overrides: {
+            travelExpenses: '450.00',
+          },
+        });
+
+        expect(pricing.travelExpenses.toFixed(2)).toBe('450.00');
+        expect(pricing.baseCost.toFixed(2)).toBe('700.00');
+        expect(pricing.total.toFixed(2)).toBe('1150.00');
+      });
+
+      it('applies partial overrides in multi-service orders', () => {
+        const pricing = calculateOrderPricing({
+          technician: mockTech,
+          isHomeService: true,
+          items: [
+            { serviceType: 'INSTALLATION', equipmentCount: 1 },
+            { serviceType: 'REVIEW', equipmentCount: 1 },
+          ],
+          overrides: {
+            rates: {
+              INSTALLATION: '900.00', // override (default is 700)
+              // REVIEW is omitted => should use mockTech.reviewRate (400)
+            },
+            departureCost: '500.00', // override departure (default is 350)
+          },
+        });
+
+        expect(pricing.baseCost.toFixed(2)).toBe('1300.00'); // 900 + 400
+        expect(pricing.departureCost.toFixed(2)).toBe('500.00');
+        expect(pricing.travelExpenses.toFixed(2)).toBe('500.00');
+        expect(pricing.total.toFixed(2)).toBe('1800.00'); // 1300 + 500
+      });
+
+      it('applies custom override to FAILED_APPOINTMENT', () => {
+        const pricing = calculateOrderPricing({
+          technician: mockTech,
+          serviceType: 'FAILED_APPOINTMENT',
+          equipmentCount: 1,
+          isHomeService: false,
+          overrides: {
+            rates: { FAILED_APPOINTMENT: '450.00' }, // default was 250
+            travelExpenses: '100.00',
+          },
+        });
+
+        expect(pricing.baseCost.toFixed(2)).toBe('450.00');
+        expect(pricing.travelExpenses.toFixed(2)).toBe('100.00');
+        expect(pricing.total.toFixed(2)).toBe('550.00');
+        expect(pricing.warnings).toHaveLength(0);
+      });
+
+      it('allows overriding a rate that was unconfigured on the technician without emitting warnings', () => {
+        const techMissing: TechnicianPricingSource = {
+          ...mockTech,
+          installationRate: null,
+        };
+        const pricing = calculateOrderPricing({
+          technician: techMissing,
+          serviceType: 'INSTALLATION',
+          equipmentCount: 1,
+          isHomeService: false,
+          overrides: {
+            rates: { INSTALLATION: '600.00' },
+          },
+        });
+
+        expect(pricing.baseCost.toFixed(2)).toBe('600.00');
+        expect(pricing.total.toFixed(2)).toBe('600.00');
+        expect(pricing.warnings).toHaveLength(0);
+      });
+    });
   });
 });

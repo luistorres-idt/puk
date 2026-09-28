@@ -7,6 +7,7 @@ import {
   EquipmentParamsSchema,
   IdParamsSchema,
   OrderListQuerySchema,
+  OrderPricingOverridesSchema,
   RescheduleFailedAppointmentSchema,
   UnitParamsSchema,
   UpdateOrderSchema,
@@ -16,13 +17,16 @@ import {
 import { authorize } from '../../auth/authenticate.js';
 import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
+import { AppError } from '../../shared/errors.js';
 import type { OrdersService } from './orders.service.js';
+import type { OrderPricingService } from './order-pricing.service.js';
 import type { SyncService } from './sync.service.js';
 
 export function createOrdersRouter(options: {
   ordersService: OrdersService;
   requireAccess: RequestHandler;
   syncService?: SyncService;
+  orderPricingService?: OrderPricingService;
 }): Router {
   const router = Router();
   router.use(options.requireAccess);
@@ -87,6 +91,26 @@ export function createOrdersRouter(options: {
         String(request.params.id),
         request.body,
       );
+      sendSuccess(response, updated);
+    },
+  );
+
+  router.patch(
+    '/:id/pricing',
+    authorize('orders:manage'),
+    validate({ body: OrderPricingOverridesSchema, params: IdParamsSchema }),
+    async (request, response) => {
+      if (!options.orderPricingService) {
+        throw new AppError(500, 'PRICING_SERVICE_UNAVAILABLE', 'Servicio de tarifas no disponible');
+      }
+      const updated = await options.orderPricingService.updateOrderPricing(
+        request.auth!.userId,
+        String(request.params.id),
+        request.body,
+      );
+      if (options.syncService) {
+        options.syncService.processPendingOperations().catch(() => {});
+      }
       sendSuccess(response, updated);
     },
   );

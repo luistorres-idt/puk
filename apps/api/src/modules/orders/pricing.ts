@@ -1,4 +1,4 @@
-import type { PricingBreakdown } from '@puk/contracts';
+import type { OrderPricingOverrides, PricingBreakdown } from '@puk/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { OrderServiceType } from '../../generated/prisma/client.js';
 
@@ -57,6 +57,7 @@ export interface CalculateOrderPricingInput {
     serviceType: OrderServiceType;
     equipmentCount?: number;
   }>;
+  readonly overrides?: OrderPricingOverrides | null;
 }
 
 export function createPricingBreakdownSnapshot(pricing: CalculatedOrderPricing): PricingBreakdown {
@@ -94,33 +95,34 @@ function roundToTwoDecimals(d: Prisma.Decimal): Prisma.Decimal {
 export function resolveServiceRate(
   technician: TechnicianPricingSource,
   serviceType: OrderServiceType,
+  overrideRate?: Prisma.Decimal | string | number | null,
 ): ServiceRateResolution {
   let rawRate: Prisma.Decimal | string | number | null | undefined;
   let rateLabel: string;
 
   switch (serviceType) {
     case 'INSTALLATION':
-      rawRate = technician.installationRate;
+      rawRate = overrideRate !== undefined ? overrideRate : technician.installationRate;
       rateLabel = 'INSTALACION';
       break;
     case 'REVIEW':
-      rawRate = technician.reviewRate;
+      rawRate = overrideRate !== undefined ? overrideRate : technician.reviewRate;
       rateLabel = 'REVISION';
       break;
     case 'UNINSTALLATION':
-      rawRate = technician.uninstallationRate;
+      rawRate = overrideRate !== undefined ? overrideRate : technician.uninstallationRate;
       rateLabel = 'DESINSTALACION';
       break;
     case 'FAILED_APPOINTMENT':
-      rawRate = technician.failedAppointmentRate;
+      rawRate = overrideRate !== undefined ? overrideRate : technician.failedAppointmentRate;
       rateLabel = 'CITA FALLIDA';
       break;
     case 'FUEL_SENSOR':
-      rawRate = technician.fuelSensorRate;
+      rawRate = overrideRate !== undefined ? overrideRate : technician.fuelSensorRate;
       rateLabel = 'SENSOR FUEL';
       break;
     case 'EQUIPMENT_REPLACEMENT':
-      rawRate = technician.replacementRate;
+      rawRate = overrideRate !== undefined ? overrideRate : technician.replacementRate;
       rateLabel = 'CAMBIO DE EQUIPO';
       break;
   }
@@ -136,20 +138,32 @@ export function resolveServiceRate(
 }
 
 export function calculateOrderPricing(input: CalculateOrderPricingInput): CalculatedOrderPricing {
-  const { technician, isHomeService } = input;
+  const { technician, isHomeService, overrides } = input;
 
-  const rawDeparture = toDecimalOrNull(technician.departureCost);
+  const rawOverrideDeparture =
+    overrides?.departureCost !== undefined && overrides.departureCost !== null
+      ? toDecimalOrNull(overrides.departureCost)
+      : null;
+  const rawDeparture = rawOverrideDeparture ?? toDecimalOrNull(technician.departureCost);
   const departureCost = rawDeparture
     ? roundToTwoDecimals(rawDeparture)
     : new Prisma.Decimal('0.00');
-  const travelExpenses = isHomeService ? departureCost : new Prisma.Decimal('0.00');
+
+  let travelExpenses: Prisma.Decimal;
+  if (overrides?.travelExpenses !== undefined && overrides.travelExpenses !== null) {
+    const rawTravel = toDecimalOrNull(overrides.travelExpenses);
+    travelExpenses = rawTravel ? roundToTwoDecimals(rawTravel) : new Prisma.Decimal('0.00');
+  } else {
+    travelExpenses = isHomeService ? departureCost : new Prisma.Decimal('0.00');
+  }
 
   const pricingVersion = input.pricingVersion ?? 1;
   const snapshotAt = input.snapshotAt ?? new Date();
 
   // Special case: FAILED_APPOINTMENT
   if (input.serviceType === 'FAILED_APPOINTMENT') {
-    const resolution = resolveServiceRate(technician, 'FAILED_APPOINTMENT');
+    const override = overrides?.rates?.FAILED_APPOINTMENT;
+    const resolution = resolveServiceRate(technician, 'FAILED_APPOINTMENT', override);
     const appliedQuantity = Math.max(1, input.equipmentCount ?? 0);
     if (!resolution.isConfigured || resolution.rate === null) {
       // Missing or invalid fee in CITA FALLIDA => 0.00
@@ -216,7 +230,8 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
     let baseCost = new Prisma.Decimal('0.00');
 
     for (const [sType, count] of grouped.entries()) {
-      const resolution = resolveServiceRate(technician, sType);
+      const override = overrides?.rates?.[sType];
+      const resolution = resolveServiceRate(technician, sType, override);
       let effectiveRate: Prisma.Decimal;
       if (!resolution.isConfigured || resolution.rate === null) {
         effectiveRate = new Prisma.Decimal('0.00');
@@ -265,7 +280,8 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
   // Single-service fallback
   const serviceType = input.serviceType ?? 'INSTALLATION';
   const equipmentCount = input.equipmentCount ?? 0;
-  const resolution = resolveServiceRate(technician, serviceType);
+  const override = overrides?.rates?.[serviceType];
+  const resolution = resolveServiceRate(technician, serviceType, override);
   const warnings: string[] = [];
   let effectiveRate: Prisma.Decimal;
 

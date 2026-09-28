@@ -1,4 +1,9 @@
-import type { FailAppointment, RequireCorrection } from '@puk/contracts';
+import * as v from 'valibot';
+import {
+  OrderPricingOverridesSchema,
+  type FailAppointment,
+  type RequireCorrection,
+} from '@puk/contracts';
 import { domainTransaction } from '../../database/transaction.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, Prisma, UnitStatus, UploadStatus } from '../../generated/prisma/client.js';
@@ -110,6 +115,9 @@ export class OrderFinalizationService {
       isHomeService: fullOrder.isHomeService,
       pricingVersion: (fullOrder.pricingVersion ?? 0) + 1,
       snapshotAt: new Date(),
+      overrides: fullOrder.pricingOverrides
+        ? v.parse(OrderPricingOverridesSchema, fullOrder.pricingOverrides)
+        : null,
     });
 
     if (pricing.warnings && pricing.warnings.length > 0) {
@@ -282,6 +290,9 @@ export class OrderFinalizationService {
           isHomeService: fullOrder.isHomeService,
           pricingVersion: (fullOrder.pricingVersion ?? 0) + 1,
           snapshotAt: new Date(),
+          overrides: fullOrder.pricingOverrides
+            ? v.parse(OrderPricingOverridesSchema, fullOrder.pricingOverrides)
+            : null,
         })
       : null;
 
@@ -421,6 +432,9 @@ export class OrderFinalizationService {
         isHomeService: order.isHomeService,
         pricingVersion: nextVersion,
         snapshotAt: new Date(),
+        overrides: order.pricingOverrides
+          ? v.parse(OrderPricingOverridesSchema, order.pricingOverrides)
+          : null,
       });
     }
 

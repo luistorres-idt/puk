@@ -19,6 +19,7 @@ import {
 import { createCatalogsRouter } from './modules/catalogs/index.js';
 import {
   createOrdersRouter,
+  type OrderPricingService,
   type OrdersService,
   type SyncService,
 } from './modules/orders/index.js';
@@ -38,6 +39,7 @@ export interface AppOptions {
   auth?: Omit<AuthRouterOptions, 'requireAccess'> & { minimumPasswordLength: number };
   catalogsService?: CatalogServicePort;
   ordersService?: OrdersService;
+  orderPricingService?: OrderPricingService;
   syncService?: SyncService;
   executionService?: ExecutionService;
   reportsService?: ReportsService;
@@ -120,6 +122,9 @@ export function createApp(options: AppOptions = {}): Express {
           ordersService: options.ordersService,
           requireAccess,
           ...(options.syncService !== undefined ? { syncService: options.syncService } : {}),
+          ...(options.orderPricingService !== undefined
+            ? { orderPricingService: options.orderPricingService }
+            : {}),
         }),
       );
     }
