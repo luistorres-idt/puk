@@ -70,6 +70,9 @@ jobs:
       - name: Synthesize AWS infrastructure
         run: pnpm infra:synth
 
+      - name: Test AWS infrastructure
+        run: pnpm infra:test
+
       - name: Security audit
         run: pnpm audit
 
