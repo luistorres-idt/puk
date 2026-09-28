@@ -2,11 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrderStatus, type PrismaClient } from '../../generated/prisma/client.js';
 import { OrderPricingService } from './order-pricing.service.js';
 
+interface MockDatabase {
+  order: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
+  $transaction: ReturnType<typeof vi.fn>;
+}
+
 describe('OrderPricingService', () => {
-  let mockPrisma: any;
+  let mockPrisma: MockDatabase;
   let service: OrderPricingService;
-  let enqueuedAudits: any[] = [];
-  let enqueuedOutbox: any[] = [];
+  let enqueuedAudits: Array<Record<string, unknown>> = [];
+  let enqueuedOutbox: Array<Record<string, unknown>> = [];
 
   const baseOrder = {
     id: '00000000-0000-4000-8000-000000000001',
@@ -42,20 +49,20 @@ describe('OrderPricingService', () => {
 
     const txMock = {
       order: {
-        update: vi.fn(async ({ data }) => ({
+        update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
           ...baseOrder,
           ...data,
         })),
       },
       sheetSyncOperation: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-        createMany: vi.fn(async ({ data }) => {
+        createMany: vi.fn(async ({ data }: { data: Array<Record<string, unknown>> }) => {
           enqueuedOutbox.push(...data);
           return { count: data.length };
         }),
       },
       auditLog: {
-        createMany: vi.fn(async ({ data }) => {
+        createMany: vi.fn(async ({ data }: { data: Array<Record<string, unknown>> }) => {
           enqueuedAudits.push(...data);
           return { count: data.length };
         }),
@@ -66,7 +73,7 @@ describe('OrderPricingService', () => {
       order: {
         findUnique: vi.fn(),
       },
-      $transaction: vi.fn(async (cb) => cb(txMock)),
+      $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(txMock)),
     };
 
     service = new OrderPricingService(mockPrisma as unknown as PrismaClient);

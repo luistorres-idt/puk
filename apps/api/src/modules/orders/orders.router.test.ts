@@ -9,6 +9,7 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import { errorHandler } from '../../middleware/error-handler.js';
 import { createOrdersRouter } from './orders.router.js';
 import { OrdersService } from './orders.service.js';
+import type { OrderPricingService } from './order-pricing.service.js';
 
 const technicianId = '00000000-0000-4000-8000-000000000001';
 const orderId = '00000000-0000-4000-8000-000000000002';
@@ -61,7 +62,7 @@ describe('order HTTP validation', () => {
         resolve: resolvePrincipal,
       }),
       ordersService: new OrdersService(database as unknown as PrismaClient),
-      orderPricingService: mockOrderPricingService as any,
+      orderPricingService: mockOrderPricingService as unknown as OrderPricingService,
     }),
   );
   app.use(errorHandler);
