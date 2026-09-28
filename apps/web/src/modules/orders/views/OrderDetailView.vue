@@ -516,6 +516,20 @@ const statusColor = orderStatusTagType;
               <span class="text-xs text-slate-400 block">
                 Cita: {{ new Date(order.scheduledAt).toLocaleString() }}
               </span>
+              <div v-if="canManagePricing && !order.pricingBreakdown" class="mt-1">
+                <button
+                  type="button"
+                  class="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  @click="openPricingModal"
+                >
+                  <span>{{
+                    hasPricingOverrides
+                      ? 'Tarifas acordadas configuradas'
+                      : 'Configurar tarifas para esta orden'
+                  }}</span>
+                  <span>→</span>
+                </button>
+              </div>
             </div>
           </div>
           <div
@@ -541,9 +555,6 @@ const statusColor = orderStatusTagType;
             <div class="flex justify-between items-center mb-1">
               <div class="flex items-center gap-2">
                 <strong class="text-slate-700">Desglose de Liquidación Técnica:</strong>
-                <n-tag v-if="hasPricingOverrides" size="tiny" type="success" round>
-                  Tarifas personalizadas
-                </n-tag>
                 <n-button
                   v-if="canManagePricing"
                   size="tiny"
@@ -597,28 +608,12 @@ const statusColor = orderStatusTagType;
                 </div>
               </div>
             </div>
-          </div>
-          <div
-            v-else-if="canManagePricing"
-            class="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600 flex justify-between items-center"
-          >
-            <div class="flex items-center gap-2">
-              <strong class="text-slate-700">Tarifas del Técnico:</strong>
-              <n-tag v-if="hasPricingOverrides" size="tiny" type="success" round>
-                Tarifas personalizadas configuradas
-              </n-tag>
-              <span v-else class="text-slate-400 italic">
-                Tarifas base del catálogo
-              </span>
-            </div>
-            <n-button
-              size="tiny"
-              type="primary"
-              secondary
-              @click="openPricingModal"
+            <div
+              v-if="order.pricingOverrides?.reason"
+              class="mt-2 text-[11px] text-slate-500 italic"
             >
-              Configurar Tarifas Acordadas
-            </n-button>
+              <strong>Motivo de ajuste:</strong> {{ order.pricingOverrides.reason }}
+            </div>
           </div>
           <div
             v-if="order.generalNotes"

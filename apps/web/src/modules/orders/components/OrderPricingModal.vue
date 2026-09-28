@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { toRefs } from 'vue';
-import {
-  NAlert,
-  NButton,
-  NInput,
-  NInputNumber,
-  NModal,
-  NTag,
-  useMessage,
-} from 'naive-ui';
+import { NButton, NInput, NInputNumber, NModal, useMessage } from 'naive-ui';
 import type { OrderPricingOverrides } from '@puk/contracts';
 import { ORDER_SERVICE_LABELS } from '@puk/contracts';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
@@ -40,12 +32,9 @@ const {
   travelExpenses,
   reason,
   isFinalized,
-  distinctOrderServices,
   displayedServices,
   openPricingModal,
   closePricingModal,
-  resetRateToBase,
-  resetTravelExpenses,
   handleSave,
 } = useOrderPricingModal({
   orderId: props.orderId,
@@ -66,176 +55,127 @@ defineExpose({
   <n-modal
     v-model:show="showPricingModal"
     preset="card"
-    :title="
-      isFinalized
-        ? 'Ajustar Precios de Liquidación Técnica'
-        : 'Configurar Tarifas Acordadas de la Orden'
-    "
-    class="w-[92vw] max-w-xl"
+    :title="isFinalized ? 'Ajustar Precios de Liquidación' : 'Tarifas Acordadas de la Orden'"
+    class="w-[92vw] max-w-lg"
   >
-    <div class="space-y-5">
-      <!-- Context Alert -->
-      <n-alert
-        v-if="isFinalized"
-        type="warning"
-        title="Ajuste Contable Posterior al Cierre"
-        :bordered="false"
+    <div class="space-y-4">
+      <!-- Context Header Info -->
+      <div
+        class="text-xs text-slate-500 pb-2 border-b border-slate-100 flex flex-wrap items-center gap-x-3 gap-y-1"
       >
-        Al guardar, se recalculará automáticamente la liquidación técnica con las nuevas tarifas,
-        se generará una nueva versión contable y se programará la actualización hacia Google Sheets.
-      </n-alert>
-      <n-alert v-else type="info" title="Tarifas Personalizadas para la Orden" :bordered="false">
-        Las tarifas ingresadas aquí sobreescribirán las tarifas base del técnico cuando la orden sea
-        completada. Cualquier servicio que dejes vacío utilizará la tarifa base del catálogo.
-      </n-alert>
-
-      <!-- Order Context Info -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 p-3 bg-slate-50 rounded border text-xs">
-        <div>
-          <span class="text-slate-400 block">Folio</span>
-          <span class="font-bold text-slate-800">{{ order?.folio ?? '-' }}</span>
-        </div>
-        <div>
-          <span class="text-slate-400 block">Cliente</span>
-          <span class="font-semibold text-slate-800 truncate block">{{
-            order?.clientNameSnapshot ?? '-'
-          }}</span>
-        </div>
-        <div>
-          <span class="text-slate-400 block">Técnico Asignado</span>
-          <span class="font-semibold text-slate-800 truncate block">
-            {{ order?.technician?.name ?? 'Sin asignar' }}
-          </span>
-        </div>
+        <span><strong class="text-slate-700">Folio:</strong> {{ order?.folio ?? '-' }}</span>
+        <span>·</span>
+        <span>
+          <strong class="text-slate-700">Técnico:</strong>
+          {{ order?.technician?.name ?? 'Sin asignar' }}
+        </span>
+        <span>·</span>
+        <span class="truncate max-w-[200px]">
+          <strong class="text-slate-700">Cliente:</strong> {{ order?.clientNameSnapshot ?? '-' }}
+        </span>
       </div>
 
-      <!-- Services Rates Section -->
-      <div class="space-y-3">
-        <div class="flex justify-between items-center">
-          <div>
-            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Tarifas por Servicio (MXN)
-            </h4>
-            <p class="text-[11px] text-slate-500">
-              Personaliza el precio unitario por cada servicio ejecutado.
-            </p>
-          </div>
-          <n-button
-            text
-            size="tiny"
-            type="primary"
-            @click="showAllServices = !showAllServices"
-          >
-            {{
-              showAllServices
-                ? 'Mostrar solo servicios de la orden'
-                : 'Ver todos los servicios del catálogo'
-            }}
-          </n-button>
-        </div>
+      <p class="text-xs text-slate-500 leading-relaxed">
+        {{
+          isFinalized
+            ? 'Modifica los precios unitarios o viáticos aplicados a esta orden. La liquidación se recalculará automáticamente.'
+            : 'Establece tarifas personalizadas para esta orden. Si dejas un campo vacío, se utilizará la tarifa base del técnico.'
+        }}
+      </p>
 
-        <div class="space-y-2.5">
-          <div
-            v-for="svc in displayedServices"
-            :key="svc"
-            class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
-          >
-            <div class="flex justify-between items-center mb-1.5">
-              <div class="flex items-center gap-1.5">
-                <span class="font-semibold text-xs text-slate-800">
-                  {{ ORDER_SERVICE_LABELS[svc] }}
-                </span>
-                <n-tag
-                  v-if="distinctOrderServices.includes(svc)"
-                  size="tiny"
-                  type="info"
-                  round
+      <!-- Clean Tabular Pricing Form -->
+      <div class="border border-slate-200 rounded-lg overflow-hidden">
+        <table class="w-full text-xs text-left border-collapse">
+          <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+            <tr>
+              <th class="py-2 px-3 font-semibold">Servicio</th>
+              <th class="py-2 px-3 font-semibold text-right">Tarifa Base</th>
+              <th class="py-2 px-3 font-semibold text-right w-44">Tarifa de la Orden</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr
+              v-for="svc in displayedServices"
+              :key="svc"
+              class="hover:bg-slate-50/50 transition-colors"
+            >
+              <td class="py-2 px-3">
+                <span class="font-medium text-slate-800">{{ ORDER_SERVICE_LABELS[svc] }}</span>
+              </td>
+              <td class="py-2 px-3 text-right font-mono text-slate-500">
+                {{
+                  getTechnicianBaseRate(svc, order)
+                    ? `$${Number(getTechnicianBaseRate(svc, order)).toFixed(2)}`
+                    : '—'
+                }}
+              </td>
+              <td class="py-1.5 px-3 text-right">
+                <n-input-number
+                  v-model:value="rates[svc]"
+                  :min="0"
+                  :precision="2"
+                  :placeholder="
+                    getTechnicianBaseRate(svc, order)
+                      ? Number(getTechnicianBaseRate(svc, order)).toFixed(2)
+                      : '0.00'
+                  "
+                  size="small"
+                  class="w-full text-right"
                 >
-                  En esta orden
-                </n-tag>
-              </div>
-              <div class="text-[11px] text-slate-500">
-                <span v-if="getTechnicianBaseRate(svc, order)" class="font-mono">
-                  Base: ${{ Number(getTechnicianBaseRate(svc, order)).toFixed(2) }}
-                </span>
-                <span v-else class="italic text-slate-400">
-                  Base: No configurada
-                </span>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <n-input-number
-                v-model:value="rates[svc]"
-                :min="0"
-                :precision="2"
-                placeholder="Tarifa personalizada..."
-                class="flex-1"
-                size="small"
-              >
-                <template #prefix>$</template>
-              </n-input-number>
-
-              <n-button
-                v-if="rates[svc] !== null && rates[svc] !== undefined"
-                size="tiny"
-                quaternary
-                type="warning"
-                @click="resetRateToBase(svc)"
-              >
-                Revertir a base
-              </n-button>
-            </div>
-          </div>
-        </div>
+                  <template #prefix>$</template>
+                </n-input-number>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      <!-- Travel Expenses Section -->
-      <div class="space-y-2 pt-2 border-t border-slate-100">
-        <div>
-          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Viáticos y Costo de Salida (MXN)
-          </h4>
-          <p class="text-[11px] text-slate-500">
-            Monto convenido por concepto de traslado o salida técnica para esta orden.
-          </p>
-        </div>
+      <!-- Toggle to show more services -->
+      <div class="flex justify-end">
+        <n-button
+          text
+          size="tiny"
+          type="primary"
+          @click="showAllServices = !showAllServices"
+        >
+          {{
+            showAllServices
+              ? 'Mostrar solo servicios de esta orden'
+              : '+ Agregar tarifa de otro servicio'
+          }}
+        </n-button>
+      </div>
 
-        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-2">
+      <!-- Travel Expenses Row -->
+      <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+        <div>
+          <span class="font-medium text-slate-800 block">Viáticos / Costo de salida</span>
+          <span class="text-slate-400 text-[11px]">Traslado acordado para esta orden</span>
+        </div>
+        <div class="w-44">
           <n-input-number
             v-model:value="travelExpenses"
             :min="0"
             :precision="2"
             placeholder="0.00"
-            class="flex-1"
             size="small"
           >
             <template #prefix>$</template>
           </n-input-number>
-
-          <n-button
-            v-if="travelExpenses !== null && travelExpenses !== undefined"
-            size="tiny"
-            quaternary
-            type="warning"
-            @click="resetTravelExpenses"
-          >
-            Limpiar
-          </n-button>
         </div>
       </div>
 
       <!-- Adjustment Justification Reason -->
-      <div class="space-y-1.5 pt-2 border-t border-slate-100">
-        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-          Motivo / Justificación del Ajuste (Opcional)
+      <div class="pt-2 border-t border-slate-100 space-y-1">
+        <label class="block text-xs font-medium text-slate-700">
+          Motivo o justificación <span class="text-slate-400 font-normal">(opcional)</span>
         </label>
         <n-input
           v-model:value="reason"
           type="textarea"
           :maxlength="500"
           show-count
-          placeholder="Ej. Tarifa pactada por servicio en día festivo, o recargo autorizado por dificultad de acceso..."
+          placeholder="Ej. Tarifa convenida por día festivo o recargo de traslado..."
           :rows="2"
         />
       </div>
@@ -250,7 +190,7 @@ defineExpose({
           :loading="isSubmitting || updatePricingPending"
           @click="handleSave"
         >
-          {{ isFinalized ? 'Aplicar Ajuste de Precios' : 'Guardar Tarifas' }}
+          {{ isFinalized ? 'Aplicar Ajuste' : 'Guardar Tarifas' }}
         </n-button>
       </div>
     </div>
