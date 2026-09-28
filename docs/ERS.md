@@ -36,7 +36,7 @@ El sistema es una plataforma web responsiva (PWA básica) orientada a sustituir 
 - **ERS:** Especificación de Requisitos de Software.
 - **PWA:** Progressive Web Application.
 - **IMEI:** International Mobile Station Equipment Identity.
-- **S3:** Simple Storage Service (o API compatible como MinIO/Cloudflare R2).
+- **Proveedor de archivos:** Servicio privado configurado para evidencias, firmas y reportes.
 - **JWT:** JSON Web Token.
 - **Outbox Pattern:** Patrón arquitectónico para publicación garantizada y asíncrona de eventos transaccionales.
 - **Checklist Post-Servicio:** Inspección del estado de la unidad vehicular realizada al concluir los trabajos técnicos.
@@ -61,7 +61,7 @@ El resto del documento detalla la perspectiva del producto, actores, casos de us
 El sistema opera bajo una arquitectura de monorepo con backend modular en Node.js (Express 5, TypeScript, Prisma ORM, PostgreSQL) y frontend reactivo en Vue 3 (Vite, Pinia, Naive UI, Tailwind CSS). Se integra de forma externa con:
 
 - **Google Sheets API:** Autoridad de catálogos de Clientes y Equipos (`SALIDAS`).
-- **Almacenamiento S3:** Repositorio privado de evidencias fotográficas y firmas digitales con URLs prefirmadas.
+- **Almacenamiento privado:** Repositorio de evidencias, firmas y reportes. Google Drive está integrado; el proveedor se configura por entorno y la aplicación controla el acceso.
 
 ```mermaid
 flowchart TD
@@ -79,14 +79,14 @@ flowchart TD
 
     subgraph Storage["Persistencia & Integraciones"]
         DB[("PostgreSQL")]
-        S3[("S3 Object Storage")]
+        Files[("Almacenamiento privado de archivos")]
         Sheets[("Google Sheets API")]
     end
 
     UI_Admin --> Backend
     UI_Tech --> Backend
     Backend --> DB
-    Backend --> S3
+    Backend --> Files
     SyncWorker --> Sheets
     SyncWorker --> DB
 ```
@@ -102,7 +102,7 @@ flowchart TD
 
 1. **Autoridad de Catálogos:** La creación y edición de clientes y equipos no se realiza en la aplicación; residen y se administran en Google Sheets.
 2. **Columnas Protegidas en Sheets:** El sistema tiene prohibido modificar `Fecha de salida` y `Estado` del equipo. Puede actualizar `Cliente`, `Estado del servicio` y los datos del vehículo conforme al servicio ejecutado.
-3. **Almacenamiento Seguro:** No se almacenan imágenes en base de datos; únicamente claves S3 de objetos privados. El acceso se realiza mediante URLs firmadas con expiración de 15 minutos.
+3. **Almacenamiento Seguro:** No se almacenan imágenes en la base de datos; únicamente referencias y metadatos. El acceso a los archivos privados se autoriza mediante la aplicación.
 4. **Modo Conectado:** El MVP asume conectividad a Internet para sincronización; no contempla soporte offline completo ni colas persistentes en IndexedDB.
 
 ---
@@ -143,7 +143,7 @@ flowchart TD
   5. Carrocería (`BODYWORK`)
   - Estados permitidos: `GOOD` (Bien), `BAD` (Mal) o `NOT_APPLICABLE` (No aplica).
   - Si el estado es `BAD`, el campo de observación explicativa es **obligatorio**.
-- **RF-15 (Evidencias Fotográficas Obligatorias):** Cada unidad requiere al menos diez fotografías completadas, distribuidas entre las categorías del checklist y subidas a S3 mediante URL prefirmada.
+- **RF-15 (Evidencias Fotográficas Obligatorias):** Cada unidad requiere al menos diez fotografías completadas, distribuidas entre las categorías del checklist y cargadas al proveedor privado configurado.
 - **Notas de ejecución:** El técnico puede capturar una nota general de la orden durante la ejecución. La nota puede guardarse antes del cierre o automáticamente al solicitar la finalización; no se divide por unidad.
 - **RF-16 (Captura de Firma del Cliente):** La orden finalizada exige la captura digital de una única firma del cliente en pantalla, junto con el nombre completo y documento de la persona firmante.
 - **RF-17 (Cierre de Cita Fallida):** Si la unidad no está disponible o el cliente no se presenta, el técnico puede registrar un cierre como `FAILED_APPOINTMENT` indicando obligatoriamente el motivo, omitiendo fotos, checklist y firma.
@@ -191,7 +191,7 @@ graph TD
   - Resultados del checklist vehicular clasificado en las 5 categorías con sus observaciones.
   - Mosaico de evidencias fotográficas incrustadas con sello de fecha/hora y categoría correspondiente.
   - Imagen de la firma digitalizada del cliente, nombre completo legible y leyenda de conformidad del servicio.
-- **Formato de Salida:** PDF estándar A4/Carta descargable y consultable vía URL prefirmada de S3.
+- **Formato de Salida:** PDF estándar A4/Carta descargable y consultable mediante la aplicación con autorización sobre la orden.
 
 #### RF-REP-02: Reporte de Discrepancias de Equipamiento en Campo
 
@@ -294,9 +294,9 @@ graph TD
   - Lectura de hoja de `Clientes` (Nombres, identificadores, contratos).
   - Lectura y actualización selectiva de hoja `SALIDAS` (catálogo de equipos, series e IMEIs).
   - Lectura de `DIRECTORIO TECNICO` y publicación idempotente del cobro en la pestaña anual configurada del libro de técnicos.
-- **Amazon S3 Compatible Storage:**
-  - Generación de URLs prefirmadas (`PUT`) para carga directa desde cliente.
-  - Generación de URLs prefirmadas (`GET`) para visualización y ensamblado de reportes PDF.
+- **Google Drive y almacenamiento de objetos:**
+  - Persistencia privada de evidencias, firmas y reportes mediante el proveedor configurado.
+  - Acceso y transferencia de archivos mediados por la aplicación o por URLs temporales cuando el adaptador las requiera.
 - **Motor de Renderizado PDF:**
   - Librería de servidor (p. ej., PDFKit o Puppeteer ligero) para la compilación de actas de servicio firmadas.
 
@@ -314,8 +314,8 @@ graph TD
 | **RF-12**     | Verificación de equipos             | Operación Campo    | Technician Mobile UI                | Alta      |
 | **RF-13**     | Reporte de discrepancias            | Operación Campo    | Mobile UI & Orders Service          | Media     |
 | **RF-14**     | Checklist vehicular (5 categorías)  | Operación Campo    | Mobile UI & Checklist Service       | Crítica   |
-| **RF-15**     | Evidencias fotográficas (S3)        | Operación Campo    | S3 Adapter & Mobile UI              | Crítica   |
-| **RF-16**     | Firma digital del cliente           | Operación Campo    | Canvas Signature & S3 Adapter       | Crítica   |
+| **RF-15**     | Evidencias fotográficas privadas    | Operación Campo    | Storage Adapter & Mobile UI         | Crítica   |
+| **RF-16**     | Firma digital del cliente           | Operación Campo    | Canvas Signature & Storage Adapter  | Crítica   |
 | **RF-17**     | Cierre como cita fallida            | Operación Campo    | Orders Module / Mobile UI           | Alta      |
 | **RF-REP-01** | Acta técnica de servicio (PDF)      | Reportes           | Reports Engine & PDF Service        | Crítica   |
 | **RF-REP-02** | Reporte de discrepancias            | Reportes           | Reports Engine & Admin UI           | Media     |
@@ -324,7 +324,7 @@ graph TD
 | **RF-REP-05** | Reporte de citas fallidas           | Reportes           | Reports Engine & Admin UI           | Media     |
 | **RF-REP-06** | Reporte de auditoría y trazabilidad | Reportes           | Audit Service & Admin UI            | Alta      |
 | **RF-REP-07** | Monitoreo de sincronización         | Reportes           | Outbox Worker & Admin UI            | Alta      |
-| **RNF-05**    | Privacidad de URLs en S3            | Seguridad          | Storage Service                     | Crítica   |
+| **RNF-05**    | Acceso privado a archivos           | Seguridad          | Storage Service                     | Crítica   |
 | **RNF-07**    | Resiliencia con Outbox              | Arquitectura       | Outbox Worker & PostgreSQL          | Crítica   |
 
 ---

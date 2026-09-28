@@ -2,16 +2,17 @@
 
 ## Módulos de la API
 
-| Módulo           | Responsabilidad                                                            |
-| ---------------- | -------------------------------------------------------------------------- |
-| `auth`           | login, refresh, revocación y consulta de sesión                            |
-| `administration` | gestión administrativa unificada de usuarios y técnicos (con DI)           |
-| `catalogs`       | consulta y caché de clientes/equipos de Sheets                             |
-| `orders`         | borradores, unidades, equipos, asignación, cancelación y outbox            |
-| `execution`      | inicio, verificación, discrepancias, checklist, evidencias, firma y cierre |
-| `reports`        | generación, versionado y descarga privada del PDF                          |
-| `health`         | liveness y readiness                                                       |
-| `observability`  | logs estructurados y métricas                                              |
+| Módulo                     | Responsabilidad                                                             |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `auth`                     | login, refresh, revocación y consulta de sesión                             |
+| `administration`           | gestión administrativa unificada de usuarios y técnicos (con DI)            |
+| `shared-technician-access` | configuración auditable del acceso compartido y consulta del modo de acceso |
+| `catalogs`                 | consulta y caché de clientes/equipos de Sheets                              |
+| `orders`                   | borradores, unidades, equipos, asignación, cancelación y outbox             |
+| `execution`                | inicio, verificación, discrepancias, checklist, evidencias, firma y cierre  |
+| `reports`                  | generación, versionado y descarga privada del PDF                           |
+| `health`                   | liveness y readiness                                                        |
+| `observability`            | logs estructurados y métricas                                               |
 
 Dentro de `orders`, `reschedule-failed-appointment.ts` concentra la resolución de una cita fallida y la clonación de la orden dentro de una sola transacción de dominio; `OrdersService` conserva la API pública del módulo. En `execution`, `OrderFinalizationService` concentra validación de completitud, cierre, cita fallida y corrección, mientras `ExecutionService` conserva la fachada pública y los flujos de evidencias y firma. Ambos servicios comparten la carga de la orden con autorización mediante `execution-order-access.ts`.
 
@@ -108,19 +109,24 @@ como `SUPERSEDED` para no escribir dos veces el mismo folio.
 sequenceDiagram
     participant W as Web
     participant API
-    participant S3 as S3 / MinIO
+    participant Storage as Proveedor de archivos configurado
     participant DB as PostgreSQL
 
-    W->>API: solicitar URL de subida
+    W->>API: iniciar carga privada
     API->>DB: crear metadato PENDING
-    API-->>W: URL prefirmada + objectKey/id
-    W->>S3: PUT directo del archivo
-    W->>API: confirmar subida
-    API->>S3: HEAD y validar MIME/tamaño
+    API-->>W: indica el protocolo del proveedor
+    alt Google Drive
+        W->>API: envía archivo autenticado
+        API->>Storage: carga y valida MIME/tamaño
+    else Adaptador de objetos
+        API-->>W: URL temporal de carga
+        W->>Storage: carga archivo
+        API->>Storage: valida MIME/tamaño
+    end
     API->>DB: marcar COMPLETED
 ```
 
-Las claves siguen los prefijos `orders/{orderId}/units/...`, `orders/{orderId}/signature/...` y `orders/{orderId}/reports/...`. La base nunca almacena bytes ni Base64.
+Las referencias siguen una identidad estable por evidencia, firma o reporte; el proveedor configurado resuelve su ubicación física. La base nunca almacena bytes ni Base64. En el modo Drive, la API recibe y transmite las cargas autenticadas; el adaptador de objetos conserva su propio protocolo.
 
 ## Generación de reporte PDF
 
@@ -129,32 +135,32 @@ sequenceDiagram
     participant T as Técnico/API
     participant DB as PostgreSQL
     participant RW as ReportsService
-    participant S3 as S3 / MinIO
+    participant Storage as Proveedor de archivos configurado
 
     T->>DB: completar orden
     T->>RW: solicitar versión de reporte
     RW->>DB: crear PENDING
     loop worker periódico
         RW->>DB: reclamar como PROCESSING
-        RW->>S3: leer firma y evidencias secuencialmente
+        RW->>Storage: leer firma y evidencias secuencialmente
         RW->>RW: normalizar imágenes y componer PDF
-        RW->>S3: guardar PDF privado
+        RW->>Storage: guardar PDF privado
         RW->>DB: READY + checksum + auditoría
     end
 ```
 
 PDFKit compone páginas Carta; Sharp corrige orientación y normaliza imágenes. Una evidencia por página ocupa el área útil sin mostrar la categoría del checklist. Un proceso `PROCESSING` abandonado por más de diez minutos vuelve a `PENDING`. Los errores públicos se sanitizan y un reintento no duplica la versión vigente.
-`ReportsService` carga la orden y conserva la transición `READY` y su auditoría; `report-storage.ts` gestiona la reserva/reutilización del ID en Drive o la subida a S3. En Drive el checksum se calcula sobre los bytes remotos cuando se reutiliza un archivo.
+`ReportsService` carga la orden y conserva la transición `READY` y su auditoría; `report-storage.ts` gestiona la reserva/reutilización de IDs en Drive o el almacenamiento del proveedor de objetos. En Drive el checksum se calcula sobre los bytes remotos cuando se reutiliza un archivo.
 
 ## Transacciones y auditoría
 
 `domainTransaction` reúne mutaciones del dominio, auditorías y registros de outbox en una transacción Prisma. Acciones como creación, asignación, cierre, captura de evidencia, generación y descarga de reporte dejan eventos identificables. Los controladores no escriben directamente salvo consultas administrativas puntuales.
-`ExecutionService` conserva la API pública de ejecución; delega cierre y corrección a `OrderFinalizationService`, y evidencias/firmas a `ExecutionMediaService`. Los protocolos Drive y S3 permanecen explícitos para preservar permisos, reservas y confirmaciones diferentes.
+`ExecutionService` conserva la API pública de ejecución; delega cierre y corrección a `OrderFinalizationService`, y evidencias/firmas a `ExecutionMediaService`. Los protocolos Drive y el adaptador de objetos permanecen explícitos para preservar permisos, reservas y confirmaciones diferentes.
 `OrdersQueryService` concentra las lecturas de listado, detalle administrativo y técnico, y auditoría. `OrdersService` conserva métodos públicos delegados para mantener los routers y consumidores existentes; el helper de creación de equipos permanece junto a los comandos que lo usan.
 
 ## Resiliencia y Circuit Breaker
 
-Para proteger la aplicación ante degradaciones o caídas en servicios de terceros (Google Sheets y AWS S3), los adaptadores se envuelven mediante el patrón Decorator (`CircuitBreakerSheetsPort` y `CircuitBreakerStoragePort`):
+Para proteger la aplicación ante degradaciones o caídas en servicios de terceros (Google Sheets y almacenamiento), los adaptadores se envuelven mediante el patrón Decorator (`CircuitBreakerSheetsPort` y `CircuitBreakerStoragePort`):
 
 - **Estados de circuito**: `CLOSED` (operación normal), `OPEN` (fallo rápido inmediato sin saturar la red externa) y `HALF_OPEN` (prueba controlada de recuperación).
 - **Parámetros configurables**: Umbral de fallos consecutivos (`CIRCUIT_BREAKER_ERROR_THRESHOLD`, por defecto 5) y tiempo de espera antes de reintento (`CIRCUIT_BREAKER_RESET_TIMEOUT_MS`, por defecto 30,000 ms).

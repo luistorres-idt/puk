@@ -38,9 +38,9 @@
 
 ### Integraciones y datos
 
-- Credenciales de Google y S3 solo en servidor.
+- Credenciales de Google y del proveedor de almacenamiento solo en servidor.
 - Puertos abstraen integraciones externas.
-- Timeouts, reintentos y circuit breaker (CLOSED/OPEN/HALF_OPEN) con métricas Prometheus para adaptadores de Sheets y S3.
+- Timeouts, reintentos y circuit breaker (CLOSED/OPEN/HALF_OPEN) con métricas Prometheus para adaptadores de Sheets y almacenamiento.
 - Outbox e idempotencia para efectos externos.
 - Concurrencia optimista en órdenes y restricción de asignación activa.
 - Auditoría de acciones críticas con snapshots antes/después cuando aplica.
@@ -83,7 +83,7 @@ Las capacidades declaradas son `users:manage`, `technicians:manage`, `orders:man
 
 ## Aspectos que requieren política externa
 
-- Rotación y custodia de claves JWT, Google y S3.
+- Rotación y custodia de claves JWT, Google y almacenamiento.
 - Retención legal de fotografías, firmas, auditoría y reportes.
 - Control de acceso a `/metrics` en el proxy productivo.
 - Backups cifrados y pruebas periódicas de restauración.

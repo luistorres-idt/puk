@@ -3,7 +3,7 @@
 ## Convenciones
 
 - Base autenticada: `/api/v1`.
-- Cuerpo: JSON, excepto las cargas directas a S3.
+- Cuerpo: JSON, excepto las cargas de archivos del proveedor configurado.
 - Validación: esquemas Valibot de `@puk/contracts`.
 - Éxito: `{ "data": ..., "meta": { "requestId": ... } }`.
 - Error: `{ "error": { "code": ..., "message": ..., "details"?: ... }, "meta": { "requestId": ... } }`.

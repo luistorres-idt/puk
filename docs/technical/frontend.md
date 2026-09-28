@@ -44,6 +44,7 @@ flowchart LR
 - Formularios y modales usan estado local del componente.
 - Tras mutaciones se invalidan órdenes, auditoría, sincronización o reporte según corresponda.
 - En el detalle administrativo, `useOrderMedia` administra el ciclo de vida de las URLs privadas y `useAddOrderUnit` encapsula el formulario de alta; `AddOrderUnitModal`, `OrderEvidenceTab`, `OrderSyncTab`, `OrderReportCard` y `OrderAuditTab` separan la presentación de la orquestación de la vista. La vista conserva las consultas y mutaciones de TanStack Query.
+- `OrderUnitsTab` presenta unidades y equipos con propiedades/eventos tipados; `AttachOrderEquipmentModal` y `useAttachOrderEquipment` aíslan el formulario de vinculación. `useEvidenceGallery` administra URLs privadas y descarta respuestas obsoletas al cambiar de contexto. Estos límites no trasladan las mutaciones ni la autoridad de permisos fuera de la vista/backend.
 
 ## Rutas
 
@@ -101,7 +102,7 @@ las mutaciones y los modales, de modo que la pestaña no crea otra fuente de est
 
 ## Evidencias y reportes
 
-`image-preprocessing.ts` convierte fotografías HEIC/HEIF a JPEG y limita sus dimensiones a 1920 px antes de solicitar o subir una URL. Las promesas rechazan explícitamente archivos no legibles o imágenes no decodificables para evitar bloqueos en la interfaz. El módulo transforma imágenes; `EvidenceCapture` conserva los protocolos distintos de carga Drive y S3. La firma se captura con canvas y se sube como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y obtiene una URL temporal cuando queda listo.
+`image-preprocessing.ts` convierte fotografías HEIC/HEIF a JPEG y limita sus dimensiones a 1920 px antes de enviarlas. Las promesas rechazan explícitamente archivos no legibles o imágenes no decodificables para evitar bloqueos en la interfaz. El módulo transforma imágenes; `EvidenceCapture` conserva los protocolos del proveedor configurado. En modo Drive la API recibe la carga autenticada; el adaptador de objetos puede usar URLs prefirmadas. La firma se captura con canvas y se envía como PNG. El detalle de la orden consulta el estado del reporte cada tres segundos mientras está pendiente o procesándose y solicita el archivo privado cuando queda listo.
 `evidence-upload-retry.ts` conserva la identidad de reintento de Drive usando la orden, la unidad y el archivo original. `useEvidenceGallery` libera las URLs privadas cuando una evidencia sale de la lista, cambia el contexto o se desmonta la vista, e ignora respuestas de cargas obsoletas.
 
 ## PWA

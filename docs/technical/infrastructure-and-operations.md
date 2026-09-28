@@ -52,7 +52,7 @@ flowchart TB
             end
         end
 
-        S3[(S3 privado<br/>evidencias y reportes)]
+        FileStore[(Almacenamiento privado de archivos)]
         SM[Secrets Manager]
         CW[CloudWatch Logs<br/>API, web y migración]
         CFN[CloudFormation<br/>2 stacks CDK]
@@ -64,7 +64,7 @@ flowchart TB
     ALB -->|3b. API, health, metrics y docs :3000| API
     Migration -->|4. migraciones y seed| RDS
     API -->|5. SQL :5432| RDS
-    API -->|6. SDK con rol IAM| S3
+    API -->|6. adaptador con identidad de servicio| FileStore
     API -->|7. HTTPS vía NAT| Sheets
     ECS -->|salida a Internet| NAT --> IGW
     SM -->|inyección al iniciar la tarea| Migration
@@ -147,13 +147,13 @@ La migración dentro de cada tarea mantiene el orden de arranque, pero con más 
 
 ### Persistencia
 
-| Recurso           | Configuración implementada                                                                                            | Comportamiento al eliminar el stack   |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| RDS PostgreSQL 17 | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection activa |
-| Bucket S3         | Cifrado SSE-S3, versionado, bloqueo de acceso público, TLS obligatorio, CORS para GET/HEAD/PUT                        | `RETAIN`                              |
-| Logs              | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                              |
+| Recurso                   | Configuración implementada                                                                                            | Comportamiento al eliminar el stack   |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| RDS PostgreSQL 17         | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection activa |
+| Almacenamiento de objetos | Cifrado, versionado, acceso privado, TLS y CORS para el proveedor de objetos de staging                               | `RETAIN`                              |
+| Logs                      | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                              |
 
-S3 conserva evidencias y reportes; PostgreSQL conserva sus metadatos y claves de objeto. El lifecycle del bucket sólo aborta cargas multipart incompletas después de un día: no elimina versiones ni define la retención de evidencias. La política de negocio y el respaldo independiente de S3 siguen pendientes antes de producción.
+El stack de staging todavía provisiona el bucket configurado para el adaptador de objetos; esa decisión de despliegue no define el modelo lógico de almacenamiento de la aplicación. Google Drive también está integrado y se selecciona por configuración. PostgreSQL conserva referencias y metadatos. El lifecycle del bucket de staging sólo aborta cargas multipart incompletas después de un día: no elimina versiones ni define la retención de evidencias. La política de negocio y el respaldo independiente siguen pendientes antes de producción.
 
 ### Stacks CDK
 
@@ -165,7 +165,7 @@ flowchart LR
         V[VPC y subredes]
         SG[Security groups]
         DB[RDS y secreto generado]
-        B[S3]
+        B[Almacenamiento de archivos]
         RS[Referencia a secreto runtime]
         Role[Rol OIDC para GitHub]
     end
@@ -310,17 +310,17 @@ flowchart LR
     WebCompose[Nginx compilado :4173]
     ApiCompose[API container :3000]
     PG[(PostgreSQL :5432)]
-    MinIO[(MinIO :9000)]
+    FileStore[(Almacenamiento local :9000)]
 
     Browser -->|hot reload| Vite
     Vite -->|proxy /api y /health| ApiHost
     ApiHost --> PG
-    ApiHost --> MinIO
+    ApiHost --> FileStore
 
     Browser -.->|modo compilado| WebCompose
     Browser -.->|API publicada aparte| ApiCompose
     ApiCompose --> PG
-    ApiCompose --> MinIO
+    ApiCompose --> FileStore
 ```
 
 En hot reload, el proxy de Vite envía `/api` y `/health` a `VITE_API_PROXY_TARGET`. En ECS, Nginx y API comparten tarea y `127.0.0.1:3000` es correcto. En Docker Compose están en contenedores distintos, pero la configuración Nginx también apunta a `127.0.0.1:3000`; por ello el proxy `/api` del contenedor web compilado no alcanza actualmente a `api`. Hasta corregir esa divergencia, use hot reload o el puerto publicado de la API para validar el modo local.

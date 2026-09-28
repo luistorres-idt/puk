@@ -27,7 +27,7 @@ Este plan establece la estrategia de transición gradual desde la aplicación le
 
 ## 3. Políticas de Retención de Evidencias y Firmas
 
-- **Fotografías de Servicio:** Retención mínima operativa de 12 meses en almacenamiento de objetos privado (S3). Posterior archivado a clase de almacenamiento Glacier o equivalente según requerimientos legales y contractuales del cliente vehicular.
+- **Fotografías de Servicio:** Retención mínima operativa de 12 meses en el proveedor privado de archivos configurado. El archivado posterior y su clase de almacenamiento se definirán según los requerimientos legales y contractuales del cliente vehicular.
 - **Firmas Digitales y Nombres de Receptores:** Conservación indefinida asociada al registro inmutable de la orden y su registro de auditoría (`AuditLog`).
 
 ## 4. Ejecución del Piloto en Paralelo

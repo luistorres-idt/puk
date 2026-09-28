@@ -2,7 +2,7 @@
 
 **Proyecto:** Bull Dog Solution — Sistema de órdenes de servicio
 
-**Última actualización:** 2026-09-17
+**Última actualización:** 2026-09-28
 
 **Alcance:** estado implementado en la rama actual
 

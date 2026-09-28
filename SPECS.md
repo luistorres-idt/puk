@@ -37,7 +37,7 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 - Reporte de discrepancias sin bloquear el trabajo del técnico.
 - Una firma del cliente por orden.
 - Reporte PDF de la orden de servicio completada, conforme a [docs/service-order-report-spec.md](./docs/service-order-report-spec.md).
-- Almacenamiento privado compatible con S3.
+- Almacenamiento privado de archivos, con proveedor intercambiable.
 - Auditoría de acciones relevantes.
 - Registro y reintento de sincronizaciones con Google Sheets.
 - Directorio técnico sincronizado y tarifas por servicio congeladas al cierre.
@@ -86,33 +86,33 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 
 ## 4. Stack tecnológico
 
-| Capa                       | Tecnología                                         |
-| -------------------------- | -------------------------------------------------- |
-| Lenguaje                   | TypeScript                                         |
-| Frontend                   | Vue 3 + Vite                                       |
-| Enrutamiento               | Vue Router                                         |
-| Estado de cliente          | Pinia                                              |
-| Estado de servidor y caché | TanStack Query para Vue                            |
-| Cliente HTTP               | Axios                                              |
-| Validación                 | Valibot                                            |
-| Componentes UI             | Naive UI                                           |
-| Estilos                    | Tailwind CSS mediante plugin de Vite               |
-| Backend                    | Node.js + Express 5                                |
-| ORM                        | Prisma                                             |
-| Base de datos              | PostgreSQL                                         |
-| Autenticación              | JWT con access y refresh tokens                    |
-| Hash de contraseñas        | Argon2id                                           |
-| Objetos                    | API compatible con Amazon S3                       |
-| API de Google              | `googleapis` / Google Sheets API v4                |
-| Seguridad HTTP             | Helmet, CORS y rate limiting                       |
-| Logs HTTP                  | Morgan                                             |
-| Logs de aplicación         | Winston con salida estructurada JSON               |
-| Documentación API          | OpenAPI 3.1 + Swagger UI                           |
-| Resiliencia externa        | Timeouts, reintentos controlados y circuit breaker |
-| Utilidades Vue             | VueUse cuando evite implementaciones propias       |
-| Pruebas                    | Vitest, Supertest y Playwright                     |
-| Contenedores               | Docker                                             |
-| Gestor de paquetes         | pnpm                                               |
+| Capa                       | Tecnología                                             |
+| -------------------------- | ------------------------------------------------------ |
+| Lenguaje                   | TypeScript                                             |
+| Frontend                   | Vue 3 + Vite                                           |
+| Enrutamiento               | Vue Router                                             |
+| Estado de cliente          | Pinia                                                  |
+| Estado de servidor y caché | TanStack Query para Vue                                |
+| Cliente HTTP               | Axios                                                  |
+| Validación                 | Valibot                                                |
+| Componentes UI             | Naive UI                                               |
+| Estilos                    | Tailwind CSS mediante plugin de Vite                   |
+| Backend                    | Node.js + Express 5                                    |
+| ORM                        | Prisma                                                 |
+| Base de datos              | PostgreSQL                                             |
+| Autenticación              | JWT con access y refresh tokens                        |
+| Hash de contraseñas        | Argon2id                                               |
+| Archivos privados          | Google Drive o proveedor de almacenamiento configurado |
+| API de Google              | `googleapis` / Google Sheets API v4                    |
+| Seguridad HTTP             | Helmet, CORS y rate limiting                           |
+| Logs HTTP                  | Morgan                                                 |
+| Logs de aplicación         | Winston con salida estructurada JSON                   |
+| Documentación API          | OpenAPI 3.1 + Swagger UI                               |
+| Resiliencia externa        | Timeouts, reintentos controlados y circuit breaker     |
+| Utilidades Vue             | VueUse cuando evite implementaciones propias           |
+| Pruebas                    | Vitest, Supertest y Playwright                         |
+| Contenedores               | Docker                                                 |
+| Gestor de paquetes         | pnpm                                                   |
 
 Las versiones exactas se fijarán en el lockfile al crear el proyecto. Se usarán versiones estables compatibles con la versión LTS de Node.js seleccionada al iniciar la implementación.
 
@@ -146,7 +146,7 @@ Se implementará un monolito modular. El frontend y el backend vivirán en un mo
 flowchart TD
     Web["Vue PWA"] --> API["Express API"]
     API --> DB["PostgreSQL"]
-    API --> S3["Almacenamiento S3"]
+    API --> Storage["Almacenamiento privado de archivos"]
     API --> Sheets["Google Sheets API"]
 ```
 
@@ -158,7 +158,7 @@ flowchart TD
 
 **PostgreSQL:** datos transaccionales, órdenes, snapshots externos, checklist, referencias de evidencias, sesiones, auditoría y estado de sincronización.
 
-**S3:** bytes de fotografías y firmas. El bucket será privado.
+**Almacenamiento privado:** bytes de fotografías, firmas y reportes; el proveedor se configura por entorno y PostgreSQL conserva solo referencias y metadatos.
 
 **Google Sheets:** catálogo oficial de clientes y equipos y datos actuales de asignación permitidos.
 
@@ -168,7 +168,7 @@ flowchart TD
 - **Slicing vertical:** cada módulo contiene sus rutas, casos de uso, persistencia, contratos y pruebas.
 - **Dependencias hacia adentro:** controladores y adaptadores dependen de servicios/casos de uso, no al revés.
 - **Controladores delgados:** traducen HTTP a una llamada de aplicación; no contienen reglas de negocio.
-- **Integraciones detrás de puertos:** Google Sheets y S3 se consumen mediante interfaces reemplazables y adaptadores concretos.
+- **Integraciones detrás de puertos:** Google Sheets y los proveedores de almacenamiento se consumen mediante interfaces reemplazables y adaptadores concretos.
 - **Contratos compartidos:** Valibot define los DTOs; Prisma define persistencia y no se expone al frontend.
 - **Estado remoto separado del estado de UI:** TanStack Query administra datos del servidor; Pinia solo estado global de interfaz y sesión.
 - **Abstracción progresiva:** una vista o componente se mueve a `shared` después de comprobar reutilización real, no por anticipación.
@@ -924,31 +924,28 @@ El MVP conservará dos roles (`ADMIN` y `TECHNICIAN`) y definirá permisos como 
 - Si aparecen más perfiles configurables, las capacidades podrán migrarse a RBAC persistido sin cambiar los controladores.
 - JWT incluye el rol, no una lista larga de permisos potencialmente obsoleta.
 
-## 15. Evidencias y almacenamiento S3
+## 15. Evidencias y almacenamiento privado
 
 ### 15.1 Flujo de subida
 
-1. Vue comprime la imagen y solicita una URL firmada.
+1. Vue prepara la imagen y envía el archivo mediante el protocolo del proveedor configurado.
 2. Express verifica usuario, orden, unidad y categoría.
-3. Express crea `Evidence` con estado `PENDING`.
-4. Express genera una URL prefirmada de corta duración.
-5. Vue sube directamente al almacenamiento.
-6. Vue llama a `/evidence/:id/complete`.
-7. Express consulta metadatos del objeto y valida tamaño y tipo.
-8. Express cambia el estado a `COMPLETED`.
+3. Express crea `Evidence` con estado `PENDING` y reserva una referencia idempotente.
+4. La API carga el archivo privado y valida tamaño, tipo y resultado de la operación.
+5. La API persiste la referencia/metadatos y cambia el estado a `COMPLETED` solo tras confirmar la carga.
 
 ### 15.2 Reglas
 
-- Bucket privado.
+- Archivos privados; el acceso se autoriza desde la aplicación.
 - No almacenar blobs o Base64 en PostgreSQL.
 - Tipos iniciales: JPEG, PNG y WebP.
 - Tamaño máximo configurable; sugerido 10 MiB por evidencia.
 - La firma se almacena como PNG, con máximo sugerido de 1 MiB.
-- URLs firmadas de subida con expiración corta, sugerida de 5 minutos.
+- Usar credenciales del proveedor solo en servidor; las cargas directas, si se habilitan para un proveedor, usan URLs temporales.
 - Nombres generados por el servidor; nunca confiar en el nombre del usuario.
 - Verificar `Content-Type`, longitud y existencia antes de completar.
 - Aplicar política de limpieza para objetos huérfanos.
-- Descargas mediante URLs temporales o proxy autorizado.
+- Descargas mediante el proveedor configurado o proxy autorizado.
 
 ### 15.3 Estructura de claves
 
@@ -1089,8 +1086,8 @@ El middleware de query solo acepta campos declarados por cada ruta y produce una
 - Cookies seguras.
 - JWT con issuer y audience validados.
 - Claves separadas y rotables.
-- Principio de menor privilegio para Google y S3.
-- Bucket privado y bloqueo de acceso público.
+- Principio de menor privilegio para Google y el proveedor configurado.
+- Archivos privados y acceso autorizado por la aplicación.
 - Validación de todos los inputs con Valibot.
 - Consultas mediante Prisma; SQL crudo solo parametrizado.
 - Rate limiting en autenticación y endpoints costosos.
@@ -1123,7 +1120,7 @@ El middleware de query solo acepta campos declarados por cada ruta y produce una
 
 ### 19.2 Resiliencia de servicios externos
 
-- Toda llamada a Google Sheets y S3 tiene timeout explícito.
+- Toda llamada a Google Sheets y al proveedor de almacenamiento tiene timeout explícito.
 - Las lecturas idempotentes pueden usar reintentos limitados con backoff y circuit breaker.
 - Las escrituras a Sheets se reintentan exclusivamente mediante `SheetSyncOperation` e idempotency key.
 - No se reintenta automáticamente una escritura cuyo resultado sea ambiguo hasta verificar primero el estado remoto.
@@ -1300,7 +1297,7 @@ Las migraciones se ejecutan una vez por despliegue, antes de activar la nueva ve
 - Frontend compilado como archivos estáticos y servido desde CDN o reverse proxy.
 - API como contenedor Node.js.
 - PostgreSQL administrado con respaldos automáticos.
-- Almacenamiento S3 compatible administrado.
+- Almacenamiento privado administrado, con proveedor compatible con el adaptador elegido.
 - Reverse proxy con TLS.
 - Preferir `/api` bajo el mismo sitio público cuando sea posible para simplificar cookies y CORS.
 - Entornos separados: desarrollo, staging y producción.
@@ -1355,7 +1352,7 @@ Las migraciones se ejecutan una vez por despliegue, antes de activar la nueva ve
 2. Definir qué ocurre cuando un administrador cambia una unidad después de asignarla.
 3. Confirmar si la columna P debe escribirse y proporcionar su catálogo válido.
 4. Definir retención legal u operativa de evidencias y firmas.
-5. Seleccionar proveedor de PostgreSQL y almacenamiento S3 para producción.
+5. Seleccionar proveedor de PostgreSQL y proveedor de archivos privados para producción.
 6. Definir dominio, ambiente y estrategia de despliegue de producción.
 7. Definir recuperación de contraseña y canal de notificación.
 8. Revisar duplicados o valores incompletos de ID e IMEI.
@@ -1385,7 +1382,7 @@ Las migraciones se ejecutan una vez por despliegue, antes de activar la nueva ve
 - Vista móvil del técnico.
 - Verificación y discrepancias.
 - Checklist.
-- Evidencias S3.
+- Evidencias privadas mediante el proveedor configurado.
 - Firma.
 - Cierre y cita fallida.
 
