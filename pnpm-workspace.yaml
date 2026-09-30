@@ -17,6 +17,10 @@ injectWorkspacePackages: true
 
 overrides:
   deepmerge-ts: '>=8.0.0'
+  ip-address@<=10.7.0: ^10.7.1
   mysql2: '>=3.23.1'
 
 forceLegacyDeploy: true
+
+minimumReleaseAgeExclude:
+  - ip-address@10.7.1
