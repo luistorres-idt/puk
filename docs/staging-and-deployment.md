@@ -23,10 +23,10 @@ El archivo `.github/workflows/ci.yml` define el flujo de validación automática
 Se deben mantener tres ambientes completamente aislados:
 
 - **Desarrollo (Local):** `docker-compose.yml` local con PostgreSQL, MinIO y catálogo simulado de Sheets.
-- **Staging (preproducción, objetivo de IaC):** PostgreSQL dedicada, almacenamiento de objetos provisionado como bucket S3 por CDK y documento de Google Sheets exclusivo de pruebas (`GOOGLE_SHEETS_SPREADSHEET_ID_STAGING`). Actualmente no existen recursos ni datos de staging en AWS.
+- **Staging (preproducción, objetivo de IaC):** PostgreSQL dedicada, Google Drive compartido para evidencias, firmas y reportes, y documentos de Google Sheets exclusivos de pruebas (`GOOGLE_SPREADSHEET_ID` y `GOOGLE_TECHNICIANS_SPREADSHEET_ID`). Actualmente no existen recursos ni datos de staging en AWS. CDK configura `STORAGE_PROVIDER=drive`; las credenciales dedicadas de Drive se entregan al secreto runtime mediante el script seguro.
 - **Producción:** Infraestructura productiva con políticas de respaldo continuo y hoja principal de clientes y salidas.
 
-Cada entorno cuenta con sus propias claves criptográficas asimétricas para JWT (`JWT_ACCESS_PRIVATE_KEY`, `JWT_REFRESH_PRIVATE_KEY`), credenciales de base de datos y llaves de acceso a almacenamiento de objetos.
+Cada entorno cuenta con sus propias claves criptográficas asimétricas para JWT (`JWT_ACCESS_PRIVATE_KEY`, `JWT_REFRESH_PRIVATE_KEY`), credenciales de base de datos y configuración de la cuenta de servicio y el Drive compartido que utilizará.
 
 ## 3. Topología objetivo de producción
 
@@ -34,7 +34,7 @@ Esta sección describe el objetivo general para producción. La arquitectura de 
 
 - **Frontend & API:** Despliegue bajo el mismo dominio público o mediante reverse proxy (ej. Nginx, Caddy o Cloudflare) mapeando `/api` directamente a la instancia de Express y `/` al frontend estático SPA/PWA. Esto elimina complejidades de cookies de terceros y simplifica CORS.
 - **Base de Datos:** PostgreSQL gestionado (ej. Neon, Supabase o AWS RDS PostgreSQL) con migración ejecutada mediante `infra/scripts/migrate.sh` antes de conmutar tráfico.
-- **Almacenamiento de Objetos:** AWS S3 o Cloudflare R2 con bloqueo de acceso público activado.
+- **Archivos de aplicación:** Google Drive compartido privado para evidencias, firmas y reportes. S3 permanece como adaptador alternativo en el código, pero no se provisiona ni se usa en staging.
 
 ## 4. Procedimiento de Migración y Despliegue
 
@@ -57,7 +57,7 @@ futuro redeploy en Ohio (`us-east-2`); los diagramas y recursos listados aquí s
 no un inventario vivo. No hay IP ni URL que se pueda consultar.
 
 El teardown del 2026-09-28 eliminó los stacks Application/Foundation, `CDKToolkit`, RDS y sus
-respaldos automáticos, bucket S3 y todas sus versiones, imágenes ECR, logs retenidos, secreto
+respaldos automáticos, bucket S3 histórico y todas sus versiones, imágenes ECR, logs retenidos, secreto
 runtime, ALB, CloudFront, NAT y VPC. **El contenido anterior de la base de datos y archivos se perdió
 irreversiblemente; no quedó snapshot final ni versión de objeto para recuperar.**
 
@@ -65,10 +65,10 @@ Recursos principales previstos por CDK (no existen actualmente en AWS):
 
 - VPC de dos zonas de disponibilidad, con subredes públicas, privadas y aisladas.
 - PostgreSQL RDS privado, cifrado, con un día de respaldos automáticos y protección contra borrado. La retención de siete días es un objetivo previo a producción, no la configuración actual.
-- Bucket S3 privado, cifrado y versionado para evidencias y reportes.
+- Google Drive compartido privado como destino de evidencias, firmas y reportes. CDK fija `STORAGE_PROVIDER=drive` y no provisiona recursos S3 ni otorga permisos S3 al task role. Antes del redeploy, configura credenciales dedicadas con `GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY` y `GOOGLE_DRIVE_SHARED_DRIVE_ID` junto con las credenciales existentes de Sheets.
 - Un host ECS sobre EC2 `t3a.medium` con una tarea en modo `bridge` (migración, API y web); la API sólo inicia después de migrar y sembrar. El host está en subred pública con IPv4 efímera, sin Elastic IP ni NAT Gateway; el security group permite HTTP público por TCP/80, sin SSH ni acceso público al puerto 3000.
 - No se provisionan Application Load Balancer ni CloudFront. La URL HTTP usa la IPv4 pública efímera del host, que puede cambiar cuando la instancia se reemplace o se detenga/inicie.
-- Secretos de aplicación en Secrets Manager y permisos S3 mediante IAM, sin access keys estáticas.
+- Secretos de aplicación en Secrets Manager. El task definition inyecta las credenciales dedicadas de Sheets y Drive desde el secreto runtime; el script requiere valores de Drive separados y nunca imprime su contenido.
 - Despliegue continuo desde `main` mediante GitHub Actions y OIDC.
 
 El detalle de subredes, security groups, dependencias de contenedores, retención y límites de disponibilidad está en [Infraestructura y operación](./technical/infrastructure-and-operations.md).
@@ -97,7 +97,7 @@ pnpm infra:deploy
 ```
 
 El bootstrap debe repetirse porque se eliminó `CDKToolkit`. `pnpm infra:foundation` crea una base
-nueva y vacía, además del bucket, el secreto de credenciales de base y el proveedor/rol OIDC de
+nueva y vacía, el secreto de credenciales de base y el proveedor/rol OIDC de
 GitHub; no restaura información anterior. El proveedor y rol OIDC de AWS anteriores se eliminaron
 con Foundation. El estado de `AWS_STAGING_READY` en GitHub no se consultó ni modificó; mantenelo
 distinto de `true` hasta terminar el redeploy y validar el smoke test. El script local
@@ -106,7 +106,12 @@ crear los recursos de aplicación declarados actualmente en CDK.
 
 El script genera los valores de runtime según su configuración y los guarda en Secrets Manager sin
 imprimirlos. No se debe asumir que sobreviven valores del ambiente eliminado; prepare sus datos de
-entrada mediante el mecanismo seguro aprobado. Esta guía no proporciona ni recupera secretos.
+entrada mediante el mecanismo seguro aprobado. `.env` debe incluir `GOOGLE_SPREADSHEET_ID`,
+`GOOGLE_TECHNICIANS_SPREADSHEET_ID`, `GOOGLE_CLIENT_EMAIL` y `GOOGLE_PRIVATE_KEY` (o
+`GOOGLE_SERVICE_ACCOUNT_FILE`), además de credenciales Drive dedicadas
+`GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY` y `GOOGLE_DRIVE_SHARED_DRIVE_ID` y
+`SEED_CLIENT_ADMIN_EMAIL`. Las credenciales de Drive no se infieren ni reutilizan desde Sheets.
+Esta guía no proporciona ni recupera secretos.
 
 Para actualizar el secreto runtime recreado, repita el comando con `--overwrite` sólo después de
 validar los valores de entrada:

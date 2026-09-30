@@ -86,18 +86,18 @@ flowchart TD
     Worker --> Sheets
 ```
 
-| Capa            | Tecnologías                                                                                         |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| Lenguaje        | TypeScript                                                                                          |
-| Frontend        | Vue 3, Vite, Vue Router, Pinia, TanStack Query                                                      |
-| Interfaz        | Naive UI, Tailwind CSS, VueUse                                                                      |
-| API             | Node.js, Express 5, Valibot                                                                         |
-| Persistencia    | PostgreSQL, Prisma                                                                                  |
-| Autenticación   | JWT, Argon2id                                                                                       |
-| Integraciones   | Google Sheets API, almacenamiento privado configurable (Google Drive y proveedor compatible con S3) |
-| Documentación   | OpenAPI 3.1, Swagger UI                                                                             |
-| Pruebas         | Vitest, Supertest, Playwright                                                                       |
-| Infraestructura | Docker Compose local; AWS CDK para staging                                                          |
+| Capa            | Tecnologías                                                                           |
+| --------------- | ------------------------------------------------------------------------------------- |
+| Lenguaje        | TypeScript                                                                            |
+| Frontend        | Vue 3, Vite, Vue Router, Pinia, TanStack Query                                        |
+| Interfaz        | Naive UI, Tailwind CSS, VueUse                                                        |
+| API             | Node.js, Express 5, Valibot                                                           |
+| Persistencia    | PostgreSQL, Prisma                                                                    |
+| Autenticación   | JWT, Argon2id                                                                         |
+| Integraciones   | Google Sheets API, Google Drive compartido privado para evidencias, firmas y reportes |
+| Documentación   | OpenAPI 3.1, Swagger UI                                                               |
+| Pruebas         | Vitest, Supertest, Playwright                                                         |
+| Infraestructura | Docker Compose local; AWS CDK para staging                                            |
 
 ## Estructura del repositorio
 
@@ -310,13 +310,13 @@ El producto se despliega con entornos separados de desarrollo, staging y producc
 - Frontend estático servido mediante CDN o reverse proxy.
 - API ejecutada como contenedor Node.js.
 - PostgreSQL administrado con respaldos automáticos y restauración probada.
-- Bucket S3 privado con bloqueo de acceso público.
+- Google Drive compartido privado para evidencias, firmas y reportes.
 - Reverse proxy con TLS y, preferentemente, API bajo el mismo dominio público.
 - Google Sheets distinto para staging y producción.
 
 El pipeline ejecuta instalación reproducible, lint, typecheck, pruebas, generación de OpenAPI, builds, escaneos, migraciones controladas, despliegue y smoke tests.
 
-La IaC define staging en AWS `us-east-2` con ECS sobre un host EC2, RDS PostgreSQL, almacenamiento de objetos, Secrets Manager y CloudWatch, pero el ambiente fue eliminado y no está desplegado. No hay URL/IP ni datos persistentes; la arquitectura prevista usa HTTP a una IPv4 efímera sin CloudFront ni ALB. Producción aún no tiene stacks IaC en la rama actual. Consulte [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) para el estado, diagramas objetivo, persistencia, CI/CD y brechas antes de producción, y [Staging y despliegue](./docs/staging-and-deployment.md) para recrearlo desde cero.
+La IaC define staging en AWS `us-east-2` con ECS sobre un host EC2, RDS PostgreSQL, Secrets Manager y CloudWatch, pero el ambiente fue eliminado y no está desplegado. CDK configura Google Drive compartido para evidencias, firmas y reportes, e inyecta sus credenciales dedicadas desde Secrets Manager; ya no provisiona S3 ni le concede permisos al task role. Para recrearlo se requieren credenciales dedicadas de Drive y el ID del Drive compartido. No hay URL/IP ni datos persistentes; la arquitectura prevista usa HTTP a una IPv4 efímera sin CloudFront ni ALB. Producción aún no tiene stacks IaC propios en la rama actual. Consulte [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) para el estado, diagramas objetivo, persistencia, CI/CD y brechas antes de producción, y [Staging y despliegue](./docs/staging-and-deployment.md) para recrearlo desde cero.
 
 ## Alcance del MVP
 

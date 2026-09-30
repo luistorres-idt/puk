@@ -4,7 +4,7 @@ Este documento resume cómo quedó implementada la integración con Google Drive
 
 ## Resumen
 
-- La aplicación puede trabajar con el proveedor configurado: Drive o S3.
+- Google Drive es el proveedor declarado para evidencias, firmas y reportes en staging/producción. El código aún conserva S3 y tiene ese proveedor como valor predeterminado técnico, por lo que el runtime debe configurar `STORAGE_PROVIDER=drive`; la IaC y el script de secretos de staging todavía no reflejan por completo la decisión.
 - En modo Drive, los archivos pasan por la API para mantener autenticación y permisos; el navegador no recibe credenciales de Google ni enlaces públicos.
 - Las evidencias pertenecen a la unidad del vehículo, no a una categoría del checklist.
 - No se migran los objetos de prueba que quedaron en S3.
@@ -48,12 +48,12 @@ En el flujo S3, el navegador puede subir directamente a una URL prefirmada. En D
 
 Se ejecutaron 10 muestras medidas por tamaño y proveedor, en secuencia alternada, con una precarga por proveedor/tamaño excluida del resultado. Cada muestra subió y descargó los mismos bytes de una imagen JPEG sintética; se comprobó que los bytes recibidos fueran idénticos. Los tiempos cubren el I/O del almacenamiento, no el renderizado en pantalla. Drive usa `getFile` (consulta de metadatos y descarga); S3 usa una URL prefirmada y una petición GET directa.
 
-| Tamaño del archivo | Operación | Drive mediana (p90) | S3 mediana (p90) | Razón de medianas Drive/S3 |
-| --- | --- | ---: | ---: | ---: |
-| 0.52 MiB (547,209 bytes) | Subida | 1,588 ms (1,706 ms) | 22.7 ms (28.2 ms) | 70× |
-| 0.52 MiB (547,209 bytes) | Lectura | 845 ms (951 ms) | 3.4 ms (4.2 ms) | 249× |
-| 2.55 MiB (2,671,488 bytes) | Subida | 3,151 ms (4,923 ms) | 33.5 ms (40.3 ms) | 94× |
-| 2.55 MiB (2,671,488 bytes) | Lectura | 1,112 ms (1,185 ms) | 5.5 ms (5.9 ms) | 202× |
+| Tamaño del archivo         | Operación | Drive mediana (p90) |  S3 mediana (p90) | Razón de medianas Drive/S3 |
+| -------------------------- | --------- | ------------------: | ----------------: | -------------------------: |
+| 0.52 MiB (547,209 bytes)   | Subida    | 1,588 ms (1,706 ms) | 22.7 ms (28.2 ms) |                        70× |
+| 0.52 MiB (547,209 bytes)   | Lectura   |     845 ms (951 ms) |   3.4 ms (4.2 ms) |                       249× |
+| 2.55 MiB (2,671,488 bytes) | Subida    | 3,151 ms (4,923 ms) | 33.5 ms (40.3 ms) |                        94× |
+| 2.55 MiB (2,671,488 bytes) | Lectura   | 1,112 ms (1,185 ms) |   5.5 ms (5.9 ms) |                       202× |
 
 **Límite importante:** el endpoint S3 configurado para esta prueba resuelve a `localhost`; no es un bucket AWS remoto. Por lo tanto, estos números describen la configuración local y no deben interpretarse como comparación entre Google Drive y S3 en producción: el recorrido de red no es equivalente. Sí confirman que, en este entorno, el flujo de Drive tarda mucho más. Para una comparación de producción habría que repetirla contra el bucket S3 real desde la misma región o máquina donde corre la API. Los archivos temporales de ambos proveedores se eliminaron al terminar.
 
@@ -61,12 +61,12 @@ Se ejecutaron 10 muestras medidas por tamaño y proveedor, en secuencia alternad
 
 Después se repitió la prueba contra el bucket remoto indicado, en `us-east-2`, usando el endpoint regional estándar de AWS. La prueba corrió desde la misma máquina para ambos proveedores, con los mismos JPEG sintéticos, 10 muestras medidas por proveedor/tamaño, orden alternado y una precarga excluida. AWS documenta el endpoint regional como `s3.us-east-2.amazonaws.com` ([referencia de endpoints](https://docs.aws.amazon.com/general/latest/gr/s3.html)).
 
-| Tamaño del archivo | Operación | Drive mediana (p90) | S3 remoto mediana (p90) | Razón de medianas Drive/S3 |
-| --- | --- | ---: | ---: | ---: |
-| 0.52 MiB (547,209 bytes) | Subida | 1,518 ms (1,884 ms) | 410 ms (645 ms) | 3.70× |
-| 0.52 MiB (547,209 bytes) | Lectura | 903 ms (1,199 ms) | 512 ms (1,283 ms) | 1.76× |
-| 2.55 MiB (2,671,488 bytes) | Subida | 1,883 ms (2,238 ms) | 553 ms (893 ms) | 3.41× |
-| 2.55 MiB (2,671,488 bytes) | Lectura | 1,136 ms (1,211 ms) | 880 ms (1,801 ms) | 1.29× |
+| Tamaño del archivo         | Operación | Drive mediana (p90) | S3 remoto mediana (p90) | Razón de medianas Drive/S3 |
+| -------------------------- | --------- | ------------------: | ----------------------: | -------------------------: |
+| 0.52 MiB (547,209 bytes)   | Subida    | 1,518 ms (1,884 ms) |         410 ms (645 ms) |                      3.70× |
+| 0.52 MiB (547,209 bytes)   | Lectura   |   903 ms (1,199 ms) |       512 ms (1,283 ms) |                      1.76× |
+| 2.55 MiB (2,671,488 bytes) | Subida    | 1,883 ms (2,238 ms) |         553 ms (893 ms) |                      3.41× |
+| 2.55 MiB (2,671,488 bytes) | Lectura   | 1,136 ms (1,211 ms) |       880 ms (1,801 ms) |                      1.29× |
 
 En esta medición, Drive tuvo medianas más altas en ambas operaciones y ambos tamaños. La diferencia de lectura fue menor con el archivo grande; además, el p90 de descarga S3 tuvo variación notable, así que conviene no concluir solo a partir de medianas. La prueba mide I/O de almacenamiento y no incluye interfaz, autenticación de la aplicación, base de datos ni resolución de carpetas; tampoco representa el tiempo total percibido por una persona en producción.
 
@@ -77,7 +77,7 @@ El bucket tiene versionado habilitado. Por eso, el borrado normal deja marcadore
 - Separación de la evidencia del checklist a la unidad, incluyendo API, contratos, vistas, consultas, reportes y pruebas.
 - Rutas de evidencia con alcance por unidad y validación de que la unidad pertenezca a la orden.
 - Reintentos idempotentes para cargas de Drive y nombre de archivo neutral para las fotos.
-- Lectura privada de evidencia, firma y PDF desde Drive; conservación del flujo S3 según el proveedor configurado.
+- Lectura privada de evidencia, firma y PDF desde Drive; conservación del adaptador S3 sólo por compatibilidad/legado.
 - Ajuste de la respuesta de firma para que la vista previa pueda mostrar el nombre de quien firmó.
 - Limpieza de operaciones del cliente de Drive que no tenían uso.
 - Actualizaciones de `docs/google-drive-integration-plan.md` y `spec.md`, además de pruebas asociadas.
