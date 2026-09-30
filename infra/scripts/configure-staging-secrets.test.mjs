@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { createSeedAdminCredentials } from './configure-staging-secrets.mjs';
+import { seedUsers } from '../../prisma/seed.ts';
 
 const script = fileURLToPath(new URL('./configure-staging-secrets.mjs', import.meta.url));
 const mockAws = `#!${process.execPath}
@@ -46,6 +48,7 @@ function runFixture(
     nativeEnvFile = false,
     malformedFile = false,
     missingInput = false,
+    missingClientAdminEmail = false,
     noAws = false,
     region = 'us-east-2',
   } = {},
@@ -58,6 +61,7 @@ function runFixture(
     GOOGLE_PRIVATE_KEY: `fixture-key-${marker}`,
     GOOGLE_SPREADSHEET_ID: `fixture-sheet-${marker}`,
     GOOGLE_TECHNICIANS_SPREADSHEET_ID: `fixture-technicians-${marker}`,
+    SEED_CLIENT_ADMIN_EMAIL: 'client-admin@fixture.invalid',
   };
   const callsPath = join(directory, 'calls.jsonl');
   const capturePath = join(directory, 'capture.json');
@@ -92,6 +96,7 @@ function runFixture(
     writeFileSync(env.GOOGLE_SERVICE_ACCOUNT_FILE, `{${marker}`, { mode: 0o600 });
   }
   if (missingInput) delete env.GOOGLE_SPREADSHEET_ID;
+  if (missingClientAdminEmail) delete env.SEED_CLIENT_ADMIN_EMAIL;
   const result = spawnSync(process.execPath, [...nodeArgs, script, ...args], {
     env,
     encoding: 'utf8',
@@ -124,14 +129,27 @@ function runFixture(
 
 test('creates a missing runtime secret with generated JWT and random seed, using native --env-file', (t) => {
   const { result, calls, capture } = runFixture(t, { nativeEnvFile: true });
-  assert.equal(result.status, 0);
+  const diagnostic = JSON.stringify({
+    error: result.error?.code,
+    signal: result.signal,
+    stderr: result.stderr?.replaceAll('fixture-', '[redacted]-'),
+    stdout: result.stdout?.replaceAll('fixture-', '[redacted]-'),
+    status: result.status,
+  });
+  assert.equal(result.status, 0, diagnostic);
   assert.deepEqual(
     calls.map((call) => call[1]),
     ['get-caller-identity', 'describe-secret', 'create-secret'],
   );
   assert.ok(calls[2].includes('--name'));
   assert.equal(capture.payload.SEED_ADMIN_PASSWORD.length, 32);
-  assert.equal(Object.keys(capture.payload).length, 11);
+  assert.equal(capture.payload.SEED_CLIENT_ADMIN_PASSWORD.length, 32);
+  assert.ok(
+    capture.payload.SEED_ADMIN_PASSWORD !== capture.payload.SEED_CLIENT_ADMIN_PASSWORD,
+    'admin passwords must be distinct without printing their values',
+  );
+  assert.equal(capture.payload.SEED_CLIENT_ADMIN_EMAIL, 'client-admin@fixture.invalid');
+  assert.equal(Object.keys(capture.payload).length, 13);
   assert.ok(capture.payload.JWT_ACCESS_PRIVATE_KEY.startsWith('-----BEGIN PRIVATE KEY-----'));
   assert.ok(capture.payload.JWT_REFRESH_PUBLIC_KEY.startsWith('-----BEGIN PUBLIC KEY-----'));
 });
@@ -173,8 +191,26 @@ test('redacts malformed service-account JSON errors', (t) => {
   assert.equal(capture, undefined);
 });
 
+test('generates distinct admin passwords and uses the configured client email', () => {
+  const generated = ['fixture-password-one', 'fixture-password-one', 'fixture-password-two'];
+  let index = 0;
+  const credentials = createSeedAdminCredentials(
+    { SEED_CLIENT_ADMIN_EMAIL: ' CLIENT-ADMIN@fixture.invalid ' },
+    () => generated[index++],
+  );
+
+  assert.equal(credentials.adminEmail, 'admin@staging.invalid');
+  assert.equal(credentials.clientAdminEmail, 'client-admin@fixture.invalid');
+  assert.ok(
+    credentials.adminPassword !== credentials.clientAdminPassword,
+    'colliding generated passwords must be regenerated without exposing them',
+  );
+  assert.equal(index, 3);
+});
+
 for (const options of [
   { missingInput: true },
+  { missingClientAdminEmail: true },
   { noAws: true },
   { args: ['--invalid'] },
   { region: 'us-west-2' },
@@ -186,12 +222,73 @@ for (const options of [
   });
 }
 
-test('repeated user seeds preserve existing passwords (static assertion)', () => {
-  const source = readFileSync(new URL('../../prisma/seed.ts', import.meta.url), 'utf8');
-  const userUpserts = [...source.matchAll(/await prisma\.user\.upsert\(\{([\s\S]*?)\n\}\);/g)];
-  assert.equal(userUpserts.length, 2);
-  for (const [, body] of userUpserts) {
-    assert.match(body, /update:\s*\{\s*\}/);
-    assert.match(body, /create:\s*\{[\s\S]*?passwordHash,/);
-  }
+test('seeds two admin accounts with separate password hashes and no credential updates', async () => {
+  const userUpserts = [];
+  const hashedPasswords = [];
+  let disconnected = false;
+  await seedUsers(
+    {
+      DATABASE_URL: 'postgresql://fixture.invalid/db',
+      NODE_ENV: 'production',
+      SEED_ADMIN_EMAIL: 'internal-admin@fixture.invalid',
+      SEED_ADMIN_PASSWORD: 'fixture-internal-password',
+      SEED_CLIENT_ADMIN_EMAIL: 'client-admin@fixture.invalid',
+      SEED_CLIENT_ADMIN_PASSWORD: 'fixture-client-password',
+    },
+    {
+      createPrismaClient: () => ({
+        technician: {
+          upsert: async () => ({
+            id: '00000000-0000-4000-8000-000000000002',
+            name: 'Fixture technician',
+          }),
+        },
+        user: {
+          upsert: async (args) => {
+            userUpserts.push(args);
+          },
+        },
+        $disconnect: async () => {
+          disconnected = true;
+        },
+      }),
+      hashPassword: async (password) => {
+        hashedPasswords.push(password);
+        return `hash-${hashedPasswords.length}`;
+      },
+    },
+  );
+
+  const admins = userUpserts.filter(({ create }) => create.role === 'ADMIN');
+  assert.equal(admins.length, 2);
+  assert.equal(admins[0].create.email, 'internal-admin@fixture.invalid');
+  assert.equal(admins[1].create.email, 'client-admin@fixture.invalid');
+  assert.ok(admins[0].create.passwordHash !== admins[1].create.passwordHash);
+  assert.ok(hashedPasswords[0] !== hashedPasswords[1]);
+  assert.ok(admins.every(({ update }) => Object.keys(update).length === 0));
+  assert.ok(disconnected);
+});
+
+test('keeps the default internal admin email when local seed overrides are absent', async () => {
+  const userUpserts = [];
+  await seedUsers(
+    { DATABASE_URL: 'postgresql://fixture.invalid/db', NODE_ENV: 'test' },
+    {
+      createPrismaClient: () => ({
+        technician: {
+          upsert: async () => ({
+            id: '00000000-0000-4000-8000-000000000002',
+            name: 'Fixture technician',
+          }),
+        },
+        user: { upsert: async (args) => userUpserts.push(args) },
+        $disconnect: async () => {},
+      }),
+      hashPassword: async () => 'fixture-hash',
+    },
+  );
+
+  const internalAdmin = userUpserts.find(({ create }) => create.role === 'ADMIN');
+  assert.equal(internalAdmin?.create.email, 'admin@staging.invalid');
+  assert.equal(userUpserts.filter(({ create }) => create.role === 'ADMIN').length, 1);
 });

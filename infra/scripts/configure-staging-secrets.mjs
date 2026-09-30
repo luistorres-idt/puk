@@ -1,23 +1,26 @@
 #!/usr/bin/env node
 
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 const accountId = '075566976700';
 const region = process.env.AWS_REGION ?? 'us-east-2';
 const secretId = 'puk/staging/runtime';
 // Load environment files externally with Node's native --env-file option.
-try {
-  configure();
-} catch {
-  // Never forward subprocess output, parser errors, paths, or secret-bearing values.
-  console.error(
-    'Staging secret configuration failed. Check inputs, AWS access, and secret metadata.',
-  );
-  process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    configure();
+  } catch {
+    // Never forward subprocess output, parser errors, paths, or secret-bearing values.
+    console.error(
+      'Staging secret configuration failed. Check inputs, AWS access, and secret metadata.',
+    );
+    process.exitCode = 1;
+  }
 }
 
 function configure() {
@@ -25,7 +28,11 @@ function configure() {
     throw new Error('Invalid staging configuration arguments.');
   }
   const missing = [];
-  for (const name of ['GOOGLE_SPREADSHEET_ID', 'GOOGLE_TECHNICIANS_SPREADSHEET_ID']) {
+  for (const name of [
+    'GOOGLE_SPREADSHEET_ID',
+    'GOOGLE_TECHNICIANS_SPREADSHEET_ID',
+    'SEED_CLIENT_ADMIN_EMAIL',
+  ]) {
     if (!process.env[name]) missing.push(name);
   }
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_FILE && !process.env.GOOGLE_PRIVATE_KEY) {
@@ -78,9 +85,7 @@ function configure() {
     console.error('The Google service account email or private key is missing.');
     process.exit(1);
   }
-  const seedAdminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@staging.invalid';
-  const seedAdminPassword =
-    process.env.SEED_ADMIN_PASSWORD ?? randomBytes(24).toString('base64url');
+  const seedAdminCredentials = createSeedAdminCredentials(process.env);
   const seedTechnicianEmail = process.env.SEED_TECHNICIAN_EMAIL ?? 'technician@staging.invalid';
   const secret = JSON.stringify({
     GOOGLE_CLIENT_EMAIL: googleClientEmail,
@@ -91,8 +96,10 @@ function configure() {
     JWT_ACCESS_PUBLIC_KEY: access.publicKey.export({ format: 'pem', type: 'spki' }),
     JWT_REFRESH_PRIVATE_KEY: refresh.privateKey.export({ format: 'pem', type: 'pkcs8' }),
     JWT_REFRESH_PUBLIC_KEY: refresh.publicKey.export({ format: 'pem', type: 'spki' }),
-    SEED_ADMIN_EMAIL: seedAdminEmail,
-    SEED_ADMIN_PASSWORD: seedAdminPassword,
+    SEED_ADMIN_EMAIL: seedAdminCredentials.adminEmail,
+    SEED_ADMIN_PASSWORD: seedAdminCredentials.adminPassword,
+    SEED_CLIENT_ADMIN_EMAIL: seedAdminCredentials.clientAdminEmail,
+    SEED_CLIENT_ADMIN_PASSWORD: seedAdminCredentials.clientAdminPassword,
     SEED_TECHNICIAN_EMAIL: seedTechnicianEmail,
   });
 
@@ -113,7 +120,46 @@ function configure() {
   } finally {
     rmSync(temporaryDirectory, { force: true, recursive: true });
   }
+  const credentialsFile = process.env.STAGING_ADMIN_CREDENTIALS_FILE;
+  if (credentialsFile) {
+    if (existsSync(credentialsFile)) {
+      throw new Error('Staging admin credentials file already exists.');
+    }
+    writeFileSync(
+      credentialsFile,
+      `${JSON.stringify(
+        [
+          { email: seedAdminCredentials.adminEmail, password: seedAdminCredentials.adminPassword },
+          {
+            email: seedAdminCredentials.clientAdminEmail,
+            password: seedAdminCredentials.clientAdminPassword,
+          },
+        ],
+        null,
+        2,
+      )}\n`,
+      { flag: 'wx', mode: 0o600 },
+    );
+  }
   console.log('Staging runtime secret configured successfully. Secret values are not displayed.');
+}
+
+export function createSeedAdminCredentials(
+  environment = process.env,
+  randomPassword = () => randomBytes(24).toString('base64url'),
+) {
+  const adminEmail = (environment.SEED_ADMIN_EMAIL ?? 'admin@staging.invalid').trim().toLowerCase();
+  const clientAdminEmail = (environment.SEED_CLIENT_ADMIN_EMAIL ?? '').trim().toLowerCase();
+  if (!clientAdminEmail) throw new Error('SEED_CLIENT_ADMIN_EMAIL is required.');
+  if (adminEmail === clientAdminEmail) {
+    throw new Error('The internal and client admin accounts must use different email addresses.');
+  }
+
+  const adminPassword = randomPassword();
+  let clientAdminPassword = randomPassword();
+  while (clientAdminPassword === adminPassword) clientAdminPassword = randomPassword();
+
+  return { adminEmail, adminPassword, clientAdminEmail, clientAdminPassword };
 }
 
 function runAws(args, allowFailure = false) {

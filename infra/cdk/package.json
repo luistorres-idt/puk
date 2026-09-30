@@ -10,7 +10,7 @@
     "deploy:foundation": "cdk deploy PukStagingFoundation --app 'node --import tsx bin/puk.ts' --require-approval never",
     "diff": "cdk diff --all --app 'node --import tsx bin/puk.ts'",
     "synth": "cdk synth --app 'node --import tsx bin/puk.ts'",
-    "test": "node --import tsx --test lib/foundation-stack.test.ts lib/application-stack.test.ts",
+    "test": "node --import tsx --test lib/foundation-stack.test.ts lib/application-stack.test.ts ../scripts/configure-staging-secrets.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -1,49 +1,141 @@
 import { hashPassword } from '../apps/api/src/auth/password.js';
 import { createPrismaClient } from '../apps/api/src/database/client.js';
 import { UserRole } from '../apps/api/src/generated/prisma/enums.js';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-const databaseUrl =
-  process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? buildDatabaseUrl(process.env);
-if (databaseUrl === undefined) throw new Error('DIRECT_URL or DATABASE_URL is required.');
+const seedPrisma = createSeedDependencies();
 
-const password = process.env.SEED_ADMIN_PASSWORD ?? 'development-only-change-me';
-if (process.env.NODE_ENV === 'production' && process.env.SEED_ADMIN_PASSWORD === undefined) {
-  throw new Error('SEED_ADMIN_PASSWORD is required in production.');
+export async function seedUsers(
+  environment: NodeJS.ProcessEnv = process.env,
+  dependencies: SeedDependencies = seedPrisma,
+): Promise<void> {
+  const databaseUrl =
+    environment['DIRECT_URL'] ?? environment['DATABASE_URL'] ?? buildDatabaseUrl(environment);
+  if (databaseUrl === undefined) throw new Error('DIRECT_URL or DATABASE_URL is required.');
+
+  const adminEmail = (environment['SEED_ADMIN_EMAIL'] ?? 'admin@staging.invalid')
+    .trim()
+    .toLowerCase();
+  const adminPassword = environment['SEED_ADMIN_PASSWORD'] ?? 'development-only-change-me';
+  const clientAdminEmail = environment['SEED_CLIENT_ADMIN_EMAIL']?.trim().toLowerCase();
+  const clientAdminPassword = environment['SEED_CLIENT_ADMIN_PASSWORD'];
+  const hasClientAdminCredentials =
+    clientAdminEmail !== undefined || clientAdminPassword !== undefined;
+
+  if (environment['NODE_ENV'] === 'production') {
+    if (environment['SEED_ADMIN_PASSWORD'] === undefined) {
+      throw new Error('SEED_ADMIN_PASSWORD is required in production.');
+    }
+    if (!clientAdminEmail || !clientAdminPassword) {
+      throw new Error(
+        'SEED_CLIENT_ADMIN_EMAIL and SEED_CLIENT_ADMIN_PASSWORD are required in production.',
+      );
+    }
+  }
+  if (hasClientAdminCredentials && (!clientAdminEmail || !clientAdminPassword)) {
+    throw new Error('Both client admin seed settings must be provided together.');
+  }
+  if (clientAdminEmail && clientAdminEmail === adminEmail) {
+    throw new Error('The internal and client admin accounts must use different email addresses.');
+  }
+
+  const adminPasswordHash = await dependencies.hashPassword(adminPassword);
+  const clientAdminPasswordHash = clientAdminPassword
+    ? await dependencies.hashPassword(clientAdminPassword)
+    : undefined;
+  const prisma = dependencies.createPrismaClient(databaseUrl);
+
+  try {
+    const technician = await prisma.technician.upsert({
+      create: { id: '00000000-0000-4000-8000-000000000002', name: 'Técnico de desarrollo' },
+      update: {},
+      where: { id: '00000000-0000-4000-8000-000000000002' },
+    });
+
+    await prisma.user.upsert({
+      create: {
+        email: adminEmail,
+        name: 'Administrador de desarrollo',
+        passwordHash: adminPasswordHash,
+        role: UserRole.ADMIN,
+      },
+      update: {},
+      where: { email: adminEmail },
+    });
+
+    if (clientAdminEmail && clientAdminPasswordHash) {
+      await prisma.user.upsert({
+        create: {
+          email: clientAdminEmail,
+          name: 'Administrador del cliente',
+          passwordHash: clientAdminPasswordHash,
+          role: UserRole.ADMIN,
+        },
+        update: {},
+        where: { email: clientAdminEmail },
+      });
+    }
+
+    await prisma.user.upsert({
+      create: {
+        email: environment['SEED_TECHNICIAN_EMAIL'] ?? 'technician@example.invalid',
+        name: technician.name,
+        passwordHash: adminPasswordHash,
+        role: UserRole.TECHNICIAN,
+        technicianId: technician.id,
+      },
+      update: {},
+      where: { email: environment['SEED_TECHNICIAN_EMAIL'] ?? 'technician@example.invalid' },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
 }
-const passwordHash = await hashPassword(password);
 
-const prisma = createPrismaClient(databaseUrl);
-const technician = await prisma.technician.upsert({
-  create: { id: '00000000-0000-4000-8000-000000000002', name: 'Técnico de desarrollo' },
-  update: {},
-  where: { id: '00000000-0000-4000-8000-000000000002' },
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  await seedUsers();
+  process.stdout.write('Development users and technician seeded.\n');
+}
 
-await prisma.user.upsert({
-  create: {
-    email: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.invalid',
-    name: 'Administrador de desarrollo',
-    passwordHash,
-    role: UserRole.ADMIN,
-  },
-  update: {},
-  where: { email: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.invalid' },
-});
+interface SeedUserCreate {
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: UserRole;
+  technicianId?: string;
+}
 
-await prisma.user.upsert({
-  create: {
-    email: process.env.SEED_TECHNICIAN_EMAIL ?? 'technician@example.invalid',
-    name: technician.name,
-    passwordHash,
-    role: UserRole.TECHNICIAN,
-    technicianId: technician.id,
-  },
-  update: {},
-  where: { email: process.env.SEED_TECHNICIAN_EMAIL ?? 'technician@example.invalid' },
-});
+interface SeedPrismaClient {
+  technician: {
+    upsert(args: {
+      create: { id: string; name: string };
+      update: Record<string, never>;
+      where: { id: string };
+    }): Promise<{ id: string; name: string }>;
+  };
+  user: {
+    upsert(args: {
+      create: SeedUserCreate;
+      update: Record<string, never>;
+      where: { email: string };
+    }): Promise<unknown>;
+  };
+  $disconnect(): Promise<void>;
+}
 
-await prisma.$disconnect();
-process.stdout.write('Development users and technician seeded.\n');
+interface SeedDependencies {
+  createPrismaClient(databaseUrl: string): SeedPrismaClient;
+  hashPassword(password: string): Promise<string>;
+}
+
+function createSeedDependencies(): SeedDependencies {
+  return {
+    createPrismaClient: (databaseUrl) =>
+      createPrismaClient(databaseUrl) as unknown as SeedPrismaClient,
+    hashPassword,
+  };
+}
 
 function buildDatabaseUrl(environment: NodeJS.ProcessEnv): string | undefined {
   const host = environment['PUK_DATABASE_HOST'];

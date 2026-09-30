@@ -17,7 +17,7 @@ test('runs one bridge-mode ECS task on an IMDSv2-protected EC2 host', () => {
   template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
     LaunchTemplateData: Match.objectLike({
       IamInstanceProfile: Match.anyValue(),
-      InstanceType: 't3a.medium',
+      InstanceType: 't3.small',
       MetadataOptions: Match.objectLike({
         HttpPutResponseHopLimit: 1,
         HttpTokens: 'required',
@@ -34,7 +34,7 @@ test('runs one bridge-mode ECS task on an IMDSv2-protected EC2 host', () => {
   });
   template.hasResourceProperties('AWS::ECS::TaskDefinition', {
     Cpu: '1024',
-    Memory: '2048',
+    Memory: '1792',
     NetworkMode: 'bridge',
     RequiresCompatibilities: ['EC2'],
     ContainerDefinitions: Match.arrayWith([
@@ -46,6 +46,19 @@ test('runs one bridge-mode ECS task on an IMDSv2-protected EC2 host', () => {
         Name: 'web',
         Links: ['api'],
         PortMappings: [{ ContainerPort: 80, HostPort: 80, Protocol: 'tcp' }],
+      }),
+    ]),
+  });
+  template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+    ContainerDefinitions: Match.arrayWith([
+      Match.objectLike({
+        Name: 'migration',
+        Secrets: Match.arrayWith([
+          Match.objectLike({ Name: 'SEED_ADMIN_EMAIL' }),
+          Match.objectLike({ Name: 'SEED_ADMIN_PASSWORD' }),
+          Match.objectLike({ Name: 'SEED_CLIENT_ADMIN_EMAIL' }),
+          Match.objectLike({ Name: 'SEED_CLIENT_ADMIN_PASSWORD' }),
+        ]),
       }),
     ]),
   });
