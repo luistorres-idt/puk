@@ -78,61 +78,87 @@ export class UsersService {
         ? undefined
         : (this.checkPassword(input.password), await hashPassword(input.password));
 
-    return this.prisma.$transaction(async (transaction) => {
-      if (transaction.sharedTechnicianAccess) {
-        const shared = await transaction.sharedTechnicianAccess.findUnique({
-          where: { id: 1 },
-        });
-        if (shared?.userId === id) {
-          if (
-            (input.role !== undefined && input.role !== existing.role) ||
-            (input.technicianId !== undefined && input.technicianId !== null)
-          ) {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const isRemovingAdminAccess =
+          existing.role === 'ADMIN' &&
+          existing.active &&
+          (input.active === false || input.role === 'TECHNICIAN');
+        if (isRemovingAdminAccess && actorUserId === id) {
+          throw new AppError(
+            400,
+            'ADMIN_SELF_LOCKOUT',
+            'An administrator cannot deactivate or demote their own account.',
+          );
+        }
+        if (isRemovingAdminAccess) {
+          const activeAdmins = await transaction.user.count({
+            where: { active: true, role: 'ADMIN' },
+          });
+          if (activeAdmins <= 1) {
             throw new AppError(
               400,
-              'INVALID_SHARED_TECHNICIAN_ACCOUNT',
-              'No se puede cambiar el rol o asignar técnico individual a la cuenta técnica compartida designada.',
+              'LAST_ACTIVE_ADMIN',
+              'The last active administrator cannot be deactivated or demoted.',
             );
           }
-          if (input.active === false && existing.active) {
-            await transaction.sharedTechnicianAccess.update({
-              where: { id: 1 },
-              data: { orderId: null, revision: { increment: 1 } },
-            });
+        }
+        if (transaction.sharedTechnicianAccess) {
+          const shared = await transaction.sharedTechnicianAccess.findUnique({
+            where: { id: 1 },
+          });
+          if (shared?.userId === id) {
+            if (
+              (input.role !== undefined && input.role !== existing.role) ||
+              (input.technicianId !== undefined && input.technicianId !== null)
+            ) {
+              throw new AppError(
+                400,
+                'INVALID_SHARED_TECHNICIAN_ACCOUNT',
+                'No se puede cambiar el rol o asignar técnico individual a la cuenta técnica compartida designada.',
+              );
+            }
+            if (input.active === false && existing.active) {
+              await transaction.sharedTechnicianAccess.update({
+                where: { id: 1 },
+                data: { orderId: null, revision: { increment: 1 } },
+              });
+            }
           }
         }
-      }
 
-      const user = await transaction.user.update({
-        data: {
-          ...(input.active === undefined ? {} : { active: input.active }),
-          ...(input.email === undefined ? {} : { email: input.email }),
-          ...(input.name === undefined ? {} : { name: input.name }),
-          ...(passwordHash === undefined ? {} : { passwordHash }),
-          ...(input.role === undefined ? {} : { role: input.role }),
-          ...(input.technicianId === undefined ? {} : { technicianId: input.technicianId }),
-        },
-        select: publicUserSelect,
-        where: { id },
-      });
-      if (!user.active) {
-        await transaction.refreshSession.updateMany({
-          data: { revokedAt: new Date() },
-          where: { userId: id, revokedAt: null },
+        const user = await transaction.user.update({
+          data: {
+            ...(input.active === undefined ? {} : { active: input.active }),
+            ...(input.email === undefined ? {} : { email: input.email }),
+            ...(input.name === undefined ? {} : { name: input.name }),
+            ...(passwordHash === undefined ? {} : { passwordHash }),
+            ...(input.role === undefined ? {} : { role: input.role }),
+            ...(input.technicianId === undefined ? {} : { technicianId: input.technicianId }),
+          },
+          select: publicUserSelect,
+          where: { id },
         });
-      }
-      await transaction.auditLog.create({
-        data: {
-          action: 'USER_UPDATED',
-          actorUserId,
-          after: user,
-          before: existing,
-          entityId: id,
-          entityType: 'User',
-        },
-      });
-      return user;
-    });
+        if (!user.active) {
+          await transaction.refreshSession.updateMany({
+            data: { revokedAt: new Date() },
+            where: { userId: id, revokedAt: null },
+          });
+        }
+        await transaction.auditLog.create({
+          data: {
+            action: 'USER_UPDATED',
+            actorUserId,
+            after: user,
+            before: existing,
+            entityId: id,
+            entityType: 'User',
+          },
+        });
+        return user;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   private checkPassword(password: string): void {

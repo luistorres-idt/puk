@@ -1,12 +1,14 @@
 import { computed, ref } from 'vue';
 import type { AdminUserListItem, SharedTechnicianAccessConfig } from '@puk/contracts';
 import {
-  createAdminUser,
   getSharedTechnicianAccess,
-  listAdminUsers,
-  updateAdminUser,
   updateSharedTechnicianAccount,
 } from '@/modules/technical-accounts';
+import {
+  createUser as createAdminUser,
+  listUsers as listAdminUsers,
+  updateUser as updateAdminUser,
+} from '@/modules/user-management';
 import { useMessage } from 'naive-ui';
 
 export function useTechnicalAccounts() {

@@ -55,6 +55,9 @@ describe('router navigation guards', () => {
 
     await router.push('/technicians');
     expect(router.currentRoute.value.name).toBe('work-order');
+
+    await router.push('/admin/users');
+    expect(router.currentRoute.value.name).toBe('work-order');
   });
 
   it('allows shared technician to access /work-order and /orders/:id/execute', async () => {
@@ -89,6 +92,22 @@ describe('router navigation guards', () => {
     });
 
     await router.push('/work-order');
+    expect(router.currentRoute.value.name).toBe('home');
+  });
+
+  it('blocks an individual technician from the administrator management route', async () => {
+    const session = useSessionStore();
+    session.acceptSession('test-token', {
+      id: '00000000-0000-4000-8000-000000000002',
+      name: 'Technician',
+      email: 'tech@example.com',
+      role: 'TECHNICIAN',
+      orderAccessMode: 'INDIVIDUAL',
+      active: true,
+      technicianId: '00000000-0000-4000-8000-000000000003',
+    });
+
+    await router.push('/admin/users');
     expect(router.currentRoute.value.name).toBe('home');
   });
 });
