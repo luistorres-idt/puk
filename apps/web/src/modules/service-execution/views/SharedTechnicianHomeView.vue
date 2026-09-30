@@ -136,37 +136,34 @@ function formatDate(dateStr: string): string {
         >
           <div class="space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <span class="font-mono text-base font-bold text-slate-900">{{ order.folio }}</span>
-              <div class="flex flex-wrap items-center gap-2">
-                <n-tag size="small" :type="orderStatusTagType(order.status)" round>
-                  {{ formatOrderStatus(order.status) }}
-                </n-tag>
-                <n-tag size="small" type="default">
-                  {{ formatServiceType(order.serviceType) }}
-                </n-tag>
+              <div>
+                <span class="font-mono text-base font-bold text-slate-900">{{ order.folio }}</span>
+                <p class="text-sm text-slate-500">{{ formatServiceType(order.serviceType) }}</p>
               </div>
+              <n-tag size="small" :type="orderStatusTagType(order.status)" round>
+                {{ formatOrderStatus(order.status) }}
+              </n-tag>
             </div>
 
             <div class="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
               <div>
-                <span class="text-xs font-semibold uppercase text-slate-400">Cliente</span>
                 <p class="font-medium text-slate-800">{{ order.clientNameSnapshot }}</p>
               </div>
               <div>
-                <span class="text-xs font-semibold uppercase text-slate-400">
-                  Técnico Responsable
-                </span>
+                <span class="text-xs font-semibold uppercase text-slate-400">Técnico</span>
                 <p class="font-medium text-slate-800">
                   {{ order.technician?.name || 'No asignado' }}
                 </p>
               </div>
               <div>
-                <span class="text-xs font-semibold uppercase text-slate-400">Programada</span>
+                <span class="text-xs font-semibold uppercase text-slate-400">Fecha</span>
                 <p class="text-slate-700">{{ formatDate(order.scheduledAt) }}</p>
               </div>
               <div v-if="order._count?.units">
-                <span class="text-xs font-semibold uppercase text-slate-400">Unidades</span>
-                <p class="text-slate-700">{{ order._count.units }} unidad(es)</p>
+                <p class="text-slate-700">
+                  {{ order._count.units }}
+                  {{ order._count.units === 1 ? 'unidad' : 'unidades' }}
+                </p>
               </div>
             </div>
 
