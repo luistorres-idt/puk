@@ -302,4 +302,5 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [ ] Evaluar RBAC persistido cuando aparezcan más perfiles configurables.
 - [ ] Incorporar recuperación de contraseña según el canal aprobado.
 - [ ] Añadir exportación o reportes de auditoría si el negocio los requiere.
-- [ ] Evaluar aplicaciones nativas, facturación, cuentas bancarias y tarifas como iniciativas separadas.
+- [x] Implementar tarifas dinámicas por orden, personalización acordada y reajuste post-cierre definido en `docs/service-pricing-customization-spec.md`.
+- [ ] Evaluar aplicaciones nativas, facturación y cuentas bancarias como iniciativas separadas.
