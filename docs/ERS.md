@@ -151,6 +151,7 @@ flowchart TD
   servicio o reprogramarlo. La cancelación conserva el cierre, tarifa y reporte de la visita. La
   reprogramación crea una nueva orden enlazada, con nuevo folio y fecha, en estado `DRAFT`; copia la
   configuración operativa y reinicia evidencias, firma, checklist, verificaciones y datos de cobro.
+- **RF-19 (Tarifas Dinámicas y Ajuste de Liquidación):** El sistema debe permitir a los administradores (`orders:manage`) configurar tarifas acordadas (`rates`) y viáticos (`travelExpenses`) para una orden específica previo a su cierre, así como ajustar importes de liquidación técnica en órdenes ya finalizadas (`COMPLETED`, `FAILED_APPOINTMENT`). El reajuste post-cierre debe recalcular los importes y desgloses con aritmética de precisión arbitraria, registrar auditoría formal (`ORDER_PRICING_ADJUSTED`), incrementar la versión contable de la orden e invalidar y encolar la re-sincronización hacia el reporte técnico de Google Sheets.
 
 ---
 

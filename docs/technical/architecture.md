@@ -112,7 +112,7 @@ docs/                    requisitos, decisiones y documentación técnica
 - Mocks de Sheets, almacenamiento y claves JWT únicamente en desarrollo con valores `development-only`.
 - Staging definido como infraestructura inmutable en dos stacks CDK: foundation para estado/red y application para cómputo/entrega.
 
-## Estado implementado al 2026-09-25
+## Estado implementado al 2026-09-30
 
 - El acceso técnico compartido se modela como configuración versionada y auditable; las políticas
   distinguen ejecución individual de tablero multiorden.
@@ -129,5 +129,8 @@ docs/                    requisitos, decisiones y documentación técnica
 - Evidencias, firmas y reportes usan el proveedor configurado; Google Drive está integrado y el
   adaptador de objetos se conserva para entornos que lo seleccionen. Cada proveedor mantiene sus
   protocolos de permisos, reintento y confirmación.
+- Las tarifas de órdenes admiten personalización acordada previa y ajuste contable post-cierre
+  mediante `OrderPricingService` y cálculo puro en `pricing.ts`, con precisión arbitraria, auditoría,
+  versiones contables y publicación multilínea en la columna de costo del reporte técnico de Sheets.
 
 La secuencia histórica de implementación y sus commits está en la [línea de tiempo del proyecto](../project-timeline.md).

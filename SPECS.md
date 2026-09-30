@@ -40,7 +40,7 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 - Almacenamiento privado de archivos, con proveedor intercambiable.
 - Auditoría de acciones relevantes.
 - Registro y reintento de sincronizaciones con Google Sheets.
-- Directorio técnico sincronizado y tarifas por servicio congeladas al cierre.
+- Directorio técnico sincronizado, configuración de tarifas pactadas por orden, reajuste post-cierre y congelación de tarifas al cierre.
 - Publicación del cobro en el libro de técnicos.
 - Interfaz web responsiva y PWA básica.
 
@@ -374,6 +374,7 @@ SyncStatus:
 - `technicianId: UUID`.
 - Snapshots del técnico, precio unitario, cantidades, costos, viáticos, total, moneda, fecha y versión del cálculo.
 - `pricingBreakdown: jsonb?`, desglose por servicio de las órdenes mixtas.
+- `pricingOverrides: jsonb?`, sobreescritura personalizada de tarifas y viáticos pactados para la orden.
 - `scheduledAt: timestamptz`.
 - `isHomeService: boolean`.
 - `serviceAddress: string?`.
@@ -740,20 +741,21 @@ Respuesta de error:
 
 ### 11.5 Órdenes
 
-| Método | Ruta                             | Descripción                  |
-| ------ | -------------------------------- | ---------------------------- |
-| GET    | `/orders`                        | Listar según rol             |
-| POST   | `/orders`                        | Crear borrador; admin        |
-| GET    | `/orders/:id`                    | Obtener detalle              |
-| PATCH  | `/orders/:id`                    | Editar borrador; admin       |
-| POST   | `/orders/:id/assign`             | Asignar y sincronizar; admin |
-| POST   | `/orders/:id/start`              | Iniciar; técnico asignado    |
-| POST   | `/orders/:id/cancel`             | Cancelar; admin              |
-| POST   | `/orders/:id/reschedule`         | Reprogramar cita fallida     |
-| POST   | `/orders/:id/require-correction` | Solicitar corrección; admin  |
-| POST   | `/orders/:id/complete`           | Finalizar servicio normal    |
-| POST   | `/orders/:id/fail-appointment`   | Cerrar como cita fallida     |
-| GET    | `/orders/:id/audit`              | Historial; admin             |
+| Método | Ruta                             | Descripción                                  |
+| ------ | -------------------------------- | -------------------------------------------- |
+| GET    | `/orders`                        | Listar según rol                             |
+| POST   | `/orders`                        | Crear borrador; admin                        |
+| GET    | `/orders/:id`                    | Obtener detalle                              |
+| PATCH  | `/orders/:id`                    | Editar borrador; admin                       |
+| POST   | `/orders/:id/assign`             | Asignar y sincronizar; admin                 |
+| POST   | `/orders/:id/start`              | Iniciar; técnico asignado                    |
+| POST   | `/orders/:id/cancel`             | Cancelar; admin                              |
+| POST   | `/orders/:id/reschedule`         | Reprogramar cita fallida                     |
+| POST   | `/orders/:id/require-correction` | Solicitar corrección; admin                  |
+| POST   | `/orders/:id/complete`           | Finalizar servicio normal                    |
+| POST   | `/orders/:id/fail-appointment`   | Cerrar como cita fallida                     |
+| PATCH  | `/orders/:id/pricing`            | Configurar o ajustar tarifas pactadas; admin |
+| GET    | `/orders/:id/audit`              | Historial; admin                             |
 
 ### 11.6 Unidades y equipos
 
@@ -829,6 +831,7 @@ CompleteEvidenceSchema
 CompleteSignatureSchema
 CompleteOrderSchema
 FailAppointmentSchema
+OrderPricingOverridesSchema
 ```
 
 Reglas:

@@ -43,7 +43,7 @@ flowchart LR
 - El manejo de errores de interfaz utiliza la utilidad `extractApiErrorMessage` (`@/shared/http/client.ts`) para presentar transparentemente al usuario los mensajes de error originados en el backend en lugar de códigos genéricos de Axios.
 - Formularios y modales usan estado local del componente.
 - Tras mutaciones se invalidan órdenes, auditoría, sincronización o reporte según corresponda.
-- En el detalle administrativo, `useOrderMedia` administra el ciclo de vida de las URLs privadas y `useAddOrderUnit` encapsula el formulario de alta; `AddOrderUnitModal`, `OrderEvidenceTab`, `OrderSyncTab`, `OrderReportCard` y `OrderAuditTab` separan la presentación de la orquestación de la vista. La vista conserva las consultas y mutaciones de TanStack Query.
+- En el detalle administrativo, `useOrderMedia` administra el ciclo de vida de las URLs privadas y `useAddOrderUnit` encapsula el formulario de alta; `AddOrderUnitModal`, `OrderEvidenceTab`, `OrderSyncTab`, `OrderReportCard` y `OrderAuditTab` separan la presentación de la orquestación de la vista. Asimismo, `OrderPricingModal` y `useOrderPricingModal` aíslan el formulario y validación para configurar tarifas acordadas y reajustar liquidaciones técnicas en formato tabular. La vista conserva las consultas y mutaciones de TanStack Query.
 - `OrderUnitsTab` presenta unidades y equipos con propiedades/eventos tipados; `AttachOrderEquipmentModal` y `useAttachOrderEquipment` aíslan el formulario de vinculación. `useEvidenceGallery` administra URLs privadas y descarta respuestas obsoletas al cambiar de contexto. Estos límites no trasladan las mutaciones ni la autoridad de permisos fuera de la vista/backend.
 
 ## Rutas

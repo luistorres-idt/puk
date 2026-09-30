@@ -247,6 +247,21 @@ Desde la tabla principal de órdenes puedes filtrar por estado:
 
 ---
 
+## 4. Guía Administrador: 5. Tarifas Acordadas y Ajustes de Liquidación
+
+En el detalle de la orden administrativa, dentro de la tarjeta de **Liquidación Técnica**:
+
+1. **Configuración Previa (`ASSIGNED`, `IN_PROGRESS`):**
+   - Pulsa el botón **`Configurar Tarifas Acordadas`**.
+   - Asigna tarifas acordadas para los tipos de servicio requeridos y/o ajusta el costo de viáticos/salida.
+   - Al guardar, las tarifas personalizadas quedan fijadas en la orden y se aplican de forma automática al completarse el servicio.
+2. **Ajuste Post-Cierre (`COMPLETED`, `FAILED_APPOINTMENT`):**
+   - Si tras la finalización se detectan diferencias o negociaciones extraordinarias, pulsa **`Ajustar Precios de Liquidación`**.
+   - Modifica las tarifas unitarias o viáticos e ingresa una justificación para auditoría.
+   - El sistema incrementa la versión contable, recalcula subtotales y encola la re-sincronización hacia la columna de costo en Google Sheets.
+
+---
+
 ## 5. Guía Técnico: 1. Bandeja Móvil
 
 1. Accede desde el navegador de tu celular al enlace de la aplicación (puedes agregarla a la pantalla de inicio como PWA).
@@ -410,7 +425,8 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 | **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets.               | Equipo Core |
 | **2026-09-11** | `v1.1.0` | Mejora      | Corte y envío semanal configurables para el reporte técnico, tablero global y reintento inmediato por operación.                    | Equipo Core |
 | **2026-09-10** | `v1.1.0` | Feature     | Órdenes multiservicio, directorio técnico sincronizado, tarifas por servicio, reporte de cobro y actualización final de inventario. | Equipo Core |
-| _Próximamente_ | `v1.2.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                                | Por definir |
+| **2026-09-28** | `v1.2.0` | Feature     | Tarifas acordadas por orden, reajuste post-cierre y formateo multilínea de costo en reporte técnico.                                | Equipo Core |
+| _Próximamente_ | `v1.3.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                                | Por definir |
 | _Próximamente_ | `v1.3.0` | Feature     | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar.                                                | Por definir |
 
 ---
