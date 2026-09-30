@@ -63,6 +63,7 @@ erDiagram
         string failedAppointmentResolutionReason
         uuid rescheduledFromOrderId FK, UK
         json pricingBreakdown
+        json pricingOverrides
         int version
         timestamp startedAt
         timestamp completedAt
@@ -173,7 +174,9 @@ erDiagram
 La API exige un técnico activo desde la creación; la relación en base de datos permanece nullable
 para conservar órdenes históricas sin técnico. Cada unidad tiene su propio tipo de servicio y agrupa
 equipos, checklist, fotografías y discrepancias, lo que permite órdenes multiservicio. La orden
-conserva el precio congelado y un desglose por servicio en `pricingBreakdown`. La firma se captura
+conserva el precio congelado y un desglose por servicio en `pricingBreakdown`, y permite sobreescrituras
+de tarifas y viáticos en `pricingOverrides` (configurados previo al cierre o ajustados administrativamente
+post-finalización mediante `OrderPricingService`). La firma se captura
 una vez por orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
 
 Una cita fallida permanece como resultado histórico y facturable. Su resolución administrativa se
