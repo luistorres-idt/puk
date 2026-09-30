@@ -103,6 +103,25 @@ como `SUPERSEDED` para no escribir dos veces el mismo folio.
 - Antes de confirmar la asignación (`POST /orders/:id/assign`), el backend ejecuta una revalidación fresca contra Google Sheets.
 - Para evitar falsos positivos de conflicto (`409 SHEET_ROW_CONFLICT`), la coincidencia de cliente entre la hoja y la orden aplica `isMatchingClient` y `normalizeString`. Esto asegura que diferencias de mayúsculas/minúsculas, acentos, espacios múltiples o sufijos corporativos (como `S.A. de C.V.`) no bloqueen la asignación de hardware que legítimamente pertenece al cliente. Solo se emite conflicto si el equipo en Sheets está asignado a una empresa completamente ajena.
 
+## Tarifas dinámicas y liquidación de órdenes
+
+El cálculo de liquidación y costos de las órdenes se gestiona mediante componentes desacoplados de alta precisión:
+
+### Motor de cálculo financiero (`pricing.ts`)
+- Utiliza aritmética de precisión arbitraria (`Prisma.Decimal` / `decimal.js`) con redondeo `ROUND_HALF_UP` a dos decimales.
+- Determina el costo base por unidad multiplicando la tarifa del servicio por la cantidad de equipos (o tarifa única en reemplazo de equipos).
+- Aplica viáticos / costo de salida según la configuración de la orden o tarifas del técnico.
+- Genera el desglose estructurado `pricingBreakdown` congelado al completar la orden.
+
+### Servicio de ajuste: `OrderPricingService`
+- Permite la sobreescritura de tarifas acordadas (`pricingOverrides`) por administradores (`orders:manage`).
+- **Órdenes no finalizadas (`DRAFT`, `ASSIGNED`, `IN_PROGRESS`):** guarda los overrides para ser tomados durante el cierre y emite auditoría `ORDER_PRICING_CONFIGURED`.
+- **Órdenes finalizadas (`COMPLETED`, `FAILED_APPOINTMENT`):** ejecuta recálculo financiero completo, incrementa `pricingVersion`, actualiza snapshots de precios y encola la re-sincronización hacia Google Sheets invalidando versiones previas (`SUPERSEDED`), registrando auditoría `ORDER_PRICING_ADJUSTED`.
+
+### Formato en Reporte Técnico de Google Sheets (`technical-report-formatter.ts`)
+- Para órdenes multiservicio o con múltiples unidades (excluyendo citas fallidas), las columnas F (`economico`), G (`serie`), H (`imeiId`), K (`servicio`) y L (`costo`) se sincronizan renglón por renglón usando saltos de línea (`\n`).
+- La columna L (`costo`) desglosa el costo correspondiente a cada unidad en estricto orden cronológico alineado con el servicio, preservando la coherencia visual y contable en la hoja de cálculo.
+
 ## Carga de fotografías y firma
 
 ```mermaid

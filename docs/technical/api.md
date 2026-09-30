@@ -76,9 +76,11 @@ configurable en el asistente. El listado acepta los seis valores del dominio com
 | POST         | `/api/v1/orders/:id/units`                                | agregar unidad                                   |
 | PATCH/DELETE | `/api/v1/orders/:id/units/:unitId`                        | modificar/eliminar unidad                        |
 | POST         | `/api/v1/orders/:id/units/:unitId/equipment`              | asignar equipo                                   |
-| DELETE       | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId` | retirar equipo                                   |
 | GET          | `/api/v1/orders/:id/sync`                                 | estado de sincronización                         |
 | POST         | `/api/v1/orders/:id/sync/retry`                           | reintento administrativo                         |
+| PATCH        | `/api/v1/orders/:id/pricing`                              | configurar o ajustar tarifas pactadas (admin)    |
+
+`PATCH /api/v1/orders/:id/pricing` requiere permiso `orders:manage`. Admite `rates` (tarifas por servicio), `travelExpenses` (viáticos) y `reason` opcional. En órdenes no concluidas (`DRAFT`, `ASSIGNED`, `IN_PROGRESS`) almacena `pricingOverrides` y audita `ORDER_PRICING_CONFIGURED`. En órdenes finalizadas (`COMPLETED`, `FAILED_APPOINTMENT`) recalcula importes y desglose, incrementa `pricingVersion`, reemplaza la operación pendiente del reporte técnico en el outbox (`SUPERSEDED`), encola la nueva sincronización hacia Google Sheets y audita `ORDER_PRICING_ADJUSTED`.
 
 ### Ejecución técnica
 

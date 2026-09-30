@@ -4,7 +4,7 @@
 - **Proyecto:** PUK (Bull Dog Solution)
 - **Documento:** Especificación técnica y de requerimientos
 - **Fecha:** 2026-09-28
-- **Estado:** Propuesta de arquitectura / Lista para implementación
+- **Estado:** Implementado y verificado
 - **Autor:** Equipo de Arquitectura de Software
 
 ---
@@ -188,7 +188,13 @@ En `orders.router.ts`:
    - En la sección "Desglose de Liquidación Técnica":
      - Si la orden está en estado `ASSIGNED` o `IN_PROGRESS`: botón "Configurar Tarifas Acordadas".
      - Si la orden está en estado `COMPLETED` o `FAILED_APPOINTMENT`: botón "Ajustar Precios de Liquidación".
-   - Al guardar, refresca reactivamente la orden y muestra notificación de éxito.
+    - Al guardar, refresca reactivamente la orden y muestra notificación de éxito.
+
+### 4.7 Formateo Multilínea en Reporte Técnico de Google Sheets (`technical-report-formatter.ts`)
+En órdenes con múltiples unidades y servicios multilínea (salvo citas fallidas):
+- Las columnas F (`economico`), G (`serie`), H (`imeiId`), K (`servicio`) y L (`costo`) utilizan `\n` para alinear cada renglón por unidad en orden cronológico.
+- La columna L (`costo`) resuelve el costo de cada unidad individual (`resolveUnitCost`) con base en el desglose congelado (`pricingBreakdown`), tarifas sobreescritas (`pricingOverrides`) o tarifa unitaria, multiplicado por el número de equipos de la unidad (o 1 para reemplazo de equipos).
+- Las columnas M (`viaticos`) y N (`total`) conservan el valor global consolidado de la orden.
 
 ---
 
@@ -220,3 +226,6 @@ En `orders.router.ts`:
    - Integrar modal y botones de acción en `OrderDetailView.vue`.
 5. **Fase 5: Verificación End-to-End**
    - Ejecutar suite de pruebas de regresión y prueba de flujo completo.
+6. **Fase 6: Formateo Multilínea de Costos en Reporte Técnico**
+   - Desglosar columna L (`costo`) renglón por renglón alineada con las unidades y servicios en Google Sheets.
+   - Validar suite unitaria de formateo de reporte con servicios homogéneos y mixtos.
