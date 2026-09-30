@@ -80,13 +80,13 @@ Esta entrada no usa TLS: las credenciales y cookies de sesión viajan sin cifrad
 
 ### Red y límites de confianza
 
-| Zona            | Recursos                              | Entrada permitida                                      | Salida relevante                 |
-| --------------- | ------------------------------------- | ------------------------------------------------------ | -------------------------------- |
-| Pública         | Host ECS EC2 con IPv4 pública efímera | TCP/80 desde cualquier IPv4                            | Internet Gateway, RDS y APIs AWS |
-| Privada aislada | RDS PostgreSQL                        | TCP/5432 sólo desde el security group de la aplicación | Sin ruta directa a Internet      |
-| Fuera de la VPC | S3, Secrets Manager y CloudWatch      | Mediante APIs administradas                            | Según el servicio                |
+| Zona            | Recursos                                   | Entrada permitida                                      | Salida relevante                 |
+| --------------- | ------------------------------------------ | ------------------------------------------------------ | -------------------------------- |
+| Pública         | Host ECS EC2 con IPv4 pública efímera      | TCP/80 desde cualquier IPv4                            | Internet Gateway, RDS y APIs AWS |
+| Privada aislada | RDS PostgreSQL                             | TCP/5432 sólo desde el security group de la aplicación | Sin ruta directa a Internet      |
+| Fuera de la VPC | Google Drive, Secrets Manager y CloudWatch | Mediante APIs administradas                            | Según el servicio                |
 
-El host EC2 recibe IPv4 pública efímera para conexiones entrantes y salientes sin NAT Gateway ni Elastic IP. Su security group sólo permite TCP/80 desde Internet; el API en el puerto 3000 no se publica. La API requiere salida HTTPS para Google Sheets y AWS. La tarea usa modo `bridge` y conserva sus roles ECS propios; IMDSv2 es obligatorio y el hop limit es 1 para impedir que contenedores alcancen las credenciales del instance profile. La instancia no recibe permisos de Secrets Manager ni de S3. Esta configuración evita el costo horario y de procesamiento del NAT, aunque la IPv4 pública sigue teniendo costo y la salida no pasa por un NAT controlado.
+El host EC2 recibe IPv4 pública efímera para conexiones entrantes y salientes sin NAT Gateway ni Elastic IP. Su security group sólo permite TCP/80 desde Internet; el API en el puerto 3000 no se publica. La API requiere salida HTTPS para Google Sheets, Google Drive y AWS. La tarea usa modo `bridge` y conserva sus roles ECS propios; IMDSv2 es obligatorio y el hop limit es 1 para impedir que contenedores alcancen las credenciales del instance profile. La instancia no recibe permisos de Secrets Manager ni de S3. Esta configuración evita el costo horario y de procesamiento del NAT, aunque la IPv4 pública sigue teniendo costo y la salida no pasa por un NAT controlado.
 
 ### Tarea ECS sobre EC2 y orden de arranque
 
@@ -122,13 +122,13 @@ La migración dentro de cada tarea mantiene el orden de arranque, pero con más 
 
 ### Persistencia
 
-| Recurso                   | Configuración definida en CDK (no desplegada)                                                                         | Política IaC al eliminar en el futuro |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| RDS PostgreSQL 17         | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection        |
-| Almacenamiento de objetos | Cifrado, versionado, acceso privado, TLS y CORS; el proveedor de staging es S3                                        | `RETAIN`                              |
-| Logs                      | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                              |
+| Recurso                    | Configuración definida en CDK (no desplegada)                                                                         | Política IaC al eliminar en el futuro |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| RDS PostgreSQL 17          | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection        |
+| Almacenamiento de archivos | Google Drive compartido para evidencias, firmas y reportes; S3 no se provisiona en staging                            | No aplica                             |
+| Logs                       | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                              |
 
-La IaC de staging define un bucket S3 para el adaptador de objetos; esa decisión de despliegue no define el modelo lógico de almacenamiento de la aplicación. Google Drive también está integrado y se selecciona por configuración. PostgreSQL conserva referencias y metadatos. El lifecycle del bucket definido en CDK sólo abortaría cargas multipart incompletas después de un día; no elimina versiones ni define la retención de evidencias. Aunque la IaC configure `RETAIN`, **los recursos y datos previos fueron eliminados expresamente y no existen respaldos recuperables**. La política de negocio y el respaldo independiente siguen pendientes antes de producción.
+La decisión de producto es usar Google Drive compartido para evidencias, firmas y reportes; PostgreSQL conserva sólo referencias y metadatos. El código aún conserva un adaptador S3 alternativo para compatibilidad, pero la IaC selecciona `STORAGE_PROVIDER=drive`, no crea buckets S3 ni agrega permisos S3 al task role. El secreto runtime se configura con credenciales de Drive dedicadas (`GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY`, `GOOGLE_DRIVE_SHARED_DRIVE_ID`), independientes de la cuenta de servicio de Sheets. **Los recursos y datos previos fueron eliminados expresamente y no existen respaldos recuperables**. La política de negocio y el respaldo independiente siguen pendientes antes de producción.
 
 ### Stacks CDK
 
@@ -157,7 +157,6 @@ flowchart LR
     V --> C
     SG --> C
     DB --> C
-    B --> C
     RS --> C
 ```
 
@@ -171,7 +170,7 @@ No se deben renombrar construct IDs ni mover recursos persistentes sin revisar p
 
 - En un redeploy, RDS generará credenciales en Secrets Manager y ECS las inyectará en `migration` y `api` al iniciar la tarea.
 - El secreto runtime `puk/staging/runtime` debe volver a crearse con el script seguro existente; el secreto anterior fue eliminado.
-- La API accederá al bucket S3 mediante el task role de ECS; no se inyectan access keys estáticas.
+- El runtime recibe `STORAGE_PROVIDER=drive` desde CDK y requiere credenciales dedicadas `GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY` y `GOOGLE_DRIVE_SHARED_DRIVE_ID`. El script `configure-staging-secrets.mjs` exige y guarda esos campos junto con los valores de Sheets, sin imprimirlos. No se deben reutilizar las credenciales de Sheets de forma implícita.
 - Foundation volverá a crear el rol GitHub OIDC `puk-staging-github-deploy`, limitado a la rama `main` del repositorio configurado.
 - Las variables no sensibles del runtime se definen en el task definition.
 
@@ -323,17 +322,17 @@ Los Dockerfiles son multi-stage. La imagen de API se ejecuta como usuario `node`
 
 ## Variables de entorno
 
-| Grupo         | Variables principales                                            |
-| ------------- | ---------------------------------------------------------------- |
-| HTTP          | `PORT`, `APP_ORIGIN`, `API_ORIGIN`, `TRUST_PROXY`                |
-| Base de datos | `DATABASE_URL`, `DIRECT_URL` o variables `PUK_DATABASE_*` en ECS |
-| JWT           | Claves pública y privada, `JWT_ISSUER`, `JWT_AUDIENCE`, TTLs     |
-| Cookies       | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`             |
-| S3            | Endpoint, región, bucket, credenciales locales y path style      |
-| Sheets        | Spreadsheet, cuenta de servicio, clave privada y pestañas        |
-| Límites       | Tamaños de evidencia y firma, TTL de URLs, caché                 |
-| Resiliencia   | Timeouts, reintentos, circuit breaker y polling                  |
-| Seed          | Correos y contraseña inicial                                     |
+| Grupo             | Variables principales                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| HTTP              | `PORT`, `APP_ORIGIN`, `API_ORIGIN`, `TRUST_PROXY`                                                                 |
+| Base de datos     | `DATABASE_URL`, `DIRECT_URL` o variables `PUK_DATABASE_*` en ECS                                                  |
+| JWT               | Claves pública y privada, `JWT_ISSUER`, `JWT_AUDIENCE`, TTLs                                                      |
+| Cookies           | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`                                                              |
+| S3 (legado/local) | Endpoint, región, bucket, credenciales locales y path style; no es el proveedor declarado para staging/producción |
+| Sheets            | Spreadsheet, cuenta de servicio, clave privada y pestañas                                                         |
+| Límites           | Tamaños de evidencia y firma, TTL de URLs, caché                                                                  |
+| Resiliencia       | Timeouts, reintentos, circuit breaker y polling                                                                   |
+| Seed              | Correos y contraseña inicial                                                                                      |
 
 La API valida su configuración al arrancar. Los valores `development-only` activan adaptadores simulados fuera de producción y nunca deben usarse en producción.
 
@@ -366,14 +365,14 @@ La guía operativa y el primer despliegue están en [staging-and-deployment.md](
 La arquitectura de staging definida en IaC prioriza costo y simplicidad, pero no está desplegada.
 La tabla compara esa configuración objetivo con el trabajo pendiente antes de producción:
 
-| Pilar          | Configuración objetivo de IaC (no desplegada)                                          | Trabajo pendiente                                                                                                  |
-| -------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Seguridad      | RDS y S3 cifrados; S3 privado; host con HTTP público; IAM de tarea para S3; OIDC en CI | Configurar dominio y TLS; limitar ingreso; revisar CORS S3; agregar WAF según riesgo; auditar permisos con cdk-nag |
-| Confiabilidad  | Dos AZ para subredes; rollback de ECS; políticas de retención previstas para RDS y S3  | RDS Multi-AZ; alarmas; estrategia de migración única; restauraciones probadas                                      |
-| Rendimiento    | Sin CDN ni caché de borde                                                              | Autoscaling ECS, pruebas de carga y dimensionamiento de RDS                                                        |
-| Costos         | Sin NAT; host EC2 único con IPv4 pública y RDS micro                                   | Presupuestos y alarmas de costo; revisar transferencia e IPv4 públicas                                             |
-| Operación      | Logs por contenedor y smoke test                                                       | Dashboards, alarmas, trazas, runbooks y objetivos SLO                                                              |
-| Sostenibilidad | Contenedores dimensionados explícitamente                                              | Medir utilización y ajustar CPU, memoria y retenciones                                                             |
+| Pilar          | Configuración objetivo de IaC (no desplegada)                                                                | Trabajo pendiente                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Seguridad      | RDS cifrado; Google Drive privado; host con HTTP público; OIDC en CI; sin recursos ni permisos S3 en staging | Configurar dominio y TLS; limitar ingreso; definir controles de Workspace; agregar WAF según riesgo; auditar permisos con cdk-nag |
+| Confiabilidad  | Dos AZ para subredes; rollback de ECS; política de retención prevista para RDS                               | RDS Multi-AZ; alarmas; estrategia de migración única; restauraciones probadas                                                     |
+| Rendimiento    | Sin CDN ni caché de borde                                                                                    | Autoscaling ECS, pruebas de carga y dimensionamiento de RDS                                                                       |
+| Costos         | Sin NAT; host EC2 único con IPv4 pública y RDS micro                                                         | Presupuestos y alarmas de costo; revisar transferencia e IPv4 públicas                                                            |
+| Operación      | Logs por contenedor y smoke test                                                                             | Dashboards, alarmas, trazas, runbooks y objetivos SLO                                                                             |
+| Sostenibilidad | Contenedores dimensionados explícitamente                                                                    | Medir utilización y ajustar CPU, memoria y retenciones                                                                            |
 
 ## Referencias oficiales AWS
 

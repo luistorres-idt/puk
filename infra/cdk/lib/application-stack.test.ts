@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
@@ -40,6 +41,12 @@ test('runs one bridge-mode ECS task on an IMDSv2-protected EC2 host', () => {
     ContainerDefinitions: Match.arrayWith([
       Match.objectLike({
         Name: 'api',
+        Environment: Match.arrayWith([{ Name: 'STORAGE_PROVIDER', Value: 'drive' }]),
+        Secrets: Match.arrayWith([
+          Match.objectLike({ Name: 'GOOGLE_DRIVE_CLIENT_EMAIL' }),
+          Match.objectLike({ Name: 'GOOGLE_DRIVE_PRIVATE_KEY' }),
+          Match.objectLike({ Name: 'GOOGLE_DRIVE_SHARED_DRIVE_ID' }),
+        ]),
         PortMappings: [{ ContainerPort: 3000, HostPort: 3000, Protocol: 'tcp' }],
       }),
       Match.objectLike({
@@ -77,4 +84,6 @@ test('runs one bridge-mode ECS task on an IMDSv2-protected EC2 host', () => {
   template.hasOutput('EcsHostAutoScalingGroupName', {});
   template.resourceCountIs('AWS::EC2::EIP', 0);
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
+  template.resourceCountIs('AWS::S3::Bucket', 0);
+  assert.doesNotMatch(JSON.stringify(template.toJSON()), /s3:(?:Get|Put|Delete|List)/i);
 });

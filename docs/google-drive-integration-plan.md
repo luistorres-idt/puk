@@ -4,6 +4,8 @@
 
 **Alcance:** almacenar en un Drive compartido las nuevas fotografías de evidencia, firmas y reportes PDF de las órdenes de servicio, con acceso privado desde la aplicación. Los archivos actuales de S3 son exclusivamente de prueba: se pueden descartar y **no se migrarán** a Drive.
 
+**Decisión vigente:** Google Drive compartido es el proveedor previsto para evidencias, firmas y reportes en staging y producción. El adaptador S3 que aún conserva el código es compatibilidad/legado, no una alternativa de despliegue aprobada. La IaC y el script de secretos de staging todavía requieren cambios para que el redeploy implemente esta decisión; ver [staging y despliegue](./staging-and-deployment.md).
+
 ## Resumen de la propuesta
 
 1. Confirmar con TI el Drive compartido de producción, su capacidad, las políticas de acceso y la identidad de servicio aprobada.
@@ -15,13 +17,13 @@
 
 ## Estado actual y alcance técnico
 
-| Archivo     | Estado implementado                                                                                                                                                                             | Consideración operativa                                                                                         |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Fotografías | La web prepara JPEG y, en modo Drive, envía la carga autenticada a la API; la API valida, persiste y confirma la referencia privada. El adaptador de objetos conserva su protocolo alternativo. | Validar los tipos de archivo, permisos y rendimiento de extremo a extremo antes de activar Drive en producción. |
-| Firmas      | En modo Drive, la API recibe PNG autenticado, registra la referencia y mantiene una vista previa privada.                                                                                       | Preservar la firma original conforme a la política de retención.                                                |
-| PDF         | El worker genera la versión del reporte; `report-storage.ts` la persiste en Drive o en el adaptador de objetos seleccionado.                                                                    | Comprobar lectura de evidencias/firma, regeneración y descarga privada para cada modo configurado.              |
+| Archivo     | Estado implementado                                                                                                                                                               | Consideración operativa                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Fotografías | La web prepara JPEG y envía la carga autenticada a la API; la API valida, persiste y confirma la referencia privada en Drive. El adaptador S3 permanece en el código como legado. | Validar tipos de archivo, permisos y rendimiento de extremo a extremo en Drive antes del despliegue. |
+| Firmas      | La API recibe PNG autenticado, registra la referencia y mantiene una vista previa privada en Drive.                                                                               | Preservar la firma original conforme a la política de retención.                                     |
+| PDF         | El worker genera la versión del reporte y `report-storage.ts` la persiste en Drive.                                                                                               | Comprobar lectura de evidencias/firma, regeneración y descarga privada en Drive.                     |
 
-El adaptador de objetos implementa [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y utiliza URLs temporales; Drive usa IDs de archivo, referencias persistidas y autorización propia. La selección se configura por entorno y ambos protocolos permanecen explícitos. Las referencias de evidencia, firma y reporte se guardan en PostgreSQL; no se debe interpretar una referencia de un proveedor como ID/ruta de otro. Los registros antiguos de prueba no requieren migración histórica a Drive.
+El adaptador S3 implementa [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y utiliza URLs temporales; Drive usa IDs de archivo, referencias persistidas y autorización propia. Aunque el runtime aún conserva ambos protocolos y el predeterminado técnico es S3, la decisión operativa es seleccionar Drive para staging/producción; las referencias de evidencia, firma y reporte se guardan en PostgreSQL y no deben mezclarse entre proveedores. Los registros antiguos de prueba no requieren migración histórica a Drive.
 
 ## Requisitos previos de Google Workspace
 

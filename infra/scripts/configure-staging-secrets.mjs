@@ -31,6 +31,9 @@ function configure() {
   for (const name of [
     'GOOGLE_SPREADSHEET_ID',
     'GOOGLE_TECHNICIANS_SPREADSHEET_ID',
+    'GOOGLE_DRIVE_CLIENT_EMAIL',
+    'GOOGLE_DRIVE_PRIVATE_KEY',
+    'GOOGLE_DRIVE_SHARED_DRIVE_ID',
     'SEED_CLIENT_ADMIN_EMAIL',
   ]) {
     if (!process.env[name]) missing.push(name);
@@ -90,6 +93,9 @@ function configure() {
   const secret = JSON.stringify({
     GOOGLE_CLIENT_EMAIL: googleClientEmail,
     GOOGLE_PRIVATE_KEY: googlePrivateKey,
+    GOOGLE_DRIVE_CLIENT_EMAIL: process.env.GOOGLE_DRIVE_CLIENT_EMAIL,
+    GOOGLE_DRIVE_PRIVATE_KEY: process.env.GOOGLE_DRIVE_PRIVATE_KEY,
+    GOOGLE_DRIVE_SHARED_DRIVE_ID: process.env.GOOGLE_DRIVE_SHARED_DRIVE_ID,
     GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID,
     GOOGLE_TECHNICIANS_SPREADSHEET_ID: process.env.GOOGLE_TECHNICIANS_SPREADSHEET_ID,
     JWT_ACCESS_PRIVATE_KEY: access.privateKey.export({ format: 'pem', type: 'pkcs8' }),

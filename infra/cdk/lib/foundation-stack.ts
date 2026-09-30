@@ -7,14 +7,12 @@ import {
   aws_ec2 as ec2,
   aws_iam as iam,
   aws_rds as rds,
-  aws_s3 as s3,
   aws_secretsmanager as secretsmanager,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 
 export class PukStagingFoundationStack extends Stack {
   public readonly applicationSecurityGroup: ec2.SecurityGroup;
-  public readonly bucket: s3.Bucket;
   public readonly database: rds.DatabaseInstance;
   public readonly loadBalancerSecurityGroup: ec2.SecurityGroup;
   public readonly runtimeSecret: secretsmanager.ISecret;
@@ -89,24 +87,6 @@ export class PukStagingFoundationStack extends Stack {
       storageEncrypted: true,
       vpc: this.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-    });
-
-    this.bucket = new s3.Bucket(this, 'EvidenceBucket', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      cors: [
-        {
-          allowedHeaders: ['*'],
-          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD, s3.HttpMethods.PUT],
-          allowedOrigins: ['*'],
-          exposedHeaders: ['ETag'],
-          maxAge: 300,
-        },
-      ],
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      lifecycleRules: [{ abortIncompleteMultipartUploadAfter: Duration.days(1) }],
-      removalPolicy: RemovalPolicy.RETAIN,
-      versioned: true,
     });
 
     this.runtimeSecret = secretsmanager.Secret.fromSecretNameV2(

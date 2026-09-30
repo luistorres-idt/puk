@@ -156,10 +156,7 @@ export class PukStagingApplicationStack extends Stack {
         OUTBOX_POLL_INTERVAL_MS: '5000',
         PORT: '3000',
         PRESIGNED_URL_TTL_SECONDS: '300',
-        S3_BUCKET: foundation.bucket.bucketName,
-        S3_ENDPOINT: `https://s3.${this.region}.amazonaws.com`,
-        S3_FORCE_PATH_STYLE: 'false',
-        S3_REGION: this.region,
+        STORAGE_PROVIDER: 'drive',
         SHEETS_RETRY_LIMIT: '3',
         SHEETS_TIMEOUT_MS: '5000',
         TECHNICAL_REPORT_CUTOFF_WEEKDAY: '2',
@@ -197,6 +194,18 @@ export class PukStagingApplicationStack extends Stack {
         GOOGLE_PRIVATE_KEY: ecs.Secret.fromSecretsManager(
           foundation.runtimeSecret,
           'GOOGLE_PRIVATE_KEY',
+        ),
+        GOOGLE_DRIVE_CLIENT_EMAIL: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'GOOGLE_DRIVE_CLIENT_EMAIL',
+        ),
+        GOOGLE_DRIVE_PRIVATE_KEY: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'GOOGLE_DRIVE_PRIVATE_KEY',
+        ),
+        GOOGLE_DRIVE_SHARED_DRIVE_ID: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'GOOGLE_DRIVE_SHARED_DRIVE_ID',
         ),
         GOOGLE_SPREADSHEET_ID: ecs.Secret.fromSecretsManager(
           foundation.runtimeSecret,
@@ -254,7 +263,6 @@ export class PukStagingApplicationStack extends Stack {
     cfnTaskDefinition.addPropertyOverride('Memory', '1792');
     cfnTaskDefinition.addPropertyOverride('ContainerDefinitions.2.Links', ['api']);
 
-    foundation.bucket.grantReadWrite(taskDefinition.taskRole);
     new ecs.Ec2Service(this, 'Service', {
       circuitBreaker: { rollback: true },
       cluster,

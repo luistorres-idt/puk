@@ -48,6 +48,7 @@ function runFixture(
     nativeEnvFile = false,
     malformedFile = false,
     missingInput = false,
+    missingDriveInput = false,
     missingClientAdminEmail = false,
     noAws = false,
     region = 'us-east-2',
@@ -59,6 +60,9 @@ function runFixture(
   const config = {
     GOOGLE_CLIENT_EMAIL: `${marker}@fixture.invalid`,
     GOOGLE_PRIVATE_KEY: `fixture-key-${marker}`,
+    GOOGLE_DRIVE_CLIENT_EMAIL: `drive-${marker}@fixture.invalid`,
+    GOOGLE_DRIVE_PRIVATE_KEY: `drive-key-${marker}`,
+    GOOGLE_DRIVE_SHARED_DRIVE_ID: `drive-id-${marker}`,
     GOOGLE_SPREADSHEET_ID: `fixture-sheet-${marker}`,
     GOOGLE_TECHNICIANS_SPREADSHEET_ID: `fixture-technicians-${marker}`,
     SEED_CLIENT_ADMIN_EMAIL: 'client-admin@fixture.invalid',
@@ -96,6 +100,7 @@ function runFixture(
     writeFileSync(env.GOOGLE_SERVICE_ACCOUNT_FILE, `{${marker}`, { mode: 0o600 });
   }
   if (missingInput) delete env.GOOGLE_SPREADSHEET_ID;
+  if (missingDriveInput) delete env.GOOGLE_DRIVE_SHARED_DRIVE_ID;
   if (missingClientAdminEmail) delete env.SEED_CLIENT_ADMIN_EMAIL;
   const result = spawnSync(process.execPath, [...nodeArgs, script, ...args], {
     env,
@@ -124,11 +129,11 @@ function runFixture(
       'Secret values must not enter CLI arguments',
     );
   }
-  return { result, calls, capture };
+  return { result, calls, capture, config };
 }
 
 test('creates a missing runtime secret with generated JWT and random seed, using native --env-file', (t) => {
-  const { result, calls, capture } = runFixture(t, { nativeEnvFile: true });
+  const { result, calls, capture, config } = runFixture(t, { nativeEnvFile: true });
   const diagnostic = JSON.stringify({
     error: result.error?.code,
     signal: result.signal,
@@ -149,7 +154,10 @@ test('creates a missing runtime secret with generated JWT and random seed, using
     'admin passwords must be distinct without printing their values',
   );
   assert.equal(capture.payload.SEED_CLIENT_ADMIN_EMAIL, 'client-admin@fixture.invalid');
-  assert.equal(Object.keys(capture.payload).length, 13);
+  assert.equal(capture.payload.GOOGLE_DRIVE_CLIENT_EMAIL, config.GOOGLE_DRIVE_CLIENT_EMAIL);
+  assert.equal(capture.payload.GOOGLE_DRIVE_PRIVATE_KEY, config.GOOGLE_DRIVE_PRIVATE_KEY);
+  assert.equal(capture.payload.GOOGLE_DRIVE_SHARED_DRIVE_ID, config.GOOGLE_DRIVE_SHARED_DRIVE_ID);
+  assert.equal(Object.keys(capture.payload).length, 16);
   assert.ok(capture.payload.JWT_ACCESS_PRIVATE_KEY.startsWith('-----BEGIN PRIVATE KEY-----'));
   assert.ok(capture.payload.JWT_REFRESH_PUBLIC_KEY.startsWith('-----BEGIN PUBLIC KEY-----'));
 });
@@ -210,6 +218,7 @@ test('generates distinct admin passwords and uses the configured client email', 
 
 for (const options of [
   { missingInput: true },
+  { missingDriveInput: true },
   { missingClientAdminEmail: true },
   { noAws: true },
   { args: ['--invalid'] },
