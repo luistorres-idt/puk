@@ -71,14 +71,14 @@ describe('createAdministrationRouter', () => {
     updateConfig: vi.fn().mockImplementation(async (_actor, input) => input),
   };
 
-  function createTestApp() {
+  function createTestApp(role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
     const app = express();
     app.use(express.json());
     app.use(
       '/admin',
       createAdministrationRouter({
         requireAccess: authenticate(mockTokens, {
-          resolve: async (userId) => ({ id: userId, role: 'ADMIN' }),
+          resolve: async (userId) => ({ id: userId, role }),
         }),
         usersService: mockUsersService as unknown as UsersService,
         techniciansService: mockTechniciansService as unknown as TechniciansService,
@@ -119,6 +119,26 @@ describe('createAdministrationRouter', () => {
     const app = createTestApp();
     const response = await request(app).get('/admin/users');
     expect(response.status).toBe(401);
+  });
+
+  it('rejects technicians from listing, creating, and modifying users', async () => {
+    vi.clearAllMocks();
+    const app = createTestApp('TECHNICIAN');
+    const headers = { Authorization: 'Bearer valid-token' };
+
+    const listResponse = await request(app).get('/admin/users').set(headers);
+    const createResponse = await request(app).post('/admin/users').set(headers).send({});
+    const updateResponse = await request(app)
+      .patch('/admin/users/00000000-0000-4000-8000-000000000001')
+      .set(headers)
+      .send({ active: false });
+
+    expect(listResponse.status).toBe(403);
+    expect(createResponse.status).toBe(403);
+    expect(updateResponse.status).toBe(403);
+    expect(mockUsersService.list).not.toHaveBeenCalled();
+    expect(mockUsersService.create).not.toHaveBeenCalled();
+    expect(mockUsersService.update).not.toHaveBeenCalled();
   });
 
   it('serves the dedicated technician selector', async () => {

@@ -50,6 +50,12 @@ El access token se envía como `Authorization: Bearer <token>`. El refresh token
 | GET      | `/api/v1/external/equipment/:externalKey` | Autenticado   |
 | POST     | `/api/v1/external/refresh`                | Administrador |
 
+`/api/v1/users` requiere `users:manage` en cada operación. Las actualizaciones permiten editar
+nombre/correo, cambiar contraseña y activar/desactivar; el servicio registra auditoría y revoca
+sesiones al desactivar. No se permite que un administrador se desactive a sí mismo ni desactivar o
+degradar al último administrador activo (`ADMIN_SELF_LOCKOUT`, `LAST_ACTIVE_ADMIN`). La cuenta
+técnica compartida conserva sus restricciones de rol y designación.
+
 ### Órdenes, unidades y equipos
 
 `POST /api/v1/orders` requiere `technicianId` con UUID de un técnico activo.

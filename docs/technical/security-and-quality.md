@@ -44,6 +44,9 @@
 - Outbox e idempotencia para efectos externos.
 - Concurrencia optimista en órdenes y restricción de asignación activa.
 - Auditoría de acciones críticas con snapshots antes/después cuando aplica.
+- La gestión de usuarios exige `users:manage`; las actualizaciones administrativas impiden el
+  auto-bloqueo y la desactivación/degradación del último administrador activo. Las actualizaciones
+  serializables protegen la comprobación ante cambios concurrentes.
 
 ## Roles
 

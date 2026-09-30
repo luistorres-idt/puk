@@ -35,4 +35,64 @@ describe('UsersService', () => {
       where: { userId: 'user-1', revokedAt: null },
     });
   });
+
+  it('prevents deactivating the last active administrator', async () => {
+    const admin = {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      name: 'Admin',
+      role: 'ADMIN' as const,
+      technicianId: null,
+      active: true,
+    };
+    const transaction = {
+      user: { count: vi.fn().mockResolvedValue(1), update: vi.fn() },
+      refreshSession: { updateMany: vi.fn() },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(admin) },
+      $transaction: vi.fn(async (work: (tx: typeof transaction) => Promise<unknown>) =>
+        work(transaction),
+      ),
+    };
+    const service = new UsersService(prisma as unknown as PrismaClient, 12);
+
+    await expect(service.update('other-admin', 'admin-1', { active: false })).rejects.toMatchObject(
+      {
+        code: 'LAST_ACTIVE_ADMIN',
+        status: 400,
+      },
+    );
+    expect(transaction.user.update).not.toHaveBeenCalled();
+  });
+
+  it('prevents an administrator from deactivating their own account', async () => {
+    const admin = {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      name: 'Admin',
+      role: 'ADMIN' as const,
+      technicianId: null,
+      active: true,
+    };
+    const transaction = {
+      user: { count: vi.fn(), update: vi.fn() },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(admin) },
+      $transaction: vi.fn(async (work: (tx: typeof transaction) => Promise<unknown>) =>
+        work(transaction),
+      ),
+    };
+    const service = new UsersService(prisma as unknown as PrismaClient, 12);
+
+    await expect(service.update('admin-1', 'admin-1', { active: false })).rejects.toMatchObject({
+      code: 'ADMIN_SELF_LOCKOUT',
+      status: 400,
+    });
+    expect(transaction.user.count).not.toHaveBeenCalled();
+    expect(transaction.user.update).not.toHaveBeenCalled();
+  });
 });

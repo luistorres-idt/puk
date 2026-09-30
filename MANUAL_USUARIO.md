@@ -160,12 +160,26 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
 
 ---
 
+### Administrar cuentas administradoras
+
+Desde **Administración → Administradores**, una persona con perfil administrador puede crear una
+cuenta, editar nombre/correo, cambiar su contraseña o activar/desactivar otras cuentas. Al crearla,
+ingresa una contraseña inicial de al menos 12 caracteres y comunícala por un canal seguro; la app no
+la vuelve a mostrar. Al cambiar una contraseña, la persona debe usar la nueva en su próximo inicio
+de sesión.
+
+La aplicación no permite desactivar tu propia cuenta ni dejar el sistema sin un administrador activo.
+Para desactivar una cuenta, confirma la acción en su fila. La sección es independiente de **Cuentas
+Técnicas**, que sigue dedicada a técnicos y a la cuenta compartida del taller.
+
 ## 4. Guía Administrador: 1. Crear Orden (Asistente de 5 Pasos)
 
 1. Inicia sesión con tus credenciales de Administrador en el portal web.
-2. Dirígete a la sección **Órdenes de Servicio** y haz clic en **`+ Nueva Orden`**.
-3. **Paso 1: Cliente**:
-   - Selecciona el **Cliente** (catálogo oficial de Google Sheets).
+
+2. Dirígete a la sección **Órdenes de Servicio** y haz clic en **`+ Nueva Orden`**. 3. **Paso 1: Cliente**:
+
+- Selecciona el **Cliente** (catálogo oficial de Google Sheets).
+
 4. **Paso 2: Servicios, Unidades y Equipos (Asignación Inteligente)**:
    - Agrega uno o varios bloques de servicio; una misma orden puede combinar:
      - `Instalación`: Colocación de nuevos equipos en vehículos.
