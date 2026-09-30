@@ -25,6 +25,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Creación de órdenes con varias unidades, varios equipos por unidad y distintos tipos de servicio en una misma orden.
 - Consulta de clientes y equipos directamente desde Google Sheets.
 - Asignación y reasignación de técnicos.
+- Configuración de tarifas acordadas por orden (pre-ejecución) y reajuste de liquidación técnica post-cierre con auditoría y re-sincronización automática a Google Sheets.
 - Seguimiento del estado y progreso de cada servicio.
 - Detección visible de conflictos cuando una fila de Sheets cambia externamente.
 - Consulta de evidencias, firma, discrepancias, auditoría y sincronización.
@@ -179,14 +180,14 @@ hasta el martes al finalizar el día y las publica el miércoles a las 17:00 en
 `America/Hermosillo`. Las órdenes cerradas después del corte pasan a la semana siguiente. El panel
 muestra por defecto operaciones del reporte técnico; las operaciones internas de equipos se pueden
 consultar con el filtro de tipo y no deben interpretarse como órdenes adicionales.
+En el reporte técnico (`2026`), cuando una orden cuenta con múltiples unidades, las columnas F (`economico`), G (`serie`), H (`imeiId`), K (`servicio`) y L (`costo`) se registran multilínea (`\n`) alineando cada fila por unidad en estricto orden cronológico.
 
 ## Requisitos
 
 - Node.js 24.20.0 LTS, fijado en `.nvmrc` y `.node-version`.
 - pnpm 11.9.0 mediante Corepack.
 - Docker y Docker Compose.
-- Documento de Google Sheets de desarrollo compartido con una cuenta de servicio.
-- Credenciales de Google Sheets y del proveedor de almacenamiento elegido para entornos no locales.
+- Credenciales de Google Sheets y del proveedor de almacenamiento elegido para entornos no locales (en desarrollo local se cuenta con emuladores y mocks en memoria integrados).
 
 ## Puesta en marcha local
 
@@ -203,21 +204,25 @@ consultar con el filtro de tipo y no deben interpretarse como órdenes adicional
    cp .env.example .env
    ```
 
+   > En desarrollo local, las claves y credenciales con marcadores `development-only...` activan automáticamente emuladores en memoria (`DevMockSheetsClient` y claves JWT efímeras), permitiendo probar la plataforma localmente sin dependencias externas obligatorias.
+
 3. Para trabajar con recarga en caliente, levantar PostgreSQL y MinIO:
 
    ```bash
    docker compose up -d postgres minio minio-init
    ```
 
-4. Aplicar las migraciones y cargar datos iniciales:
+4. Generar el cliente de Prisma, aplicar las migraciones y cargar datos iniciales:
 
    ```bash
+   pnpm prisma:generate
    pnpm prisma:migrate
    pnpm prisma:seed
    ```
 
-   El seed local crea `admin@example.invalid` y `technician@example.invalid`. Cambia
-   `SEED_ADMIN_PASSWORD` antes de ejecutarlo fuera de un entorno local; en producción es obligatorio.
+   El seed local crea los siguientes usuarios de prueba con la contraseña por defecto `development-only-change-me` (configurable mediante `SEED_ADMIN_PASSWORD`):
+   - **Administrador:** `admin@example.invalid`
+   - **Técnico:** `technician@example.invalid`
 
 5. Iniciar API y web:
 
@@ -225,7 +230,7 @@ consultar con el filtro de tipo y no deben interpretarse como órdenes adicional
    pnpm dev
    ```
 
-La aplicación web queda disponible por defecto en `http://localhost:5173` y la API en `http://localhost:3000`. `VITE_DEV_PORT`, `VITE_API_PROXY_TARGET` y `PORT` permiten usar puertos diferentes sin modificar código.
+La aplicación web queda disponible por defecto en `http://localhost:5173` y la API en `http://localhost:3000`. `VITE_DEV_PORT`, `VITE_API_PROXY_TARGET` y `PORT` permiten usar puertos diferentes sin modificar código. El comando compila primero los contratos compartidos (`@puk/contracts`) antes de levantar ambos servidores en recarga reactiva.
 
 Como alternativa, el stack completo compilado se levanta con:
 
@@ -256,21 +261,23 @@ Los secretos no deben guardarse en el repositorio. En producción se utilizan id
 
 ## Comandos disponibles
 
-| Comando                | Descripción                                 |
-| ---------------------- | ------------------------------------------- |
-| `pnpm dev`             | Inicia API y web en desarrollo              |
-| `pnpm build`           | Construye todas las aplicaciones y paquetes |
-| `pnpm format`          | Formatea los archivos del repositorio       |
-| `pnpm format:check`    | Verifica el formato sin escribir cambios    |
-| `pnpm lint`            | Ejecuta el análisis estático                |
-| `pnpm typecheck`       | Comprueba TypeScript estricto               |
-| `pnpm test`            | Ejecuta pruebas unitarias y de integración  |
-| `pnpm test:e2e`        | Ejecuta escenarios Playwright               |
-| `pnpm docs:build`      | Genera OpenAPI 3.1                          |
-| `pnpm docs:validate`   | Valida el contrato de la API                |
-| `pnpm prisma:migrate`  | Aplica migraciones de base de datos         |
-| `pnpm prisma:seed`     | Carga datos iniciales de desarrollo         |
-| `pnpm prisma:validate` | Valida la configuración y el esquema Prisma |
+| Comando                | Descripción                                              |
+| ---------------------- | -------------------------------------------------------- |
+| `pnpm dev`             | Inicia API y web en desarrollo                           |
+| `pnpm build`           | Construye todas las aplicaciones y paquetes              |
+| `pnpm format`          | Formatea los archivos del repositorio                    |
+| `pnpm format:check`    | Verifica el formato sin escribir cambios                 |
+| `pnpm lint`            | Ejecuta el análisis estático                             |
+| `pnpm typecheck`       | Comprueba TypeScript estricto                            |
+| `pnpm test`            | Ejecuta pruebas unitarias y de integración               |
+| `pnpm test:e2e`        | Ejecuta escenarios Playwright                            |
+| `pnpm test:e2e:mock`   | Ejecuta escenarios Playwright con dependencias simuladas |
+| `pnpm docs:build`      | Genera OpenAPI 3.1                                       |
+| `pnpm docs:validate`   | Valida el contrato de la API                             |
+| `pnpm prisma:generate` | Genera el cliente de Prisma en `apps/api`                |
+| `pnpm prisma:migrate`  | Aplica migraciones de base de datos                      |
+| `pnpm prisma:seed`     | Carga datos iniciales de desarrollo                      |
+| `pnpm prisma:validate` | Valida la configuración y el esquema Prisma              |
 
 ## API y documentación
 
