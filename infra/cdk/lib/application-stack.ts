@@ -52,7 +52,7 @@ export class PukStagingApplicationStack extends Stack {
       associatePublicIpAddress: true,
       cpuCredits: ec2.CpuCredits.STANDARD,
       httpPutResponseHopLimit: 1,
-      instanceType: new ec2.InstanceType('t3a.medium'),
+      instanceType: new ec2.InstanceType('t3.small'),
       machineImage: ecs.EcsOptimizedImage.amazonLinux2023(ecs.AmiHardwareType.STANDARD),
       requireImdsv2: true,
       role: ecsHostRole,
@@ -115,6 +115,14 @@ export class PukStagingApplicationStack extends Stack {
         SEED_ADMIN_PASSWORD: ecs.Secret.fromSecretsManager(
           foundation.runtimeSecret,
           'SEED_ADMIN_PASSWORD',
+        ),
+        SEED_CLIENT_ADMIN_EMAIL: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'SEED_CLIENT_ADMIN_EMAIL',
+        ),
+        SEED_CLIENT_ADMIN_PASSWORD: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'SEED_CLIENT_ADMIN_PASSWORD',
         ),
         SEED_TECHNICIAN_EMAIL: ecs.Secret.fromSecretsManager(
           foundation.runtimeSecret,
@@ -243,7 +251,7 @@ export class PukStagingApplicationStack extends Stack {
     // CDK does not expose the ECS bridge-mode links field on ContainerDefinitionOptions.
     const cfnTaskDefinition = taskDefinition.node.defaultChild as ecs.CfnTaskDefinition;
     cfnTaskDefinition.addPropertyOverride('Cpu', '1024');
-    cfnTaskDefinition.addPropertyOverride('Memory', '2048');
+    cfnTaskDefinition.addPropertyOverride('Memory', '1792');
     cfnTaskDefinition.addPropertyOverride('ContainerDefinitions.2.Links', ['api']);
 
     foundation.bucket.grantReadWrite(taskDefinition.taskRole);
