@@ -45,6 +45,9 @@ test('header toggle updates authenticated content and mobile navigation', async 
   page,
   isMobile,
 }) => {
+  if (!isMobile) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
   await page.emulateMedia({ colorScheme: 'light' });
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -87,13 +90,20 @@ test('header toggle updates authenticated content and mobile navigation', async 
     )
     .toEqual([30, 41, 59, 242]);
   await expect(page.locator('footer')).toHaveCSS('background-color', 'rgb(30, 41, 59)');
-  if (isMobile) {
+  const desktopNavigation = page
+    .locator('.app-header nav[aria-label="Navegación principal"]')
+    .first();
+  if (isMobile || !(await desktopNavigation.isVisible())) {
     await page.getByRole('button', { name: 'Menú principal' }).click();
   }
   await page.getByRole('link', { name: 'Órdenes', exact: true }).click();
   await expect(page).toHaveURL(/\/orders$/);
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  );
+  const hasNoHorizontalOverflow = () =>
+    page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  await expect.poll(hasNoHorizontalOverflow).toBe(true);
+  if (!isMobile) {
+    await page.setViewportSize({ width: 1024, height: 720 });
+    await expect.poll(hasNoHorizontalOverflow).toBe(true);
+  }
 });

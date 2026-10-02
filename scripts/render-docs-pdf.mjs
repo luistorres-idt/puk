@@ -19,7 +19,6 @@ function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', env: process.env });
   if (result.status !== 0) throw new Error(`${command} failed (${result.status}):\n${result.stderr || result.stdout}`);
 }
-function escHtml(s) { return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'); }
 function getArgs() {
   const args = process.argv.slice(2);
   const fileIndex = args.indexOf('--file');
@@ -193,9 +192,9 @@ async function buildPoppinsCss() {
 async function renderUserManual(sourceText, documentOutput, rootOutput) {
   const frontmatter = sourceText.match(/^---\n([\s\S]*?)\n---\s*\n/);
   let markdown = frontmatter ? sourceText.slice(frontmatter[0].length) : sourceText;
-  const styleMatch = frontmatter?.[1].match(/^  style: \|\n((?:[ \t]+.*\n?)*)/m);
+  const styleMatch = frontmatter?.[1].match(/^ {2}style: \|\n((?:[ \t]+.*\n?)*)/m);
   const authoredStyles = styleMatch
-    ? styleMatch[1].split('\n').map((line) => line.replace(/^  /, '')).join('\n')
+    ? styleMatch[1].split('\n').map((line) => line.replace(/^ {2}/, '')).join('\n')
     : '';
   markdown = markdown.replace(/^## (.+)$/gm, (heading, title, offset) => {
     // The title slide includes the subtitle; every following level-two section starts a slide.

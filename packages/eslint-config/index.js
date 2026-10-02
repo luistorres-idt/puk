@@ -156,13 +156,14 @@ export default typescriptEslint.config(
       'apps/api/**/*.ts',
       'infra/**/*.{js,mjs,ts}',
       'packages/**/*.{js,ts}',
+      'scripts/**/*.{js,mjs}',
     ],
     languageOptions: {
       globals: globals.node,
     },
   },
   {
-    files: ['infra/scripts/**/*.{js,mjs}'],
+    files: ['infra/scripts/**/*.{js,mjs}', 'scripts/**/*.{js,mjs}'],
     rules: {
       'no-console': 'off',
     },

@@ -80,6 +80,52 @@ export function formatEquipmentStatus(status?: string | null): string {
   }
 }
 
+// Al agregar una acción de auditoría, agrega también aquí su título en español.
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  AUTH_LOGIN: 'Inicio de sesión',
+  CHECKLIST_SAVED: 'Lista de verificación guardada',
+  DISCREPANCY_REPORTED: 'Discrepancia reportada',
+  EQUIPMENT_ASSIGNED: 'Equipo asignado',
+  EQUIPMENT_REMOVED: 'Equipo retirado',
+  EQUIPMENT_VERIFIED: 'Equipo verificado',
+  EXECUTION_NOTES_UPDATED: 'Notas de ejecución actualizadas',
+  FAILED_APPOINTMENT_CANCELLED: 'Cita fallida cancelada',
+  FAILED_APPOINTMENT_RESCHEDULED: 'Cita fallida reprogramada',
+  ORDER_ASSIGNED: 'Orden asignada',
+  ORDER_CANCELLED: 'Orden cancelada',
+  ORDER_COMPLETED: 'Orden completada',
+  ORDER_CORRECTION_REQUESTED: 'Corrección solicitada',
+  ORDER_CREATED: 'Orden creada',
+  ORDER_CREATED_FROM_FAILED_APPOINTMENT: 'Orden creada por cita fallida',
+  ORDER_FAILED_APPOINTMENT: 'Orden marcada como cita fallida',
+  ORDER_PRICING_ADJUSTED: 'Precio de la orden ajustado',
+  ORDER_PRICING_CONFIGURED: 'Precio de la orden configurado',
+  ORDER_STARTED: 'Orden iniciada',
+  ORDER_UPDATED: 'Orden actualizada',
+  SERVICE_ORDER_REPORT_DOWNLOADED: 'Reporte de servicio descargado',
+  SERVICE_ORDER_REPORT_FAILED: 'Error al generar el reporte de servicio',
+  SERVICE_ORDER_REPORT_GENERATED: 'Reporte de servicio generado',
+  SERVICE_ORDER_REPORT_REQUESTED: 'Reporte de servicio solicitado',
+  SERVICE_ORDER_REPORT_RETRIED: 'Generación del reporte reintentada',
+  SHARED_TECHNICIAN_ACCOUNT_CHANGED: 'Cuenta de técnico compartida actualizada',
+  SHARED_TECHNICIAN_ORDER_ENABLED: 'Acceso compartido a la orden habilitado',
+  TECHNICIAN_CREATED: 'Técnico creado',
+  TECHNICIANS_SYNCED_FROM_SHEETS: 'Técnicos sincronizados desde la hoja de cálculo',
+  TECHNICIAN_UPDATED: 'Técnico actualizado',
+  TECHNICAL_REPORT_SYNC_SCHEDULE_UPDATED: 'Horario de sincronización del reporte actualizado',
+  UNIT_ADDED: 'Unidad agregada',
+  UNIT_CREATED: 'Unidad creada',
+  UNIT_DELETED: 'Unidad eliminada',
+  UNIT_UPDATED: 'Unidad actualizada',
+  USER_CREATED: 'Usuario creado',
+  USER_UPDATED: 'Usuario actualizado',
+};
+
+export function formatAuditAction(action?: string | null): string {
+  if (!action) return 'Evento de auditoría';
+  return AUDIT_ACTION_LABELS[action] ?? action.replaceAll('_', ' ').toLocaleLowerCase('es-MX');
+}
+
 export function equipmentStatusTagType(
   status?: string | null,
 ): 'default' | 'info' | 'warning' | 'success' | 'error' {
