@@ -12,7 +12,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'pnpm build && pnpm preview',
+    command:
+      process.env['PLAYWRIGHT_USE_PREBUILT_APP'] === '1'
+        ? 'pnpm preview'
+        : 'pnpm build && pnpm preview',
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,
     url: 'http://127.0.0.1:4173',
