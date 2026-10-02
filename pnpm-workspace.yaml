@@ -10,7 +10,7 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
-  puppeteer: set this to true or false
+  puppeteer: true
   unrs-resolver: true
   vue-demi: true
 
@@ -19,6 +19,7 @@ injectWorkspacePackages: true
 overrides:
   deepmerge-ts: '>=8.0.0'
   ip-address@<=10.7.0: ^10.7.1
+  lodash-es: 4.18.1
   mysql2: '>=3.23.1'
 
 forceLegacyDeploy: true
