@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { NButton, NEmpty, NSpin } from 'naive-ui';
 import type { AuditLogItem } from '../api.js';
+import { formatAuditAction } from '../formatters.js';
 
 defineProps<{
   auditLogs: AuditLogItem[];
@@ -36,7 +37,7 @@ const emit = defineEmits<{
       >
         <div>
           <div class="flex items-center gap-2">
-            <span class="font-bold text-slate-800">{{ log.action }}</span>
+            <span class="font-bold text-slate-800">{{ formatAuditAction(log.action) }}</span>
             <span class="text-slate-400">&bull;</span>
             <span class="text-slate-600 font-medium">{{
               log.actor?.name || log.actor?.email || 'Sistema'
@@ -48,7 +49,7 @@ const emit = defineEmits<{
         </div>
 
         <span class="text-slate-400 font-mono text-[11px] whitespace-nowrap">
-          {{ new Date(log.createdAt).toLocaleString() }}
+          {{ new Date(log.createdAt).toLocaleString('es-MX') }}
         </span>
       </div>
     </div>
