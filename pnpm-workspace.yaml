@@ -10,6 +10,7 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
+  puppeteer: set this to true or false
   unrs-resolver: true
   vue-demi: true
 

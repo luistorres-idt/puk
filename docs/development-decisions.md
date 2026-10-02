@@ -1,10 +1,10 @@
 # Decisiones temporales para desarrollo
 
-Estas reglas desbloquean el desarrollo sin conceder acceso a datos productivos. Deben validarse con el negocio antes del piloto.
+Registro de decisiones temporales tomadas durante el desarrollo. Las decisiones que ya se incorporaron al producto se mantienen como historial; no todas son pendientes vigentes. AWS staging se eliminó y no existe producción desplegada. Ver la [guía de staging](./staging-and-deployment.md) antes de interpretar referencias a entornos.
 
 ## Google Sheets
 
-- Desarrollo y staging usan documentos separados, nunca el documento productivo.
+- El desarrollo y el staging histórico usaron documentos separados, nunca el documento productivo. Staging ya fue eliminado; cualquier redeploy debe recrear referencias/secretos y seguir manteniendo libros separados.
 - La pestaña `Clientes` debe exponer `IDCliente` y `Cliente`; `SALIDAS` debe conservar los encabezados y posiciones descritos en `SPECS.md`.
 - La identidad estable usa `ID` cuando es válido y, en su ausencia, IMEI como respaldo temporal. Valores `PENDIENTE`, `N/A`, vacíos o identidades duplicadas/incompletas no son seleccionables.
 - La columna `P` queda deshabilitada por defecto. Si el negocio la habilita, solo acepta `INSTALACION`, `REVISION` o `DESINSTALACION`.
@@ -16,7 +16,7 @@ Estas reglas desbloquean el desarrollo sin conceder acceso a datos productivos. 
 ## Evidencias
 
 - Cada fotografía admite JPEG, PNG o WebP, con máximo de 10 MiB.
-- Se exigen al menos diez fotografías completadas por unidad, distribuidas entre las categorías. No existe un máximo funcional por categoría.
+- Se exigen al menos diez fotografías completadas por unidad. La evidencia es una galería general de unidad, no se asigna a categorías del checklist.
 - La firma PNG tiene un máximo de 1 MiB.
 - Los límites se configuran por entorno y el backend siempre los vuelve a validar.
 

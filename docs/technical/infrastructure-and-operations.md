@@ -1,10 +1,10 @@
 # Infraestructura y operación
 
-**Estado documentado:** 2026-09-28
+**Estado documentado:** 2026-10-02
 
 **Fuente de verdad:** `infra/cdk`, `docker-compose.yml`, `infra/docker` y `.github/workflows`
 
-Este documento distingue la arquitectura declarada por CDK de los recursos actualmente desplegados. **Al 2026-09-28 no existe infraestructura de staging en AWS**: se eliminaron los stacks de aplicación, foundation y `CDKToolkit`, además de los recursos asociados. No hay URL ni IP de staging, base de datos, archivos ni secretos disponibles.
+Este documento distingue la arquitectura declarada por CDK de los recursos actualmente desplegados. **Al 2026-10-02 no existe infraestructura de staging en AWS**: se eliminaron los stacks de aplicación, foundation y `CDKToolkit`, además de los recursos asociados. No hay URL ni IP de staging, base de datos, archivos ni secretos disponibles.
 
 La base de datos anterior y sus respaldos automáticos se eliminaron sin snapshot final; el bucket y sus versiones se vaciaron y eliminaron, y también se eliminó el secreto runtime. **Los datos anteriores no son recuperables.** Los diagramas y detalles siguientes describen la arquitectura objetivo que `infra/cdk` volvería a crear, no recursos vivos. Producción no tiene stacks CDK propios.
 

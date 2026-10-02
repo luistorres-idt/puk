@@ -8,7 +8,7 @@
 
 **Versión:** 0.1
 
-**Estado:** Implementada; plantilla visual pendiente de aprobación
+**Estado al 2026-10-02:** Implementación del reporte PDF privada y versionada; plantilla/logotipo oficial y pruebas de regresión visual siguen pendientes de aprobación.
 
 ## 1. Objetivo
 
@@ -26,7 +26,7 @@ El reporte funciona como comprobante de atención para Bull Dog Solution y para 
 - Una sección por cada unidad de la orden.
 - Detalle de todos los equipos relacionados con cada unidad.
 - Checklist y observaciones de la unidad.
-- Evidencias fotográficas agrupadas por unidad y categoría.
+- Evidencias fotográficas agrupadas por unidad; son una galería general y no se vinculan a una categoría del checklist.
 - Regeneración controlada cuando una orden pase por corrección y vuelva a completarse.
 - Acceso privado y auditado al documento.
 
@@ -230,11 +230,11 @@ La generación automática reutiliza el mismo caso de uso que el endpoint manual
 4. Cada sección contiene todos los equipos de la unidad y sus datos disponibles.
 5. Las discrepancias se muestran junto al equipo correspondiente y no sustituyen los valores esperados.
 6. El checklist muestra las cinco categorías, su condición traducida y sus observaciones.
-7. Cada fotografía válida aparece una sola vez, asociada a la unidad y categoría correctas.
+7. Cada fotografía válida aparece una sola vez, asociada a su unidad; la categoría del checklist no se imprime en la página de evidencia.
 8. Las fotografías se presentan, por defecto, una por página, grandes, sin recorte y sin deformación.
 9. Una orden con varias unidades y varios equipos conserva correctamente la agrupación de datos y evidencias.
 10. Los campos opcionales vacíos usan textos legibles y nunca muestran valores técnicos.
-11. Un técnico ajeno a la orden no puede consultar ni descargar el reporte.
+11. Un técnico sin acceso individual o compartido a la orden no puede consultar ni descargar el reporte.
 12. El archivo se almacena de forma privada y la URL de descarga expira.
 13. Un fallo de generación es visible y permite reintento sin duplicar la versión vigente.
 14. Después de una corrección se genera una versión nueva y la anterior se conserva para auditoría.
@@ -252,7 +252,7 @@ La generación automática reutiliza el mismo caso de uso que el endpoint manual
 - Imagen dañada o faltante.
 - Reintento después de un fallo temporal de almacenamiento.
 - Corrección y generación de una segunda versión.
-- Intento de descarga por administrador, técnico asignado y técnico ajeno.
+- Intento de descarga por administrador, técnico asignado, técnico con acceso compartido a la orden y técnico sin acceso.
 
 ## 13. Definiciones pendientes de negocio y diseño
 

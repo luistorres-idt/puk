@@ -28,8 +28,8 @@
 
 ### Archivos
 
-- Bucket privado y URLs prefirmadas con expiración.
-- Carga directa para evitar transportar imágenes por Express.
+- Google Drive compartido se usa para el almacenamiento seleccionado en IaC de staging; Drive transmite archivos mediante rutas autenticadas de la API.
+- El adaptador de almacenamiento de objetos conserva carga/descarga directa mediante URLs prefirmadas según entorno.
 - Validación posterior de existencia, MIME y tamaño.
 - Nombres de objeto generados por servidor.
 - Fotografías y firmas fuera de PostgreSQL.
@@ -91,4 +91,4 @@ Las capacidades declaradas son `users:manage`, `technicians:manage`, `orders:man
 - Control de acceso a `/metrics` en el proxy productivo.
 - Backups cifrados y pruebas periódicas de restauración.
 - Aprobación del logotipo y leyenda de conformidad del PDF.
-- Monitoreo y alertas sobre outbox fallido, generación de reportes y espacio del bucket.
+- Monitoreo y alertas sobre outbox fallido, generación de reportes y capacidad/retención de Drive o del proveedor configurado.

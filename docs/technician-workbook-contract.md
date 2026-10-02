@@ -1,7 +1,9 @@
 # Contrato del libro de técnicos y cobro
 
 Versión: `1.1-implemented`, 2026-09-10. Estado: directorio, tarifas, cálculo de snapshots,
-persistencia y sincronización del reporte técnico implementados y verificados en desarrollo/staging.
+persistencia y sincronización del reporte técnico implementados. La validación externa de directorio
+y escritura en staging ocurrió históricamente; AWS staging fue eliminado después y no existe
+despliegue actual. Las pruebas automatizadas siguen cubriendo los contratos localmente.
 
 ## Identidad y configuración
 

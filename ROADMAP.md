@@ -2,6 +2,11 @@
 
 Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar con sus criterios de salida cumplidos antes de avanzar a la siguiente.
 
+> **Estado actual (2026-10-02):** las casillas de fases anteriores registran trabajo histórico. El
+> producto implementa los flujos principales, pero AWS staging fue eliminado y no hay despliegue
+> actual; producción aún no tiene infraestructura propia. La IaC de staging selecciona Google Drive,
+> no S3, para evidencias, firmas y reportes. Ver [infraestructura y operación](./docs/technical/infrastructure-and-operations.md).
+
 ## 0. Definiciones y preparación
 
 - [x] Confirmar la versión LTS de Node.js y fijar las versiones compatibles mediante `pnpm-lock.yaml`.
@@ -88,6 +93,8 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Crear las pantallas de login, sesión y directorio de técnicos.
 - [x] Configurar la instancia Axios con token en memoria, refresh único compartido y un solo reintento.
 - [x] Añadir auditoría para creación, edición, activación y desactivación de usuarios y técnicos.
+- [x] Agregar administración separada de cuentas ADMIN, con protección contra auto-bloqueo y desactivación del último administrador.
+- [x] Agregar acceso compartido de taller: cuenta TECHNICIAN designada y una orden habilitada a la vez, con revisión optimista y auditoría.
 
 ### Criterio de salida
 
@@ -257,12 +264,12 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Crear pipeline reproducible: instalación, lint, typecheck, pruebas, OpenAPI, build y escaneos.
 - [x] Ejecutar migraciones una sola vez por despliegue antes de activar la nueva versión.
 - [x] Preparar rollback y respaldo para migraciones destructivas.
-- [x] Seleccionar proveedores de PostgreSQL, almacenamiento S3 y hosting.
-- [x] Configurar desarrollo, staging y producción con secretos separados.
+- [x] Seleccionar PostgreSQL, Google Drive compartido para archivos de staging y hosting AWS de staging; S3 se conserva en código como adaptador alternativo.
+- [x] Definir configuración separada por entorno; los secretos de staging deben recrearse tras la eliminación del ambiente.
 - [x] Usar un documento de Google Sheets exclusivo para staging.
-- [x] Desplegar frontend, API, base de datos, bucket privado, reverse proxy y TLS.
+- [x] Definir IaC de staging para frontend/API, PostgreSQL, Drive y reverse proxy. **No está desplegada actualmente**; el stack no crea bucket S3 ni configura TLS público.
 - [x] Preferir `/api` en el mismo sitio público para simplificar cookies y CORS.
-- [x] Ejecutar smoke tests automáticos contra los health checks después del despliegue.
+- [x] Incorporar smoke tests al workflow para un redeploy futuro; no hay endpoint vivo actualmente.
 
 ### Criterio de salida
 
@@ -270,6 +277,11 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Los respaldos, restauración y rollback cuentan con procedimientos probados.
 
 ## 14. Piloto y migración desde AppSheet
+
+> Las casillas documentan el estado histórico registrado al preparar el MVP. No prueban que el
+> cutover de producción siga activo ni que lo esté hoy: al 2026-10-02 AWS staging está eliminado y
+> no existe despliegue productivo. La migración operativa debe revalidarse con Operaciones; ver
+> [el plan de AppSheet](./docs/appsheet-migration-plan.md).
 
 - [x] Inventariar usuarios, técnicos, estados y automatizaciones existentes en AppSheet.
 - [x] Cargar y validar usuarios y técnicos iniciales.
@@ -303,4 +315,5 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [ ] Incorporar recuperación de contraseña según el canal aprobado.
 - [ ] Añadir exportación o reportes de auditoría si el negocio los requiere.
 - [x] Implementar tarifas dinámicas por orden, personalización acordada y reajuste post-cierre definido en `docs/service-pricing-customization-spec.md`.
+- [x] Integrar Google Drive para nuevas evidencias, firmas y reportes; no se migran objetos de prueba S3. La IaC lo selecciona para staging, pendiente de redeploy y validación externa.
 - [ ] Evaluar aplicaciones nativas, facturación y cuentas bancarias como iniciativas separadas.

@@ -2,6 +2,12 @@
 
 La columna de pruebas identifica el nivel mínimo que debe existir antes de cerrar la fase correspondiente.
 
+> Esta matriz es el contrato de aceptación del MVP, no el catálogo vigente de rutas. Las rutas son
+> relativas a `/api/v1` y los endpoints de ejecución/archivos evolucionaron para soportar Drive;
+> consulta el [catálogo HTTP actual](./technical/api.md). Estado de implementación revisado
+> 2026-10-02: las capacidades principales están implementadas, pero staging AWS está eliminado y
+> no hay despliegue de producción.
+
 | Regla o capacidad                   | Endpoints previstos                                           | Evidencia de aceptación                                                           |
 | ----------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | Sesión y rotación segura            | `POST /auth/login`, `/auth/refresh`, `/auth/logout`           | Integración: login genérico, rotación, reutilización y revocación                 |
@@ -25,4 +31,6 @@ La columna de pruebas identifica el nivel mínimo que debe existir antes de cerr
 | Reporte PDF de orden de servicio    | `/orders/:id/report`, `/orders/:id/reports`                   | Contrato, autorización, versionado y regresión visual del PDF                     |
 | Corrección y cancelación            | `/orders/:id/request-correction`, `/orders/:id/cancel`        | Matriz de estados, inmutabilidad y auditoría                                      |
 | Tarifas acordadas y liquidación     | `PATCH /orders/:id/pricing`                                   | Unidad e integración: cálculo decimal puro, auditoría y reporte Sheets multilínea |
+| Acceso compartido de técnico        | `/shared-technician-access`, `/me/order-access`               | Cuenta TECHNICIAN designada, una orden habilitada, revisión optimista y auditoría  |
+| Administración de cuentas admin    | `GET/POST/PATCH /users`                                       | Capacidad `users:manage`, límites de auto-bloqueo/último admin y auditoría         |
 | Salud y formato HTTP                | `/health/live`, `/health/ready`                               | Supertest y contrato OpenAPI con `requestId`                                      |

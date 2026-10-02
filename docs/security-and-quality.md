@@ -2,6 +2,11 @@
 
 Este documento consolida la arquitectura de seguridad, calidad y observabilidad implementada en el sistema Bull Dog Solution conforme a `SPECS.md` y la Fase 12 del roadmap.
 
+> **Alcance vigente:** describe controles del código, no una garantía de despliegue. AWS staging está
+> eliminado y no existe producción desplegada. TLS, retención/backups de Drive y operación segura
+> del ambiente deben verificarse al recrear un entorno; la IaC de staging expone HTTP en una IPv4
+> efímera y no crea TLS/ALB/CloudFront.
+
 ## 1. Seguridad de Red y Transporte
 
 - **TLS / HTTPS:** Todas las comunicaciones externas deben realizarse exclusivamente bajo TLS 1.3/1.2.
@@ -12,7 +17,7 @@ Este documento consolida la arquitectura de seguridad, calidad y observabilidad 
 
 - **Tokens Asimétricos:** Emisión de JWT de corta duración (15 minutos) firmados con par de claves asimétricas RSA/EdDSA.
 - **Refresh Tokens Rotativos:** Los refresh tokens se almacenan en PostgreSQL con hash y revocación inmediata. Se transmiten mediante cookie HTTP-only con atributos `Secure`, `SameSite=Strict` y ruta restringida (`/api/v1/auth`).
-- **Aislamiento Técnico:** Verificación estricta de que un técnico únicamente puede consultar, iniciar, modificar o cerrar órdenes asignadas a su identificador propio (`technicianId`). Intentos de acceso cruzado entre técnicos responden `403 FORBIDDEN`.
+- **Acceso técnico:** La política individual limita al técnico a órdenes de su asignación. Una cuenta TECHNICIAN designada para taller puede acceder solo a la única orden explícitamente habilitada; esa concesión no cambia el técnico asignado y se audita.
 
 ## 3. Protección de Datos y Almacenamiento
 
@@ -21,9 +26,9 @@ Este documento consolida la arquitectura de seguridad, calidad y observabilidad 
   - Payload JSON de Express acotado a 1 MiB.
   - Rate limiting central (`express-rate-limit`) con cuotas por IP y ventana de tiempo.
   - Validación de esquemas en todas las entradas mediante Valibot.
-- **Bucket Privado y URLs Firmadas:**
-  - El bucket S3/MinIO no tiene acceso público habilitado (`BlockPublicAccess: true`).
-  - La subida y descarga de fotografías y firmas digitales se gestiona exclusivamente mediante URLs prefirmadas de corta duración (15 minutos).
+- **Archivos privados:**
+  - Google Drive compartido es el proveedor seleccionado por la IaC de staging; S3/MinIO se conserva en el código para otros entornos.
+  - En modo Drive, fotografías, firmas y PDFs se transfieren por rutas autenticadas de la API, que comprueba autorización y devuelve archivos privados sin cache. El adaptador de objetos utiliza URLs prefirmadas donde corresponde.
   - Verificación de metadatos (tipo MIME JPEG/PNG/WebP, tamaño máximo por imagen y dimensiones) antes de confirmar el registro.
 - **Redacción de Secretos en Logs:**
   - Filtro central en Winston y Morgan que anonimiza y redacta automáticamente tokens de portador, contraseñas, cookies de refresh, claves de API, URLs firmadas y datos privados.
@@ -48,4 +53,4 @@ Este documento consolida la arquitectura de seguridad, calidad y observabilidad 
 
 - **Respaldos de Base de Datos:** Script automatizado `infra/scripts/backup.sh` con compresión `gzip`, suma de verificación SHA256 y rotación de 30 días.
 - **Restauración y Recuperación ante Desastres:** Script `infra/scripts/restore.sh` que valida la integridad del archivo y ejecuta la restauración en una sola transacción (`--single-transaction`).
-- **Limpieza de Objetos Abandonados:** Script `infra/scripts/cleanup-orphaned-objects.ts` para purgar subidas pendientes abandonadas mayores a 24 horas y objetos en almacenamiento sin referencia en base de datos.
+- **Limpieza de Objetos Abandonados:** existe `infra/scripts/cleanup-orphaned-objects.ts`; su alcance debe revisarse antes de usarlo (no asumir que cubre todas las referencias, en particular reportes Drive). No ejecutarlo para limpieza histórica sin autorización específica.

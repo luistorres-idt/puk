@@ -2,7 +2,7 @@
 
 Este documento detalla los procedimientos de integración continua, despliegue y operación del ambiente de Staging y Producción para Bull Dog Solution.
 
-> **Estado al 2026-09-28:** AWS staging está completamente eliminado; no hay infraestructura, URL/IP, base de datos, archivos ni secretos de staging. La base anterior, todos los objetos/versiones y los secretos se borraron sin respaldo recuperable. Esta guía describe cómo volver a crear el ambiente, no cómo operar uno que siga activo.
+> **Estado al 2026-10-02:** AWS staging está completamente eliminado; no hay infraestructura, URL/IP, base de datos, archivos ni secretos de staging. La base anterior, todos los objetos/versiones y los secretos se borraron sin respaldo recuperable. Esta guía describe cómo volver a crear el ambiente, no cómo operar uno que siga activo. Las secciones de producción son orientación y brechas, no un procedimiento de despliegue ya disponible.
 
 ## 1. Pipeline de Integración Continua (CI)
 

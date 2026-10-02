@@ -5,6 +5,10 @@ de 2026. Las fechas históricas y los commits representativos se obtienen del hi
 trabajo UX de cuentas técnicas y la limpieza de mantenibilidad ya están integrados en la rama
 actual; no queda un plan laboral pendiente reflejado aquí.
 
+**Estado de lectura (2026-10-02):** la cronología es un registro histórico cerrado al 2026-09-30;
+no representa disponibilidad de staging. La documentación operativa vigente confirma que staging
+fue eliminado y producción no está desplegada. Esta actualización documental no añade hitos de código.
+
 ## Diagrama de Gantt
 
 ```mermaid

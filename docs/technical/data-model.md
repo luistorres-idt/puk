@@ -1,5 +1,9 @@
 # Modelo de datos
 
+**Estado:** esquema relacional documentado según `prisma/schema.prisma` (revisado 2026-10-02).
+Las referencias de almacenamiento son opacas y dependen del proveedor; Drive usa IDs de archivo y
+una tabla de mapeo de carpetas. La base conserva metadatos, no bytes.
+
 ## Diagrama entidad-relación
 
 ```mermaid
@@ -12,17 +16,19 @@ erDiagram
     ORDER ||--o{ DISCREPANCY : registra
     ORDER ||--o{ SHEET_SYNC_OPERATION : sincroniza
     ORDER ||--o{ SERVICE_ORDER_REPORT : genera
+    ORDER ||--o| SHARED_TECHNICIAN_ACCESS : "puede habilitarse para"
     ORDER_UNIT ||--o{ ORDER_EQUIPMENT : equipa
     ORDER_UNIT ||--o| CHECKLIST : inspecciona
+    ORDER_UNIT ||--o{ EVIDENCE : documenta
     ORDER_UNIT ||--o{ DISCREPANCY : agrupa
     CHECKLIST ||--|{ CHECKLIST_ITEM : contiene
-    CHECKLIST_ITEM ||--o{ EVIDENCE : documenta
     ORDER_EQUIPMENT ||--o{ DISCREPANCY : presenta
     USER ||--o{ REFRESH_SESSION : mantiene
     USER ||--o{ AUDIT_LOG : ejecuta
     USER ||--o{ EVIDENCE : carga
     USER ||--o{ SIGNATURE : captura
     USER ||--o{ ORDER : "resuelve cita fallida"
+    USER ||--o| SHARED_TECHNICIAN_ACCESS : "cuenta compartida designada"
     ORDER o|--o| ORDER : "reprograma como"
 
     USER {
@@ -62,6 +68,15 @@ erDiagram
         uuid failedAppointmentResolvedById FK
         string failedAppointmentResolutionReason
         uuid rescheduledFromOrderId FK, UK
+        Decimal pricingUnitRate
+        int pricingAppliedQuantity
+        Decimal pricingBaseCost
+        Decimal pricingDepartureCost
+        Decimal pricingTravelExpenses
+        Decimal pricingTotal
+        string pricingCurrency
+        timestamp pricingSnapshotAt
+        int pricingVersion
         json pricingBreakdown
         json pricingOverrides
         int version
@@ -103,11 +118,15 @@ erDiagram
     }
     EVIDENCE {
         uuid id PK
-        uuid checklistItemId FK
+        uuid orderUnitId FK
         string objectKey UK
+        uuid idempotencyKey UK
         string mimeType
         int sizeBytes
+        string checksum
+        uuid uploadedById FK
         UploadStatus status
+        timestamp completedAt
         timestamp deletedAt
     }
     SIGNATURE {
@@ -115,6 +134,9 @@ erDiagram
         uuid orderId FK, UK
         string signerName
         string objectKey UK
+        string mimeType
+        int sizeBytes
+        uuid capturedById FK
         timestamp signedAt
     }
     DISCREPANCY {
@@ -137,6 +159,28 @@ erDiagram
         int sizeBytes
         string checksum
         timestamp generatedAt
+    }
+    SHARED_TECHNICIAN_ACCESS {
+        int id PK
+        uuid userId FK, UK
+        uuid orderId FK, UK
+        int revision
+        timestamp updatedAt
+    }
+    DRIVE_FOLDER {
+        string logicalKey PK
+        string driveFileId UK
+        string parentDriveFileId
+        string name
+    }
+    DRIVE_SIGNATURE_UPLOAD {
+        uuid idempotencyKey PK
+        uuid orderId FK
+        string objectKey UK
+        string signerName
+        string checksum
+        int sizeBytes
+        timestamp completedAt
     }
     SHEET_SYNC_OPERATION {
         uuid id PK
@@ -170,14 +214,20 @@ erDiagram
 
 ## Agregado principal
 
-`Order` es la raíz del agregado operativo. Conserva el cliente como snapshot y contiene unidades.
-La API exige un técnico activo desde la creación; la relación en base de datos permanece nullable
-para conservar órdenes históricas sin técnico. Cada unidad tiene su propio tipo de servicio y agrupa
-equipos, checklist, fotografías y discrepancias, lo que permite órdenes multiservicio. La orden
-conserva el precio congelado y un desglose por servicio en `pricingBreakdown`, y permite sobreescrituras
-de tarifas y viáticos en `pricingOverrides` (configurados previo al cierre o ajustados administrativamente
-post-finalización mediante `OrderPricingService`). La firma se captura
-una vez por orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
+`Order` es la raíz del agregado operativo. Conserva el cliente y el técnico como snapshots, y contiene
+unidades. La API exige un técnico activo para crear/asignar, pero la relación puede ser nullable por
+compatibilidad con registros históricos. Cada unidad tiene su tipo de servicio, equipos, checklist,
+fotografías (`Evidence`) y discrepancias. Las evidencias pertenecen directamente a la unidad, no a los
+items del checklist; las cinco categorías del checklist se almacenan independientemente. La orden
+conserva los importes y el desglose congelados (`pricing*`, `pricingBreakdown`), así como los overrides
+acordados (`pricingOverrides`). El servicio administrativo puede reajustar una orden cerrada,
+incrementar `pricingVersion`, auditar y encolar una nueva publicación. La firma se captura una vez por
+orden. Sincronizaciones y reportes son efectos versionados relacionados con la orden.
+
+`SharedTechnicianAccess` es una configuración de control de acceso singleton (ID 1), con una cuenta
+TECHNICIAN designada y, opcionalmente, una orden ejecutable habilitada. `revision` evita actualizaciones
+obsoletas; cambiar la cuenta también limpia la orden habilitada. La cuenta y la orden son relaciones
+opcionales para poder revocar el acceso.
 
 Una cita fallida permanece como resultado histórico y facturable. Su resolución administrativa se
 registra mediante `FailedAppointmentResolution`: `CANCELLED` cierra el servicio y `RESCHEDULED`
@@ -202,7 +252,9 @@ datos de ejecución.
 - `Order.folio` es único.
 - Un usuario solo puede vincularse con un técnico.
 - El número de serie de una unidad es único dentro de su orden.
-- Solo existe un checklist y una firma por unidad/orden respectivamente.
+- Solo existe un checklist por unidad y una firma por orden.
+- La configuración singleton de acceso compartido mantiene a lo sumo una cuenta y una orden activas;
+  su elegibilidad y sincronización con el estado de la orden también se valida en el dominio.
 - Cada categoría aparece una sola vez en cada checklist.
 - Las claves de evidencia, firma y reporte son únicas en almacenamiento.
 - El par `(orderId, version)` identifica una versión de reporte.
@@ -216,4 +268,4 @@ datos de ejecución.
 
 ## Eliminación y retención
 
-Unidades, checklist, items, evidencias, firmas y reportes usan cascada al eliminar su padre. Usuarios y técnicos usan restricciones o `SET NULL` para conservar trazabilidad. La aplicación normalmente cancela o elimina lógicamente evidencias; no expone eliminación física de órdenes como operación habitual.
+Unidades, checklist, items, evidencias, firmas y reportes usan cascada al eliminar su padre. Usuarios y técnicos usan restricciones o `SET NULL` para conservar trazabilidad. La aplicación normalmente cancela órdenes o elimina lógicamente evidencias; no expone eliminación física de órdenes como operación habitual. `DriveFolder` persiste IDs de carpetas para resolver claves lógicas de forma idempotente; no representa una ruta física local ni almacena el contenido de archivos.

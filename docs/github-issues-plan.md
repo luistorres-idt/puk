@@ -2,6 +2,12 @@
 
 Fecha: 2026-09-08. Repositorio: `luistorres-idt/puk`.
 
+> **Estado del documento (2026-10-02):** la tabla final registra verificación local histórica de las
+> issues #4–#10; no refleja su estado actual en GitHub ni un despliegue vigente. Las funcionalidades
+> enumeradas están implementadas en la rama de trabajo actual según contratos/código. Staging AWS
+> se eliminó después de aquellas pruebas; no hay endpoint de staging activo. Los status remotos no se
+> cambiaron ni se volvieron a consultar al actualizar esta documentación.
+
 ## Orden de entrega
 
 1. #7: contrato del libro y decisiones funcionales.

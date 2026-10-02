@@ -57,6 +57,7 @@ flowchart LR
 | `/orders/:id`         | detalle, evidencias, reporte y auditoría | administrador                       |
 | `/orders/:id/execute` | ejecución mobile-first                   | técnico autorizado o administrador  |
 | `/technicians`        | administración de técnicos               | administrador                       |
+| `/admin/users`        | administración de cuentas ADMIN          | administrador                       |
 
 La guarda de navegación inicializa la sesión, revalida la identidad cuando vence el TTL, redirige
 según `orderAccessMode` y aplica `requiresRole`. Recuperar el foco y actualizar manualmente el
@@ -67,6 +68,8 @@ La administración de cuentas técnicas se compone desde `technicians/views/Tech
 `useTechnicalAccounts` concentra estado y mutaciones, mientras `SharedAccountPanel`,
 `TechnicalAccountTable` y `TechnicalAccountModals` mantienen la presentación separada. Las llamadas
 de usuarios y acceso compartido pertenecen a `modules/technical-accounts`.
+La vista de cuentas técnicas permite designar la cuenta de taller y habilitarle una orden ejecutable;
+la administración de cuentas ADMIN está separada y no debe confundirse con ese control.
 La vista de ejecución carga `/orders/:id/execution`, cuyo contrato omite información administrativa,
 fiscal y de sincronización. Los técnicos navegan a esa vista también para consultar su historial.
 Al final de la vista, la tarjeta **Notas de ejecución** permite guardar una nota general de la orden

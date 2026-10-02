@@ -56,6 +56,17 @@ sesiones al desactivar. No se permite que un administrador se desactive a sí mi
 degradar al último administrador activo (`ADMIN_SELF_LOCKOUT`, `LAST_ACTIVE_ADMIN`). La cuenta
 técnica compartida conserva sus restricciones de rol y designación.
 
+| Método | Ruta | Acceso / propósito |
+| ------ | ---- | ------------------ |
+| GET | `/api/v1/shared-technician-access` | Consultar configuración; administrador con `users:manage` |
+| PUT | `/api/v1/shared-technician-access/account` | Designar o retirar cuenta TECHNICIAN compartida; `users:manage` |
+| PUT | `/api/v1/shared-technician-access/order` | Habilitar o retirar una orden ejecutable; `orders:manage` |
+| GET | `/api/v1/me/order-access` | Consultar modo individual/compartido de la sesión autenticada |
+
+El acceso compartido habilita como máximo una orden a la cuenta de taller designada; no cambia
+el técnico asignado a la orden. Las modificaciones requieren `expectedRevision` para evitar
+actualizaciones concurrentes obsoletas y se auditan.
+
 ### Órdenes, unidades y equipos
 
 `POST /api/v1/orders` requiere `technicianId` con UUID de un técnico activo.
@@ -102,12 +113,15 @@ proyección de respuesta explícita.
 | POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/verify`        | verificar equipo          |
 | POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/discrepancy`   | reportar diferencia       |
 | PUT    | `/api/v1/orders/:id/units/:unitId/checklist`                            | guardar checklist         |
-| POST   | `/api/v1/orders/:id/units/:unitId/checklist/:category/evidence/presign` | preparar foto             |
+| POST   | `/api/v1/orders/:id/units/:unitId/evidence/file`                         | subir evidencia (Drive)   |
+| POST   | `/api/v1/orders/:id/units/:unitId/evidence/presign`                      | preparar carga (objetos)  |
 | POST   | `/api/v1/evidence/:id/complete`                                         | confirmar foto            |
 | DELETE | `/api/v1/evidence/:id`                                                  | eliminar lógicamente foto |
 | GET    | `/api/v1/evidence/:id/url`                                              | URL temporal de foto      |
-| POST   | `/api/v1/orders/:id/signature/presign`                                  | preparar firma            |
-| POST   | `/api/v1/orders/:id/signature/complete?objectKey=...`                   | confirmar firma           |
+| PUT    | `/api/v1/orders/:id/signature/file`                                     | subir firma PNG (Drive)   |
+| POST   | `/api/v1/orders/:id/signature/presign`                                  | preparar carga (objetos)  |
+| POST   | `/api/v1/orders/:id/signature/complete?objectKey=...`                   | confirmar carga (objetos) |
+| GET    | `/api/v1/orders/:id/signature/file`                                     | descargar firma privada (Drive) |
 | GET    | `/api/v1/orders/:id/signature/url`                                      | URL temporal de firma     |
 | GET    | `/api/v1/orders/:id/completeness`                                       | requisitos pendientes     |
 | PATCH  | `/api/v1/orders/:id/execution-notes`                                   | guardar nota general de ejecución |
@@ -127,10 +141,11 @@ remotas son idempotentes y no revierten el cierre si Google Sheets está tempora
 
 | Método | Ruta                                 | Acceso / propósito                    |
 | ------ | ------------------------------------ | ------------------------------------- |
-| GET    | `/api/v1/orders/:id/report`          | metadatos de versión vigente          |
-| GET    | `/api/v1/orders/:id/reports`         | historial de versiones                |
-| POST   | `/api/v1/orders/:id/report/generate` | generar/reintentar como administrador |
-| GET    | `/api/v1/orders/:id/report/download` | URL privada temporal                  |
+| GET    | `/api/v1/orders/:id/report`                 | metadatos de versión vigente          |
+| GET    | `/api/v1/orders/:id/reports`                | historial de versiones                |
+| POST   | `/api/v1/orders/:id/report/generate`        | generar/reintentar como administrador |
+| GET    | `/api/v1/orders/:id/report/file`            | descargar PDF privado                 |
+| GET    | `/api/v1/orders/:id/reports/:version/file`  | descargar versión privada             |
 
 ### Monitoreo de sincronización
 

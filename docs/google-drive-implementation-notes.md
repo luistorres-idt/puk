@@ -1,10 +1,10 @@
 # Implementación de almacenamiento en Google Drive
 
-Este documento resume cómo quedó implementada la integración con Google Drive, los cambios relacionados que siguen sin commit y una diferencia operativa importante frente a S3: **en el uso actual, cargar y mostrar imágenes desde Drive tarda significativamente más**. La comparación es una observación de uso; todavía no hay una medición controlada que cuantifique cuánto.
+Este documento resume la integración con Google Drive y mediciones de rendimiento realizadas durante su implementación. Las pruebas descritas son evidencia histórica acotada a sus entornos; no equivalen a una medición del tiempo total de uso en producción.
 
 ## Resumen
 
-- Google Drive es el proveedor declarado para evidencias, firmas y reportes en staging/producción. El código aún conserva S3 y tiene ese proveedor como valor predeterminado técnico, por lo que el runtime debe configurar `STORAGE_PROVIDER=drive`; la IaC y el script de secretos de staging todavía no reflejan por completo la decisión.
+- Google Drive compartido es el destino configurado por la IaC para evidencias, firmas y reportes en un futuro staging. El ambiente AWS fue eliminado y no está desplegado. El código conserva el adaptador S3 y su fallback/default según entorno; staging configura `STORAGE_PROVIDER=drive` y el script seguro exige credenciales dedicadas de Drive. Producción no tiene IaC propia ni está desplegada.
 - En modo Drive, los archivos pasan por la API para mantener autenticación y permisos; el navegador no recibe credenciales de Google ni enlaces públicos.
 - Las evidencias pertenecen a la unidad del vehículo, no a una categoría del checklist.
 - No se migran los objetos de prueba que quedaron en S3.

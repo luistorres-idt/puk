@@ -3,7 +3,7 @@ marp: true
 theme: default
 paginate: true
 header: 'Bull Dog Solution — Manual de Usuario y Presentación Operativa'
-footer: 'Versión 1.0 | Sistema de Órdenes de Servicio'
+footer: 'Manual operativo | Sistema de Órdenes de Servicio'
 style: |
   section {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -117,7 +117,7 @@ El sistema sustituye la operativa manual y las limitaciones de AppSheet por una 
 - **Para la Oficina (Administradores):**
   - Control centralizado de órdenes, clientes, unidades y asignación de técnicos.
   - Conexión directa con Google Sheets para catálogos oficiales sin duplicidad.
-  - Auditoría de estados y exportación de reportes ejecutivos.
+  - Consulta de auditoría de órdenes y supervisión de reportes de servicio.
 
 - **Para el Campo (Técnicos):**
   - Aplicación web optimizada para teléfonos móviles (PWA).
@@ -134,7 +134,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
 | Rol                                                  | Entorno Principal             | Responsabilidades Clave                                                                                                                                                                                                                         |
 | :--------------------------------------------------- | :---------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <span class="badge badge-admin">ADMINISTRADOR</span> | Web Desktop (Computadora)     | • Crea órdenes en borrador.<br>• Consulta clientes y equipos de Sheets.<br>• Asigna y reasigna técnicos.<br>• Consulta auditoría, reportes y supervisa sincronizaciones.                                                                        |
-| <span class="badge badge-tech">TÉCNICO</span>        | Web Mobile / PWA (Smartphone) | • Consulta órdenes asignadas a su nombre.<br>• Inicia el servicio en la unidad vehicular.<br>• Valida IMEI/series y levanta discrepancias.<br>• Llena checklist con fotos obligatorias.<br>• Recoge firma digital del cliente y finaliza orden. |
+| <span class="badge badge-tech">TÉCNICO</span>        | Web Mobile / PWA (Smartphone) | • Consulta órdenes asignadas a su cuenta individual o habilitadas para la cuenta compartida.<br>• Inicia el servicio.<br>• Valida equipos y registra discrepancias.<br>• Completa checklist y evidencia.<br>• Recoge firma del cliente y finaliza la orden. |
 
 ---
 
@@ -146,7 +146,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
   <div class="flow-card admin"><span class="step-num">3</span><br>Asigna Técnico Responsable</div>
   <div class="flow-card tech"><span class="step-num">4</span><br><b>Técnico</b> inicia Servicio</div>
   <div class="flow-card tech"><span class="step-num">5</span><br>Valida Hardware e IMEI</div>
-  <div class="flow-card tech"><span class="step-num">6</span><br>Checklist + mínimo 10 fotos por unidad</div>
+  <div class="flow-card tech"><span class="step-num">6</span><br>Checklist + evidencia mínima por unidad</div>
   <div class="flow-card tech"><span class="step-num">7</span><br>Firma Digital Cliente</div>
   <div class="flow-card final"><span class="step-num">8</span><br>Cierre y Reporte PDF</div>
 </div>
@@ -156,7 +156,7 @@ El sistema maneja dos perfiles de usuario claramente delimitados:
   <span class="badge badge-error">Cierre como Cita Fallida (con motivo)</span>
 </div>
 
-> **Regla de oro:** El técnico no puede cerrar un servicio normal si una unidad tiene menos de diez fotografías, si alguna unidad no tiene su checklist completo o si falta la firma con nombre del cliente.
+> **Regla de oro:** El técnico no puede cerrar un servicio normal si una unidad tiene menos de diez fotografías completadas, si falta alguna de las cinco categorías del checklist o si falta la firma con nombre del cliente. Las fotos se cuentan por unidad, no por categoría.
 
 ---
 
@@ -171,6 +171,14 @@ de sesión.
 La aplicación no permite desactivar tu propia cuenta ni dejar el sistema sin un administrador activo.
 Para desactivar una cuenta, confirma la acción en su fila. La sección es independiente de **Cuentas
 Técnicas**, que sigue dedicada a técnicos y a la cuenta compartida del taller.
+
+### Acceso técnico compartido
+
+En **Cuentas Técnicas**, un administrador puede designar una cuenta activa con rol técnico y sin
+técnico individual asociado como cuenta compartida del taller. Luego puede habilitar para esa cuenta
+una sola orden asignada a un técnico individual y en estado ejecutable. La orden compartida aparece
+para la cuenta designada; no cambia su asignación ni concede acceso general a las demás órdenes.
+Cambiar la cuenta compartida revoca la orden habilitada anterior. El acceso se registra en auditoría.
 
 ## 4. Guía Administrador: 1. Crear Orden (Asistente de 5 Pasos)
 
@@ -307,11 +315,11 @@ Al terminar los trabajos mecánicos/eléctricos, debes realizar la inspección d
 
 ## 6. Reglas de Evidencias Fotográficas
 
-> ⚠️ **REGLA ESTRICTA DE CALIDAD:**  
-> **Cada unidad requiere al menos diez fotografías completadas**, distribuidas entre las categorías del checklist.
+> **Cada unidad requiere al menos diez fotografías completadas.** Las fotos son una galería general
+> de la unidad y no se exigen por categoría del checklist.
 
 1. Pulsa sobre el icono de cámara en la categoría correspondiente.
-2. Toma una foto clara y bien iluminada desde tu teléfono.
+2. Toma una foto clara y bien iluminada desde tu teléfono. En Drive la carga se transmite de forma autenticada a la API y puede tardar más que una transferencia directa a un almacén de objetos.
 3. La foto se carga automáticamente al almacenamiento privado mediante la aplicación.
 4. El sistema mostrará una miniatura con confirmación verde.
 5. Si alguna unidad no tiene las diez fotos requeridas, la aplicación indicará el requisito pendiente y no permitirá finalizar.
@@ -333,7 +341,7 @@ Cuando todas las unidades tengan sus equipos verificados y sus checklists comple
 6. Pulsa **`Finalizar Orden de Servicio`**:
    - La orden pasa a **`COMPLETED`**.
    - Se sella la fecha y hora final.
-   - El sistema genera el acta técnica digital con validez de entrega.
+   - El sistema solicita en segundo plano una versión privada del reporte PDF; su disponibilidad puede tardar mientras el worker lo procesa.
    - Se encolan el reporte técnico y el estado final de cada equipo en `SALIDAS`. En desinstalaciones y equipos retirados se limpian cliente y vehículo; en instalaciones se registra el nuevo vínculo.
 
 ---
@@ -347,7 +355,7 @@ Si acudes al lugar pero el servicio no se puede realizar (cliente ausente, unida
 3. Confirma la acción:
    - La orden pasa al estado **`FAILED_APPOINTMENT`**.
    - No se exige checklist, fotografías ni firma del cliente.
-   - El administrador y el área de logística reciben la notificación para reprogramación o cobro de visita técnica.
+   - La orden queda disponible para que administración revise, cancele o reprograme; el sistema no envía una notificación externa automática.
 
 El administrador puede resolverla desde el detalle de la orden:
 
@@ -363,9 +371,9 @@ El administrador puede resolverla desde el detalle de la orden:
 Para cada orden completada, el sistema genera automáticamente un **Acta / Certificado de Servicio**:
 
 - **¿Dónde consultarlo?**  
-  Tanto el administrador como el cliente pueden descargar el PDF desde el detalle de la orden.
+  El administrador y el técnico con acceso a la orden pueden consultar o descargar el PDF privado desde el detalle. El cliente no tiene una cuenta ni un enlace público de descarga integrado.
 - **¿Qué incluye el documento?**
-  - Folio y logotipo oficial de Bull Dog Solution.
+  - Folio e identificación del servicio (la plantilla/logotipo oficial sigue pendiente de aprobación).
   - Tiempos de atención (inicio y término).
   - Datos de unidades y tabla de hardware verificado con notas de discrepancias.
   - Tabla del checklist vehicular (Bien / Mal / Observaciones).
@@ -374,15 +382,11 @@ Para cada orden completada, el sistema genera automáticamente un **Acta / Certi
 
 ---
 
-## 8. Módulo de Reportes Ejecutivos y Exportación
+## 8. Auditoría y sincronización
 
-Desde el menú **Reportes** (perfil Administrador), se cuenta con las siguientes opciones de exportación:
-
-1. **Reporte Consolidado de Órdenes:** Exportación a Excel (XLSX) y CSV con filtros por rango de fechas, clientes y tipo de servicio.
-2. **Reporte de Discrepancias:** Listado de todos los equipos con diferencias de IMEI/Serie reportados en campo para ajuste de inventario.
-3. **Métricas de Técnicos:** Tasa de servicios completados, tiempos promedio por servicio y efectividad de visitas.
-4. **Reporte de Citas Fallidas:** Resumen de causas recurrentes de no atención.
-5. **Auditoría:** Registro de quién modificó o reasignó cada orden y cuándo.
+No hay un módulo de reportes ejecutivos/exportación XLSX o CSV en la interfaz actual. La auditoría
+se consulta desde el detalle administrativo de la orden y la sección **Sincronización** permite
+supervisar operaciones del reporte técnico y cambios de equipos en Google Sheets.
 
 ---
 
@@ -393,7 +397,7 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 - **Patrón Outbox:**  
   Cuando se asigna un equipo o se actualiza una orden, la acción se guarda primero en la base de datos PostgreSQL y un worker la envía a Google Sheets en segundo plano.
 - **Reintentos Automáticos:**  
-  Si Google Sheets no responde, el sistema reintenta periódicamente sin perder información.
+  Si Google Sheets no responde, la operación permanece registrada para reintento periódico; un administrador también puede reintentarla desde la sección de sincronización.
 - **Monitor de Sincronización:**  
   Los administradores cuentan con la sección **Sincronización**, donde pueden ver reportes programados, procesando, sincronizados o fallidos y ejecutar **Sincronizar ahora** cuando corresponda.
 - **Corte semanal del reporte técnico:**
@@ -408,11 +412,11 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 ## 10. Preguntas Frecuentes y Resolución de Problemas
 
 - **¿Qué hago si no hay señal celular en el taller?**  
-  Toma las fotos con tu cámara nativa; en cuanto tengas conexión móvil o Wi-Fi, abre la orden para completar el checklist y subir las evidencias.
+  La aplicación no ofrece operación offline completa ni sincronización diferida garantizada. Conserva el trabajo localmente por medios aprobados y carga la información cuando tengas conexión; verifica que fotos y cambios aparezcan confirmados antes de cerrar.
 - **¿Puedo cambiar de técnico una orden ya asignada?**  
   Sí, el administrador puede reasignarla desde el panel web mientras la orden no haya sido finalizada.
 - **¿Por qué no se habilita el botón de finalizar orden?**  
-  Verifica que: (1) Todas las unidades tengan checklist completo, (2) Cada unidad tenga al menos diez fotos, (3) Todos los equipos estén verificados o con discrepancia reportada, y (4) Se haya ingresado el nombre y firma del cliente.
+  Verifica que: (1) Todas las unidades tengan las cinco categorías del checklist, (2) Cada unidad tenga al menos diez fotos completadas, (3) Todos los equipos estén verificados o con discrepancia reportada, y (4) Se haya ingresado el nombre y firma del cliente.
 
 ---
 
@@ -422,12 +426,11 @@ El sistema está diseñado para que una falla en Internet o en las cuotas de Goo
 
 | Fecha          | Versión  | Tipo        | Descripción del Cambio / Nueva Feature                                                                                              | Responsable |
 | :------------- | :------- | :---------- | :---------------------------------------------------------------------------------------------------------------------------------- | :---------- |
-| **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, Checklist 5 categorías, Fotos S3, Firma Canvas, Reportes PDF/Excel y Sincronización Sheets.               | Equipo Core |
+| **2026-09-02** | `v1.0.0` | Lanzamiento | MVP del Sistema: Órdenes, checklist de 5 categorías, evidencia privada, firma y sincronización Sheets.               | Equipo Core |
 | **2026-09-11** | `v1.1.0` | Mejora      | Corte y envío semanal configurables para el reporte técnico, tablero global y reintento inmediato por operación.                    | Equipo Core |
 | **2026-09-10** | `v1.1.0` | Feature     | Órdenes multiservicio, directorio técnico sincronizado, tarifas por servicio, reporte de cobro y actualización final de inventario. | Equipo Core |
 | **2026-09-28** | `v1.2.0` | Feature     | Tarifas acordadas por orden, reajuste post-cierre y formateo multilínea de costo en reporte técnico.                                | Equipo Core |
-| _Próximamente_ | `v1.3.0` | Feature     | Modo offline progresivo con persistencia local en dispositivo móvil.                                                                | Por definir |
-| _Próximamente_ | `v1.3.0` | Feature     | Envío automático de Acta de Servicio por correo electrónico al cliente al finalizar.                                                | Por definir |
+| _Propuesta no implementada_ | — | Idea | Modo offline progresivo y envío automático de reportes por correo requieren diseño, autorización y priorización; no están disponibles. | Por definir |
 
 ---
 

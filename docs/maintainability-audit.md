@@ -2,6 +2,10 @@
 
 **Estado:** auditoría y limpieza de los límites prioritarios cerradas. El reporte distingue la verificación realizada de la deuda residual; no afirma que cada archivo del repositorio necesite o haya recibido una refactorización.
 
+**Corte de evidencia (2026-10-02):** cifras de líneas, conteos de pruebas y resultados de comandos
+abajo son el registro de la ejecución original de la auditoría, no una ejecución nueva en esta
+actualización documental. Las tareas de documentación no alteraron código ni cambian esa evidencia.
+
 ## Diagnóstico
 
 El principal problema no es la cantidad de líneas por sí sola, sino la mezcla de responsabilidades en archivos que coordinan reglas de negocio, acceso a datos, estado de interfaz y presentación. La medición excluye código generado y `dist`.

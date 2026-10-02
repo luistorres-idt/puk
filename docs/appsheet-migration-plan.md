@@ -2,6 +2,11 @@
 
 Este plan establece la estrategia de transición gradual desde la aplicación legacy en AppSheet hacia el nuevo sistema web y PWA de Bull Dog Solution conforme a la Fase 14 del roadmap.
 
+> **Estado (2026-10-02):** este archivo conserva el plan propuesto, no evidencia de que el piloto,
+> cutover o retiro de AppSheet hayan ocurrido. El código del producto está implementado, pero AWS
+> staging está eliminado y producción no está desplegada. Cualquier cambio operativo debe planificarse
+> y verificarse de nuevo con Operaciones antes de tratar una etapa como completada.
+
 ## 1. Inventario del Sistema Legacy
 
 - **Usuarios y Roles:**
@@ -25,10 +30,10 @@ Este plan establece la estrategia de transición gradual desde la aplicación le
 2. **Directorio de Técnicos:** Registro de técnicos en la tabla `Technician` y vinculación uno a uno con sus correspondientes registros de usuario `User` con rol `TECHNICIAN`.
 3. **Cuentas de Acceso:** Entrega segura de credenciales temporales solicitando cambio en primer inicio.
 
-## 3. Políticas de Retención de Evidencias y Firmas
+## 3. Propuesta de políticas de retención (requiere aprobación)
 
-- **Fotografías de Servicio:** Retención mínima operativa de 12 meses en el proveedor privado de archivos configurado. El archivado posterior y su clase de almacenamiento se definirán según los requerimientos legales y contractuales del cliente vehicular.
-- **Firmas Digitales y Nombres de Receptores:** Conservación indefinida asociada al registro inmutable de la orden y su registro de auditoría (`AuditLog`).
+- **Fotografías de Servicio:** Se propuso una retención mínima operativa de 12 meses en el proveedor privado de archivos. No está aprobada; archivado y borrado deben ajustarse a los requisitos legales y contractuales.
+- **Firmas Digitales y Nombres de Receptores:** Se propuso conservación indefinida asociada a la orden y auditoría. No está aprobada ni configurada como política automática.
 
 ## 4. Ejecución del Piloto en Paralelo
 

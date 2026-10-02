@@ -16,6 +16,14 @@
 
 Dentro de `orders`, `reschedule-failed-appointment.ts` concentra la resolución de una cita fallida y la clonación de la orden dentro de una sola transacción de dominio; `OrdersService` conserva la API pública del módulo. En `execution`, `OrderFinalizationService` concentra validación de completitud, cierre, cita fallida y corrección, mientras `ExecutionService` conserva la fachada pública y los flujos de evidencias y firma. Ambos servicios comparten la carga de la orden con autorización mediante `execution-order-access.ts`.
 
+### Acceso a órdenes técnicas
+
+La API aplica `assertOrderAccess` en operaciones de lectura y ejecución. El modo individual limita
+al técnico a sus propias órdenes. La cuenta TECHNICIAN compartida designada recibe acceso sólo a la
+orden explícitamente habilitada en `SharedTechnicianAccess`; habilitarla no cambia `Order.technicianId`
+y no abre el resto del catálogo. La configuración permite una sola orden, valida que sea ejecutable,
+usa `revision` para control optimista y registra cambios/revocaciones en auditoría.
+
 ## Ciclo de una orden
 
 El ciclo de vida está formalizado en una máquina de estados determinista (`order-state-machine.ts`), que define el grafo de transiciones permitidas y valida invariantes de dominio (`assertValidOrderTransition`, `assertCanEditOrder`, `assertCanModifyUnits`, `assertCanExecuteWork`).
@@ -43,7 +51,7 @@ Para completar normalmente una orden se evalúa la regla de dominio pura mediant
 1. Al menos una unidad registrada.
 2. Todos los equipos verificados (`MATCHED` o `DISCREPANCY_REPORTED`). Una discrepancia documentada no bloquea el cierre.
 3. Checklist completo con las 5 categorías obligatorias (`DASHBOARD`, `WINDOWS`, `ACCESSORIES`, `TRIMS`, `BODYWORK`).
-4. Mínimo 10 fotografías de evidencia completadas por unidad.
+4. Mínimo 10 fotografías de evidencia completadas por unidad. Se almacenan como galería de unidad y no están ligadas a categorías del checklist.
 5. Firma digital y nombre de conformidad del cliente.
 
 La cita fallida omite checklist, fotos y firma.
@@ -115,7 +123,7 @@ El cálculo de liquidación y costos de las órdenes se gestiona mediante compon
 
 ### Servicio de ajuste: `OrderPricingService`
 - Permite la sobreescritura de tarifas acordadas (`pricingOverrides`) por administradores (`orders:manage`).
-- **Órdenes no finalizadas (`DRAFT`, `ASSIGNED`, `IN_PROGRESS`):** guarda los overrides para ser tomados durante el cierre y emite auditoría `ORDER_PRICING_CONFIGURED`.
+- **Órdenes no finalizadas y no canceladas:** guarda los overrides para ser tomados durante el cierre y emite auditoría `ORDER_PRICING_CONFIGURED`.
 - **Órdenes finalizadas (`COMPLETED`, `FAILED_APPOINTMENT`):** ejecuta recálculo financiero completo, incrementa `pricingVersion`, actualiza snapshots de precios y encola la re-sincronización hacia Google Sheets invalidando versiones previas (`SUPERSEDED`), registrando auditoría `ORDER_PRICING_ADJUSTED`.
 
 ### Formato en Reporte Técnico de Google Sheets (`technical-report-formatter.ts`)
@@ -146,6 +154,10 @@ sequenceDiagram
 ```
 
 Las referencias siguen una identidad estable por evidencia, firma o reporte; el proveedor configurado resuelve su ubicación física. La base nunca almacena bytes ni Base64. En el modo Drive, la API recibe y transmite las cargas autenticadas; el adaptador de objetos conserva su propio protocolo.
+
+En el estado actual (2026-10-02), Drive compartido es el proveedor configurado por la IaC de staging,
+pero AWS staging está eliminado y no existe producción desplegada. El adaptador S3/MinIO se mantiene
+para desarrollo local/entornos que lo seleccionen; sus rutas no son el flujo de Drive.
 
 ## Generación de reporte PDF
 

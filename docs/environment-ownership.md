@@ -8,10 +8,10 @@ Los valores locales no sensibles se documentan en `.env.example`. Los secretos r
 | PostgreSQL  | `DATABASE_URL`, `DIRECT_URL`                                    | Sí                | Plataforma             |
 | JWT         | `JWT_*_PRIVATE_KEY`, `JWT_*_PUBLIC_KEY`, issuer, audience y TTL | Claves privadas   | Seguridad/Plataforma   |
 | Cookies     | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`            | No                | Backend                |
-| S3          | `S3_ENDPOINT`, región, bucket, access key y secret key          | Credenciales      | Plataforma             |
+| Archivos    | Drive: `GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY`, `GOOGLE_DRIVE_SHARED_DRIVE_ID`; adaptador S3 opcional con `S3_*` | Credenciales e IDs | Plataforma / Workspace |
 | Sheets      | spreadsheet ID, cuenta de servicio, clave privada y pestañas    | Credenciales e ID | Operaciones/Plataforma |
 | Límites     | tamaños, TTL de URLs y caché                                    | No                | Backend/Producto       |
 | Resiliencia | timeouts, reintentos, breaker y outbox                          | No                | Backend/SRE            |
 | Logs        | `LOG_LEVEL`                                                     | No                | SRE                    |
 
-Desarrollo puede usar PostgreSQL y MinIO locales con las credenciales ficticias de `.env.example`. La integración de Sheets usa un adaptador simulado hasta que Operaciones entregue un documento exclusivo y Plataforma inyecte la cuenta de servicio.
+Desarrollo puede usar PostgreSQL y MinIO locales con las credenciales ficticias de `.env.example`. Google Drive es el proveedor elegido en IaC de staging, pero el ambiente AWS está eliminado y sus secretos deben recrearse; producción no está desplegada. La integración de Sheets puede usar el adaptador simulado local o credenciales específicas del entorno.

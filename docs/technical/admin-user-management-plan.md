@@ -1,8 +1,11 @@
 # Plan: administrar usuarios administradores
 
-**Estado:** Completado · **Progreso:** 6/6 checkpoints
+**Estado:** Completado y verificado localmente (2026-10-02) · **Progreso:** 6/6 checkpoints
 
 Este plan agrega una interfaz para que los administradores gestionen otras cuentas admin sin mezclar esa tarea con **Cuentas Técnicas**. El archivo es el registro de avance: marcar cada checkpoint solo cuando sus criterios estén verificados.
+
+La implementación está en la rama actual. Su verificación es local; no implica que exista un
+ambiente AWS desplegado (staging fue eliminado y producción no está desplegada).
 
 ## Decisión de diseño
 

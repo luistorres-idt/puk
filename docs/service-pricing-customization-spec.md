@@ -1,9 +1,10 @@
 # Especificación de Requerimientos y Diseño Técnico (ERS / RFC)
 ## Tarifas Dinámicas y Ajuste de Liquidación de Órdenes de Servicio
 
-- **Proyecto:** PUK (Bull Dog Solution)
+- **Proyecto:** Bull Dog Solution
 - **Documento:** Especificación técnica y de requerimientos
-- **Fecha:** 2026-09-28
+- **Fecha original:** 2026-09-28
+- **Revisión de estado:** 2026-10-02
 - **Estado:** Implementado y verificado
 - **Autor:** Equipo de Arquitectura de Software
 
@@ -31,7 +32,7 @@ Actualmente, las tarifas se encuentran definidas en la hoja de cálculo de Googl
   - Su interfaz móvil de ejecución (`OrderExecutionView.vue`) mantiene el flujo limpio habitual. No se añaden pasos bloqueantes ni campos de precio a su pantalla.
 - **Administradores (`ADMIN`):**
   - Poseen control total sobre las tarifas y liquidación (`orders:manage`).
-  - Pueden definir o modificar tarifas acordadas antes o al iniciar la orden (`DRAFT`, `ASSIGNED`, `IN_PROGRESS`).
+  - Pueden definir o modificar tarifas acordadas mientras la orden no esté finalizada ni cancelada (incluye `DRAFT`, `ASSIGNED`, `IN_PROGRESS` y órdenes devueltas a `REQUIRES_CORRECTION`).
   - Pueden ajustar precios y viáticos en órdenes ya finalizadas (`COMPLETED`, `FAILED_APPOINTMENT`).
 
 ### 2.2 Ciclo de Vida de los Precios en la Orden
@@ -156,7 +157,7 @@ Ubicación: `apps/api/src/modules/orders/order-pricing.service.ts`
 
 Responsabilidades:
 1. `setOrderPricingOverrides(actorUserId: string, orderId: string, input: OrderPricingOverrides)`:
-   - Permite a administradores configurar o actualizar tarifas pactadas en órdenes que aún no han sido finalizadas (`DRAFT`, `ASSIGNED`, `IN_PROGRESS`).
+   - Permite a administradores configurar o actualizar tarifas pactadas en órdenes que no estén finalizadas ni canceladas; la vista ofrece el control a administradores en cualquier estado excepto `CANCELLED`.
    - Persiste en `order.pricingOverrides`.
    - Registra auditoría `ORDER_PRICING_CONFIGURED`.
 2. `adjustFinalizedOrderPricing(actorUserId: string, orderId: string, input: OrderPricingOverrides)`:

@@ -1,5 +1,10 @@
 # Especificación: almacenamiento de órdenes en Google Drive
 
+**Estado:** implementación de aplicación completada e integrada; la IaC de staging configura Drive,
+pero AWS staging está eliminado y no hay despliegue actual. La validación en AWS y las políticas de
+respaldo/retención de producción siguen pendientes. Esta especificación conserva los requisitos y
+límites originales; no autoriza migrar ni borrar archivos históricos de S3.
+
 ## Objetivo
 
 Guardar las nuevas evidencias fotográficas, firmas y versiones PDF de órdenes de servicio en un Drive compartido de la organización. La aplicación conserva el control de acceso: los navegadores no reciben credenciales de Google ni enlaces públicos de Drive.

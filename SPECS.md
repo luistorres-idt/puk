@@ -1,5 +1,11 @@
 # Especificación técnica — Sistema de órdenes de servicio
 
+> Esta especificación mantiene los requisitos funcionales y de diseño del proyecto. No sustituye el
+> estado implementado: el sistema ya incluye administración de usuarios, acceso técnico compartido,
+> tarifas por orden, reportes PDF y Google Drive para archivos. AWS staging fue eliminado y no hay
+> despliegue productivo; los pendientes de infraestructura/operación se mantienen como tales. Para
+> el estado ejecutable y los detalles actuales, consulta [la documentación técnica](./docs/technical/README.md).
+
 **Organización:** Bull Dog Solution
 
 **Documento:** Especificación técnica del MVP
@@ -71,7 +77,7 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
    - Molduras.
    - Carrocería.
 8. Cada categoría admite `Bien`, `Mal` o `No aplica`.
-9. Cada unidad requiere al menos diez fotografías completadas, distribuidas entre las categorías del checklist.
+9. Cada unidad requiere al menos diez fotografías completadas en una galería propia; no se asignan a las categorías del checklist.
 10. Cuando una categoría se marque `Mal`, la observación es obligatoria.
 11. Para finalizar un servicio normal, todas las unidades deben tener:
     - Equipos verificados.
@@ -1350,6 +1356,13 @@ Las migraciones se ejecutan una vez por despliegue, antes de activar la nueva ve
 - Existen pruebas automatizadas de los flujos críticos.
 
 ## 29. Decisiones pendientes antes de producción
+
+> Esta lista conserva preguntas de la especificación inicial. Estado al 2026-10-02: Drive está
+> seleccionado en la IaC de staging, pero no existe un despliegue; la elección/configuración de
+> producción, retención y recuperación ante pérdida siguen pendientes. Las decisiones locales de
+> cancelación, cambios de unidad y columnas de Sheets están registradas en
+> [development-decisions.md](./docs/development-decisions.md) y deben ratificarse con Operaciones
+> antes de un cutover. Esta lista no afirma que cada decisión de producto siga sin resolverse.
 
 1. Definir qué ocurre en Google Sheets al cancelar una orden ya sincronizada.
 2. Definir qué ocurre cuando un administrador cambia una unidad después de asignarla.

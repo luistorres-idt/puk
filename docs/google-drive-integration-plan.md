@@ -1,10 +1,16 @@
 # Plan de integración con Google Drive
 
-**Estado:** integración implementada en la rama local y trazada en [la issue #28](https://github.com/luistorres-idt/puk/issues/28). El usuario habilitó Drive API y confirmó que una carga de fotos terminó correctamente en las carpetas esperadas usando su configuración local. Esto valida ese flujo en ese entorno, pero **no** equivale a validar todos los tipos de archivo ni a desplegar o activar Drive en producción. La implementación se contrasta con [`spec.md`](../spec.md).
+**Estado:** implementación integrada y validada en desarrollo, incluida carga de evidencia y lectura privada de archivos; la infraestructura de staging ya configura Drive, pero AWS staging está eliminado y no hay despliegue actual. Producción no está desplegada. La validación local no equivale a una validación operativa en producción. La implementación se contrasta con [`spec.md`](../spec.md).
 
 **Alcance:** almacenar en un Drive compartido las nuevas fotografías de evidencia, firmas y reportes PDF de las órdenes de servicio, con acceso privado desde la aplicación. Los archivos actuales de S3 son exclusivamente de prueba: se pueden descartar y **no se migrarán** a Drive.
 
-**Decisión vigente:** Google Drive compartido es el proveedor previsto para evidencias, firmas y reportes en staging y producción. El adaptador S3 que aún conserva el código es compatibilidad/legado, no una alternativa de despliegue aprobada. La IaC y el script de secretos de staging todavía requieren cambios para que el redeploy implemente esta decisión; ver [staging y despliegue](./staging-and-deployment.md).
+**Decisión vigente:** Google Drive compartido es el proveedor configurado para un futuro staging y el destino previsto para evidencias, firmas y reportes. El adaptador S3 permanece en el código como alternativa técnica/legado; no se provisiona en el stack de staging. AWS staging fue eliminado y no hay recursos actuales; antes de redeploy se deben recrear infraestructura y secretos. Ver [staging y despliegue](./staging-and-deployment.md).
+
+> Las secciones siguientes conservan el diseño y los criterios originales del plan. La implementación
+> de aplicación (carga/lectura privada de evidencias y firmas, generación y almacenamiento de PDF en
+> Drive) está completada e integrada. Lo pendiente es operativo: recrear staging, volver a validar
+> con Drive en ese entorno y definir respaldo/retención para producción. No ejecutar operaciones de
+> AWS ni limpieza de datos como parte de este documento.
 
 ## Resumen de la propuesta
 
@@ -23,7 +29,7 @@
 | Firmas      | La API recibe PNG autenticado, registra la referencia y mantiene una vista previa privada en Drive.                                                                               | Preservar la firma original conforme a la política de retención.                                     |
 | PDF         | El worker genera la versión del reporte y `report-storage.ts` la persiste en Drive.                                                                                               | Comprobar lectura de evidencias/firma, regeneración y descarga privada en Drive.                     |
 
-El adaptador S3 implementa [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y utiliza URLs temporales; Drive usa IDs de archivo, referencias persistidas y autorización propia. Aunque el runtime aún conserva ambos protocolos y el predeterminado técnico es S3, la decisión operativa es seleccionar Drive para staging/producción; las referencias de evidencia, firma y reporte se guardan en PostgreSQL y no deben mezclarse entre proveedores. Los registros antiguos de prueba no requieren migración histórica a Drive.
+El adaptador S3 implementa [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y utiliza URLs temporales; Drive usa IDs de archivo, referencias persistidas y autorización propia. El stack de staging selecciona Drive con `STORAGE_PROVIDER=drive`; el entorno desplegado no existe actualmente. Las referencias de evidencia, firma y reporte se guardan en PostgreSQL y no deben mezclarse entre proveedores. Los registros antiguos de prueba no requieren migración histórica a Drive.
 
 ## Requisitos previos de Google Workspace
 

@@ -4,7 +4,7 @@
 
 Bull Dog Solution es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
 
-PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuente externa de clientes y equipos. Las fotografías, firmas y PDFs viven en el proveedor privado de archivos configurado (Google Drive o almacenamiento de objetos); PostgreSQL conserva únicamente metadatos y referencias.
+PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuente externa de clientes y equipos. Google Drive compartido es el proveedor configurado por la IaC de staging para fotografías, firmas y PDFs; el adaptador de almacenamiento de objetos permanece en el código para compatibilidad/otros entornos. PostgreSQL conserva únicamente metadatos y referencias. Staging AWS está eliminado y producción no tiene infraestructura propia.
 
 ## Diagrama de contexto
 

@@ -2,11 +2,11 @@
 
 Sistema web responsivo para preparar, asignar, ejecutar y auditar órdenes multiservicio de equipos en unidades vehiculares.
 
-> Este README describe el estado objetivo del producto una vez concluido el MVP. La implementación se encuentra organizada en [ROADMAP.md](./ROADMAP.md) y su definición técnica completa está en [SPECS.md](./SPECS.md).
+> Este README resume el producto implementado en la rama actual. [ROADMAP.md](./ROADMAP.md) conserva el seguimiento de trabajo y [SPECS.md](./SPECS.md) la especificación funcional/técnica; para el estado de ejecución y despliegue, consulta la [documentación técnica](./docs/technical/README.md).
 
 La documentación del estado técnico implementado, incluidos los diagramas de arquitectura y entidad-relación, está disponible en [docs/technical/README.md](./docs/technical/README.md).
 
-> **Estado de AWS (2026-09-28):** staging está completamente eliminado. No hay URL ni IP pública ni quedan base de datos, archivos o secretos de staging; los datos anteriores se borraron sin respaldo recuperable. `infra/cdk` describe sólo la arquitectura prevista para un futuro redeploy. Consultá [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) antes de usar los procedimientos de despliegue.
+> **Estado de AWS (2026-10-02):** staging está completamente eliminado. No hay URL ni IP pública ni quedan base de datos, archivos o secretos de staging; los datos anteriores se borraron sin respaldo recuperable. `infra/cdk` describe sólo la arquitectura prevista para un futuro redeploy. Consultá [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) antes de usar los procedimientos de despliegue.
 
 ## Descripción
 
@@ -17,7 +17,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Los técnicos pueden guardar una nota general de ejecución antes del cierre; las notas no se separan por unidad.
 - Google Sheets conserva la autoridad sobre los catálogos de clientes y equipos.
 - PostgreSQL mantiene los datos transaccionales, el historial y el estado de sincronización.
-- Las fotografías, firmas y reportes se almacenan de forma privada mediante el proveedor de archivos configurado. Google Drive está integrado; PostgreSQL conserva únicamente sus referencias y metadatos.
+- Las fotografías, firmas y reportes se almacenan de forma privada en el proveedor configurado. Google Drive compartido está integrado y es el proveedor objetivo de staging; S3 permanece como adaptador alternativo/legado en el código. La infraestructura de staging no está desplegada actualmente.
 
 ## Funcionalidades principales
 
@@ -41,7 +41,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Reporte de diferencias de ID, IMEI, serie o unidad sin bloquear el trabajo.
 - Checklist posterior al servicio para tablero, cristales, accesorios, molduras y carrocería.
 - Estados `Bien`, `Mal` y `No aplica`, con observación obligatoria para elementos en mal estado.
-- Captura de al menos diez fotografías por unidad, distribuidas entre las categorías del checklist.
+- Captura de al menos diez fotografías por unidad; la evidencia es una galería general y no se exige por categoría del checklist.
 - Firma única del cliente y registro del nombre de la persona firmante.
 - Cierre normal con validación integral o cierre simplificado como cita fallida.
 
@@ -50,7 +50,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Access y refresh tokens JWT con rotación y revocación de sesiones.
 - Autorización por rol y pertenencia de la orden.
 - Validación de todas las entradas mediante Valibot.
-- Almacenamiento privado y URLs prefirmadas de corta duración.
+- Almacenamiento privado con autorización; Drive entrega archivos por la API y el adaptador de objetos usa URLs prefirmadas de corta duración.
 - Auditoría de operaciones administrativas y cambios relevantes.
 - Idempotencia, concurrencia optimista y outbox para efectos externos.
 - Logs estructurados con redacción de secretos y datos sensibles.
@@ -206,7 +206,7 @@ En el reporte técnico (`2026`), cuando una orden cuenta con múltiples unidades
    cp .env.example .env
    ```
 
-   > En desarrollo local, las claves y credenciales con marcadores `development-only...` activan automáticamente emuladores en memoria (`DevMockSheetsClient` y claves JWT efímeras), permitiendo probar la plataforma localmente sin dependencias externas obligatorias.
+   > En desarrollo local, los marcadores `development-only...` activan el mock de Google Sheets y claves JWT efímeras. El almacenamiento local se configura por Docker Compose con MinIO; no implica que staging use MinIO.
 
 3. Para trabajar con recarga en caliente, levantar PostgreSQL y MinIO:
 
@@ -232,7 +232,7 @@ En el reporte técnico (`2026`), cuando una orden cuenta con múltiples unidades
    pnpm dev
    ```
 
-La aplicación web queda disponible por defecto en `http://localhost:5173` y la API en `http://localhost:3000`. `VITE_DEV_PORT`, `VITE_API_PROXY_TARGET` y `PORT` permiten usar puertos diferentes sin modificar código. El comando compila primero los contratos compartidos (`@puk/contracts`) antes de levantar ambos servidores en recarga reactiva.
+La aplicación web queda disponible por defecto en `http://localhost:5173` y la API en `http://localhost:3000`. `VITE_DEV_PORT`, `VITE_API_PROXY_TARGET` y `PORT` permiten usar puertos diferentes sin modificar código. El comando compila primero los contratos compartidos (`@puk/contracts`) antes de levantar ambos servidores en recarga reactiva. La interfaz no ofrece modo offline completo: las respuestas autenticadas no se cachean.
 
 Como alternativa, el stack completo compilado se levanta con:
 
