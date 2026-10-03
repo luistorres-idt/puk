@@ -83,7 +83,7 @@ async function logout(): Promise<void> {
           <nav
             v-if="session.user"
             aria-label="Navegación principal"
-            class="hidden items-center gap-2 2xl:flex lg:gap-4"
+            class="hidden items-center gap-2 xl:flex lg:gap-4"
           >
             <template v-if="session.user.orderAccessMode === 'SHARED'">
               <router-link
@@ -161,7 +161,7 @@ async function logout(): Promise<void> {
           <button
             v-if="session.user"
             type="button"
-            class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 2xl:hidden focus:outline-none"
+            class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 xl:hidden focus:outline-none"
             :aria-expanded="isMobileMenuOpen"
             aria-label="Menú principal"
             @click="isMobileMenuOpen = !isMobileMenuOpen"
@@ -193,7 +193,7 @@ async function logout(): Promise<void> {
       <!-- Mobile Navigation Drawer / Dropdown -->
       <div
         v-if="session.user && isMobileMenuOpen"
-        class="app-mobile-menu border-t border-slate-200 bg-white px-4 py-3 shadow-lg 2xl:hidden"
+        class="app-mobile-menu absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 py-3 shadow-lg xl:hidden"
       >
         <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
           <div>
