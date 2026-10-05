@@ -65,4 +65,24 @@ describe('Drive upload idempotency headers', () => {
     expect(preview.signerName).toBe('María O’Neil');
     expect(preview.downloadUrl).toMatch(/^blob:/);
   });
+
+  it('uploads signature successfully in insecure contexts where crypto.subtle is undefined', async () => {
+    const originalCrypto = globalThis.crypto;
+    vi.stubGlobal('crypto', {
+      ...originalCrypto,
+      subtle: undefined,
+    });
+
+    vi.mocked(api.put).mockResolvedValue({ data: { data: { id: 'signature-insecure' } } });
+    const blob = new Blob([Uint8Array.from([4, 5, 6])], { type: 'image/png' });
+
+    const result = await uploadSignatureFile('order-2', 'Client Insecure', blob);
+    expect(result).toEqual({ id: 'signature-insecure' });
+
+    const callHeaders = vi.mocked(api.put).mock.calls.at(-1)?.[2]?.headers;
+    expect(callHeaders?.['X-Signer-Name']).toBe('Client Insecure');
+    expect(callHeaders?.['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/);
+
+    vi.unstubAllGlobals();
+  });
 });

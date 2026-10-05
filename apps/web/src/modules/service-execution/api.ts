@@ -12,6 +12,7 @@ import type {
 } from '@puk/contracts';
 import { api, type ApiResponse } from '../../shared/http/client.js';
 import { generateUuid } from '@/shared/utils/uuid.js';
+import { computeBlobDigest } from '@/shared/utils/digest.js';
 
 export type { ApiResponse };
 
@@ -146,8 +147,7 @@ export async function getEvidenceUrl(evidenceId: string) {
 }
 
 export async function uploadSignatureFile(orderId: string, signerName: string, blob: Blob) {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
-  const checksum = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const checksum = await computeBlobDigest(blob);
   const retryKey = `puk:signature-upload:${orderId}:${signerName.trim()}:${checksum}`;
   let storedKey: string | null = null;
   try {
