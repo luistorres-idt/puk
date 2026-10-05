@@ -255,8 +255,10 @@ test('seeds two admin accounts with separate password hashes and no credential u
         user: {
           upsert: async (args) => {
             userUpserts.push(args);
+            return { id: '00000000-0000-4000-8000-000000000001' };
           },
         },
+        order: { upsert: async () => {} },
         $disconnect: async () => {
           disconnected = true;
         },
@@ -290,7 +292,17 @@ test('keeps the default internal admin email when local seed overrides are absen
             name: 'Fixture technician',
           }),
         },
-        user: { upsert: async (args) => userUpserts.push(args) },
+        user: {
+          upsert: async (args) => {
+            userUpserts.push(args);
+            return { id: '00000000-0000-4000-8000-000000000001' };
+          },
+        },
+        order: {
+          upsert: async () => {
+            throw new Error('Non-test DB must not receive fixtures');
+          },
+        },
         $disconnect: async () => {},
       }),
       hashPassword: async () => 'fixture-hash',
@@ -300,4 +312,39 @@ test('keeps the default internal admin email when local seed overrides are absen
   const internalAdmin = userUpserts.find(({ create }) => create.role === 'ADMIN');
   assert.equal(internalAdmin?.create.email, 'admin@staging.invalid');
   assert.equal(userUpserts.filter(({ create }) => create.role === 'ADMIN').length, 1);
+});
+
+test('seeds one repeatable order and unit only for puk_test', async () => {
+  let orderUpsert;
+  let connectedUrl;
+  await seedUsers(
+    { TEST_DATABASE_URL: 'postgresql://fixture.invalid/puk_test', NODE_ENV: 'test' },
+    {
+      createPrismaClient: (url) => {
+        connectedUrl = url;
+        return {
+          technician: {
+            upsert: async () => ({
+              id: '00000000-0000-4000-8000-000000000002',
+              name: 'Fixture technician',
+            }),
+          },
+          user: { upsert: async () => ({ id: '00000000-0000-4000-8000-000000000001' }) },
+          order: {
+            upsert: async (args) => {
+              orderUpsert = args;
+            },
+          },
+          $disconnect: async () => {},
+        };
+      },
+      hashPassword: async () => 'fixture-hash',
+    },
+  );
+
+  assert.equal(connectedUrl, 'postgresql://fixture.invalid/puk_test');
+  assert.equal(orderUpsert.where.id, '00000000-0000-4000-8000-000000000003');
+  assert.equal(orderUpsert.create.technicianId, '00000000-0000-4000-8000-000000000002');
+  assert.equal(orderUpsert.create.createdById, '00000000-0000-4000-8000-000000000001');
+  assert.equal(orderUpsert.create.units.create.serialNumber, 'TEST-SEED-SERIAL-001');
 });

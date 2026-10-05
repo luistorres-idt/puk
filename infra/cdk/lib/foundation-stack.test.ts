@@ -38,6 +38,8 @@ function assertDeployTrust(template: Template, providerArn: unknown): void {
 
 test('creates a native GitHub OIDC provider by default without thumbprints', () => {
   const template = foundationTemplate();
+  template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+  assert.doesNotMatch(JSON.stringify(template.toJSON()), /LoadBalancerSecurityGroup/);
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
   template.hasResourceProperties('AWS::IAM::Policy', {
     PolicyDocument: Match.objectLike({

@@ -10,7 +10,7 @@
     "docs:build": "pnpm build && node dist/docs/build-openapi.js",
     "docs:validate": "pnpm build && node dist/docs/validate-openapi.js",
     "start": "node dist/server.js",
-    "test": "vitest run",
+    "test": "node --import dotenv/config ./node_modules/vitest/vitest.mjs run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -11,8 +11,13 @@ export async function seedUsers(
   dependencies: SeedDependencies = seedPrisma,
 ): Promise<void> {
   const databaseUrl =
-    environment['DIRECT_URL'] ?? environment['DATABASE_URL'] ?? buildDatabaseUrl(environment);
-  if (databaseUrl === undefined) throw new Error('DIRECT_URL or DATABASE_URL is required.');
+    environment['TEST_DATABASE_URL'] ??
+    environment['DIRECT_URL'] ??
+    environment['DATABASE_URL'] ??
+    buildDatabaseUrl(environment);
+  if (databaseUrl === undefined) {
+    throw new Error('TEST_DATABASE_URL, DIRECT_URL, or DATABASE_URL is required.');
+  }
 
   const adminEmail = (environment['SEED_ADMIN_EMAIL'] ?? 'admin@staging.invalid')
     .trim()
@@ -53,7 +58,7 @@ export async function seedUsers(
       where: { id: '00000000-0000-4000-8000-000000000002' },
     });
 
-    await prisma.user.upsert({
+    const admin = await prisma.user.upsert({
       create: {
         email: adminEmail,
         name: 'Administrador de desarrollo',
@@ -88,6 +93,32 @@ export async function seedUsers(
       update: {},
       where: { email: environment['SEED_TECHNICIAN_EMAIL'] ?? 'technician@example.invalid' },
     });
+
+    if (isTestDatabase(databaseUrl, environment)) {
+      await prisma.order.upsert({
+        where: { id: '00000000-0000-4000-8000-000000000003' },
+        update: {},
+        create: {
+          id: '00000000-0000-4000-8000-000000000003',
+          folio: 'TEST-SEED-001',
+          serviceType: 'INSTALLATION',
+          status: 'DRAFT',
+          clientSheetId: 'TEST-SEED-CLIENT',
+          clientNameSnapshot: 'Cliente de pruebas',
+          technicianId: technician.id,
+          technicianNameSnapshot: technician.name,
+          scheduledAt: new Date('2026-01-15T17:00:00.000Z'),
+          createdById: admin.id,
+          units: {
+            create: {
+              label: 'Unidad de prueba',
+              makeModel: 'Modelo de prueba',
+              serialNumber: 'TEST-SEED-SERIAL-001',
+            },
+          },
+        },
+      });
+    }
   } finally {
     await prisma.$disconnect();
   }
@@ -119,6 +150,25 @@ interface SeedPrismaClient {
       create: SeedUserCreate;
       update: Record<string, never>;
       where: { email: string };
+    }): Promise<{ id: string }>;
+  };
+  order: {
+    upsert(args: {
+      create: {
+        id: string;
+        folio: string;
+        serviceType: 'INSTALLATION';
+        status: 'DRAFT';
+        clientSheetId: string;
+        clientNameSnapshot: string;
+        technicianId: string;
+        technicianNameSnapshot: string;
+        scheduledAt: Date;
+        createdById: string;
+        units: { create: { label: string; makeModel: string; serialNumber: string } };
+      };
+      update: Record<string, never>;
+      where: { id: string };
     }): Promise<unknown>;
   };
   $disconnect(): Promise<void>;
@@ -151,4 +201,16 @@ function buildDatabaseUrl(environment: NodeJS.ProcessEnv): string | undefined {
 
   const sslQuery = sslMode ? `&sslmode=${encodeURIComponent(sslMode)}` : '';
   return `postgresql://${encodeURIComponent(user!)}:${encodeURIComponent(password!)}@${host}:${port}/${encodeURIComponent(database!)}?schema=public${sslQuery}`;
+}
+
+function isTestDatabase(databaseUrl: string, environment: NodeJS.ProcessEnv): boolean {
+  try {
+    const databaseName = new URL(databaseUrl).pathname.replace(/^\//, '').split('/')[0];
+    return (
+      databaseName === 'puk_test' ||
+      (environment['SEED_TEST_DATA'] === 'true' && environment['NODE_ENV'] === 'test')
+    );
+  } catch {
+    return false;
+  }
 }

@@ -1,27 +1,38 @@
 # Infraestructura y operación
 
-**Estado documentado:** 2026-10-02
+**Estado documentado:** 2026-10-05
 
-**Fuente de verdad:** `infra/cdk`, `docker-compose.yml`, `infra/docker` y `.github/workflows`
+**Fuentes:** inventario AWS verificado el 2026-10-05 para el estado activo; `infra/cdk`,
+`docker-compose.yml`, `infra/docker` y `.github/workflows` para la configuración declarada.
 
-Este documento distingue la arquitectura declarada por CDK de los recursos actualmente desplegados. **Al 2026-10-02 no existe infraestructura de staging en AWS**: se eliminaron los stacks de aplicación, foundation y `CDKToolkit`, además de los recursos asociados. No hay URL ni IP de staging, base de datos, archivos ni secretos disponibles.
+Staging está activo en la cuenta `075566976700`, región `us-east-2`: los stacks
+`PukStagingFoundation` y `PukStagingApplication` existen, ECS ejecuta una tarea en EC2 `t3.small`
+y RDS es independiente del host. La IPv4 observada es `18.222.63.51`, efímera. El secreto runtime
+`puk/staging/runtime` existe. Una validación segura de presencia confirmó los cuatro campos de
+Sheets y la ausencia de los tres campos de Drive, sin mostrar valores. No se inspeccionaron datos
+de RDS.
 
-La base de datos anterior y sus respaldos automáticos se eliminaron sin snapshot final; el bucket y sus versiones se vaciaron y eliminaron, y también se eliminó el secreto runtime. **Los datos anteriores no son recuperables.** Los diagramas y detalles siguientes describen la arquitectura objetivo que `infra/cdk` volvería a crear, no recursos vivos. Producción no tiene stacks CDK propios.
+**Diferencia pendiente:** la revisión de tarea 14 todavía usa S3; la IaC local selecciona Drive.
+El bucket `EvidenceBucket` sigue referenciado por la aplicación. La consulta de versiones del
+2026-10-05 devolvió cero versiones y marcadores de borrado, sin paginación pendiente; no habilita
+su eliminación mientras siga siendo un consumidor activo. La sincronización espera configuración
+segura y validación de los recursos de Google de pruebas. No se han eliminado datos ni recursos
+como parte de esta sincronización. Producción no tiene stacks CDK propios.
 
 ## Ambientes
 
-| Ambiente                  | Implementación actual                                                                                                       | Persistencia                    | Entrada                                           |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------- |
-| Desarrollo con hot reload | Vite y API en el host; PostgreSQL y MinIO en Docker Compose                                                                 | Volúmenes locales               | `http://localhost:5173` y `http://localhost:3000` |
-| Desarrollo compilado      | Contenedores `web`, `api`, `postgres`, `minio` y `minio-init`                                                               | Volúmenes locales               | `http://localhost:4173` y `http://localhost:3000` |
-| Staging                   | No desplegado; `infra/cdk` define ECS sobre EC2, RDS privado, almacenamiento de archivos, Secrets Manager y CloudWatch Logs | No hay recursos ni datos en AWS | Sin URL ni IP                                     |
-| Producción                | No implementado como IaC en la rama actual                                                                                  | Por definir                     | Por definir                                       |
+| Ambiente                  | Implementación actual                                                                     | Persistencia           | Entrada                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------- |
+| Desarrollo con hot reload | Vite y API en el host; PostgreSQL y MinIO en Docker Compose                               | Volúmenes locales      | `http://localhost:5173` y `http://localhost:3000` |
+| Desarrollo compilado      | Contenedores `web`, `api`, `postgres`, `minio` y `minio-init`                             | Volúmenes locales      | `http://localhost:4173` y `http://localhost:3000` |
+| Staging                   | ECS sobre EC2 activo; RDS privado, S3, Secrets Manager y CloudWatch Logs; Drive pendiente | RDS y bucket existente | `http://18.222.63.51` (IPv4 efímera)              |
+| Producción                | No implementado como IaC en la rama actual                                                | Por definir            | Por definir                                       |
 
-## Arquitectura objetivo de staging en AWS (no desplegada)
+## Arquitectura de staging en AWS: estado activo y configuración objetivo
 
 ### Vista de despliegue
 
-> **Diagrama objetivo de IaC:** representa lo que CDK provisionaría en un redeploy; actualmente no hay stacks ni recursos de staging.
+> **Topología declarada por IaC:** el cómputo ECS sobre EC2 está activo. El almacenamiento activo es S3; Drive es el cambio pendiente, no una integración ya validada.
 
 ```mermaid
 flowchart TB
@@ -34,8 +45,8 @@ flowchart TB
             IGW[Internet Gateway]
 
             subgraph Public[Subredes públicas]
-                EC2[ECS-optimized AL2023<br/>t3a.medium - 1 host]
-                subgraph Task[Tarea ECS EC2 - bridge - 1 vCPU / 2 GiB]
+                EC2[ECS-optimized AL2023<br/>t3.small - 1 host]
+                subgraph Task[Tarea ECS EC2 - bridge - 1 vCPU / 1792 MiB]
                     Migration[migration<br/>Prisma migrate y seed]
                     API[api<br/>Express puerto 3000]
                     Web[web<br/>Nginx puerto 80]
@@ -67,7 +78,7 @@ flowchart TB
     CFN --> VPC
 ```
 
-El diagrama muestra la topología que CDK define para redeploy: subredes públicas, privadas para aplicación y privadas aisladas, una por zona de disponibilidad; un Auto Scaling Group fijo con una instancia EC2 `t3a.medium` en subred pública y una IPv4 efímera; HTTP directo por el puerto 80; sin NAT Gateway, Elastic IP, ALB ni CloudFront. Nginx enruta internamente al API y RDS queda en subredes privadas aisladas.
+El diagrama muestra la topología definida por CDK: subredes públicas, privadas para aplicación y privadas aisladas, una por zona de disponibilidad; un Auto Scaling Group fijo con una instancia EC2 `t3.small` en subred pública y una IPv4 efímera; HTTP directo por el puerto 80; sin NAT Gateway, Elastic IP, ALB ni CloudFront. Nginx enruta internamente al API y RDS queda en subredes privadas aisladas.
 
 ### Recorrido de una solicitud
 
@@ -90,7 +101,7 @@ El host EC2 recibe IPv4 pública efímera para conexiones entrantes y salientes 
 
 ### Tarea ECS sobre EC2 y orden de arranque
 
-> **Diagrama objetivo de IaC:** el orden descrito corresponde a una futura tarea; no hay tarea ECS corriendo mientras staging esté eliminado.
+> **Orden definido por IaC:** la API y web están ejecutándose en la tarea activa; la migración es un contenedor que termina antes de la API.
 
 ```mermaid
 flowchart LR
@@ -116,23 +127,28 @@ Los tres contenedores comparten la tarea; ECS la ejecuta en modo `bridge` dentro
 - `api` es esencial y expone el puerto 3000. Su health check interno consulta `/health/live`.
 - `web` es esencial y expone el puerto 80. Sólo inicia cuando la API está saludable.
 - El servicio usa `desiredCount: 1` en un ASG de capacidad fija (mínimo/máximo/deseado 1). El despliegue usa 0 % mínimo y 100 % máximo para detener la tarea anterior antes de iniciar la nueva: hay una interrupción breve durante cada despliegue y no se garantiza alta disponibilidad ante falla del host.
-- El host es `t3a.medium` con CPU credits en modo `standard`: se limita el costo inesperado de créditos surplus, a cambio de que el rendimiento de CPU pueda bajar al agotarse el balance bajo carga sostenida.
+- El host es `t3.small` con CPU credits en modo `standard`: se limita el costo inesperado de créditos surplus, a cambio de que el rendimiento de CPU pueda bajar al agotarse el balance bajo carga sostenida.
 
 La migración dentro de cada tarea mantiene el orden de arranque, pero con más de una tarea podría ejecutar migraciones o seed de forma concurrente. Antes de escalar horizontalmente se debe convertir la migración en un job único por despliegue o comprobar explícitamente su idempotencia y bloqueo.
 
 ### Persistencia
 
-| Recurso                    | Configuración definida en CDK (no desplegada)                                                                         | Política IaC al eliminar en el futuro |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| RDS PostgreSQL 17          | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection        |
-| Almacenamiento de archivos | Google Drive compartido para evidencias, firmas y reportes; S3 no se provisiona en staging                            | No aplica                             |
-| Logs                       | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                              |
+| Recurso                    | Configuración declarada / diferencia activa                                                                           | Política IaC al eliminar en el futuro                |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| RDS PostgreSQL 17          | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection                       |
+| Almacenamiento de archivos | S3 en la revisión activa; Google Drive compartido pendiente de configuración y despliegue                             | Conservar archivos y bucket hasta validar transición |
+| Logs                       | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                                             |
 
-La decisión de producto es usar Google Drive compartido para evidencias, firmas y reportes; PostgreSQL conserva sólo referencias y metadatos. El código aún conserva un adaptador S3 alternativo para compatibilidad, pero la IaC selecciona `STORAGE_PROVIDER=drive`, no crea buckets S3 ni agrega permisos S3 al task role. El secreto runtime se configura con credenciales de Drive dedicadas (`GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY`, `GOOGLE_DRIVE_SHARED_DRIVE_ID`), independientes de la cuenta de servicio de Sheets. **Los recursos y datos previos fueron eliminados expresamente y no existen respaldos recuperables**. La política de negocio y el respaldo independiente siguen pendientes antes de producción.
+El objetivo de producto es usar una unidad compartida de Google Drive para evidencias, firmas y
+reportes; PostgreSQL conserva referencias y metadatos. La IaC local selecciona
+`STORAGE_PROVIDER=drive`, no declara buckets ni permisos S3 nuevos, y requiere los tres campos
+`GOOGLE_DRIVE_*`. La revisión desplegada sigue usando S3. Conservar bucket, referencias y permisos
+necesarios hasta validar el reemplazo; cambiar de proveedor no migra archivos existentes.
+La política de respaldo independiente sigue pendiente antes de producción.
 
 ### Stacks CDK
 
-> **Diagrama objetivo de IaC:** describe dependencias de futuros stacks. Los stacks Foundation y Application ya fueron eliminados.
+> **Dependencias entre stacks existentes:** revisar los exports consumidos antes de desplegar cualquier limpieza.
 
 ```mermaid
 flowchart LR
@@ -142,7 +158,7 @@ flowchart LR
         V[VPC y subredes]
         SG[Security groups]
         DB[RDS y secreto generado]
-        B[Almacenamiento de archivos]
+        B[Bucket S3 activo - transición pendiente]
         RS[Referencia a secreto runtime]
         Role[Rol OIDC para GitHub]
     end
@@ -160,30 +176,46 @@ flowchart LR
     RS --> C
 ```
 
-En un redeploy, `PukStagingApplication` recibe referencias del stack foundation, por lo que CDK crea dependencias y exports de CloudFormation. Foundation concentrará recursos con estado o compartidos; Application concentrará cómputo. Esta separación reduce el riesgo al reemplazar la capa de aplicación, aunque el stack foundation no activa `terminationProtection` a nivel de CloudFormation.
+`PukStagingApplication` recibe referencias del stack Foundation, por lo que CDK crea dependencias y exports de CloudFormation. Foundation concentra recursos con estado o compartidos; Application concentra cómputo. Esta separación reduce el riesgo al reemplazar la capa de aplicación, aunque el stack foundation no activa `terminationProtection` a nivel de CloudFormation.
 
-La definición CDK conserva una referencia a un security group legado del ALB para compatibilidad de actualización entre stacks; el redeploy objetivo no crea ALB ni CloudFront, y dicho grupo no procesa tráfico. Esa referencia no significa que el grupo siga desplegado: el stack Foundation también fue eliminado. Su limpieza en IaC debe hacerse en dos pasos coordinados para no dejar una exportación consumida.
+La IaC conserva una referencia a un security group legado del ALB para compatibilidad entre
+stacks. No hay ALB ni NAT Gateway en el inventario regional consultado. Tanto esa referencia
+como los exports S3 requieren limpieza ordenada: preservar el recurso/export original mientras
+Application lo consuma, actualizar primero el consumidor y retirar después sólo lo que quede sin
+uso. El diff actual de Foundation elimina exports S3 aún consumidos y modifica la política del bucket.
+Con Drive configurado y validado, desplegar primero Application con `cdk deploy
+PukStagingApplication --exclusively` desde `infra/cdk`, sin actualizar Foundation como dependencia;
+no empezar con `deploy --all`. Después de liberar imports y validar la aplicación, actualizar
+Foundation. No borrar datos como atajo; volver a comprobar versiones y marcadores de borrado antes
+de considerar el bucket vacío como candidato a limpieza.
 
 No se deben renombrar construct IDs ni mover recursos persistentes sin revisar primero `pnpm infra:diff`: un cambio de logical ID puede provocar reemplazo. Tampoco se debe eliminar un export del stack foundation mientras Application lo consuma.
 
-### Identidades y configuración de ejecución previstas para redeploy
+### Identidades y configuración de ejecución
 
-- En un redeploy, RDS generará credenciales en Secrets Manager y ECS las inyectará en `migration` y `api` al iniciar la tarea.
-- El secreto runtime `puk/staging/runtime` debe volver a crearse con el script seguro existente; el secreto anterior fue eliminado.
-- El runtime recibe `STORAGE_PROVIDER=drive` desde CDK y requiere credenciales dedicadas `GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY` y `GOOGLE_DRIVE_SHARED_DRIVE_ID`. El script `configure-staging-secrets.mjs` exige y guarda esos campos junto con los valores de Sheets, sin imprimirlos. No se deben reutilizar las credenciales de Sheets de forma implícita.
-- Foundation volverá a crear el rol GitHub OIDC `puk-staging-github-deploy`, limitado a la rama `main` del repositorio configurado.
-- Las variables no sensibles del runtime se definen en el task definition.
+- ECS inyecta credenciales de RDS desde su secreto generado al iniciar `migration` y `api`.
+- El secreto runtime existente es `puk/staging/runtime` en Secrets Manager, `us-east-2`.
+- La revisión activa contiene referencias de Sheets. El cambio local a Drive agrega
+  `GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY` y `GOOGLE_DRIVE_SHARED_DRIVE_ID`;
+  requiere configurar y verificar una identidad y una unidad compartida de pruebas.
+- Las identidades de Sheets y Drive pueden ser distintas; no inferir ni reutilizar sus claves
+  automáticamente. Permisos IAM de Google Cloud no sustituyen compartir los recursos de Workspace.
+- La IaC define el rol OIDC `puk-staging-github-deploy`, limitado a `main` del repositorio configurado.
+- Las variables no sensibles se definen en el task definition; nombres de pestañas y
+  `STORAGE_PROVIDER` no cambian editando sólo los IDs en Secrets Manager.
 
-La administración o lectura de valores sensibles debe realizarse mediante el procedimiento seguro aprobado por el equipo. Este documento sólo describe sus referencias y consumidores.
+El procedimiento completo de cuentas de servicio, IDs, permisos y actualización parcial está en
+[Configurar Sheets y Drive](../staging-and-deployment.md#dónde-configurar-sheets-y-drive).
+No copiar claves o archivos JSON a chat, logs, tickets ni Git.
 
-### Observabilidad definida para redeploy
+### Observabilidad
 
-Esta sección describe la configuración que CDK aplicará en un redeploy; no hay cluster, host ni grupos de logs actualmente desplegados.
+Esta sección describe los checks y logs definidos por la IaC y la aplicación; no valida por sí sola el acceso a Google.
 
 - ECS Container Insights está deshabilitado en el cluster `puk-staging` para evitar métricas adicionales; permanecen disponibles los health checks y logs de CloudWatch.
 - El host usa ECS-optimized Amazon Linux 2023 x86_64, no expone SSH y acepta HTTP público sólo por TCP/80. No tiene Elastic IP; si la instancia se reemplaza, cambia su IPv4 pública de acceso y egreso.
 - `GET /health/live` comprueba que el proceso de API responda.
-- `GET /health/ready` comprueba conectividad con PostgreSQL y se usa en el smoke test.
+- `GET /health/ready` comprueba sólo conectividad con PostgreSQL y se usa en el smoke test. No prueba Sheets, autenticación de Google ni permisos de Drive; validarlos por separado.
 - `GET /metrics` expone métricas Prometheus, pero el CDK no crea un scraper, alarmas ni dashboards.
 - `GET /health/metrics` ofrece un snapshot JSON desde la aplicación.
 - Los logs de migración, API y web se envían a grupos separados de CloudWatch Logs con retención de un mes.
@@ -191,7 +223,7 @@ Esta sección describe la configuración que CDK aplicará en un redeploy; no ha
 
 ## Integración y despliegue continuo
 
-> **Diagrama objetivo de IaC:** el workflow no podrá desplegar hasta recrear CDKToolkit, los stacks y el secreto runtime.
+> **Workflow declarado:** el valor actual de `AWS_STAGING_READY` no se verificó ni modificó. Resolver configuración de Google y exports entre stacks antes de habilitar despliegues automáticos.
 
 ```mermaid
 sequenceDiagram
@@ -228,21 +260,22 @@ despliega la revisión que pasó las validaciones. Un despliegue manual de asset
 registrar explícitamente el SHA de Git, la revisión de ECS y el operador para conservar la
 trazabilidad de release.
 
-### Recreación de secretos y operación posterior a redeploy
+### Actualización de secretos y operación
 
-El secreto `puk/staging/runtime` fue eliminado junto con el ambiente. Para crearlo de nuevo, primero
-despliegue Foundation y después use el script local con sus entradas válidas, sin imprimir valores:
+Para cambiar IDs o una cuenta de servicio, usar la consola de Secrets Manager y editar únicamente
+los campos de Google de `puk/staging/runtime`, preservando todos los campos `JWT_*`, `SEED_*` y
+cualquier otro valor existente. La [guía de staging](../staging-and-deployment.md#declarar-una-nueva-cuenta-de-servicio-de-pruebas)
+explica el mapeo del JSON y los permisos de los documentos y la unidad compartida.
 
-```bash
-AWS_REGION=us-east-2 node --env-file=.env infra/scripts/configure-staging-secrets.mjs
-```
+**No usar `configure-staging-secrets.mjs --overwrite` para cambios parciales:** reemplaza el
+contenido completo y regenera claves JWT y contraseñas del seed. El comando sin `--overwrite`
+rechaza el secreto existente y sólo es apropiado para creación inicial. Nunca mostrar claves en
+terminal, chat, tickets o logs. Una nueva versión del secreto no actualiza tareas ya iniciadas:
+requiere despliegue nuevo. La primera activación de Drive también necesita el task definition
+actualizado desde IaC, no sólo reiniciar la revisión 14.
 
-El script configura valores nuevos; no restaura ni revela valores anteriores. Nunca muestres
-secretos en terminal, logs, tickets o chat. Una nueva versión no cambia tareas ya iniciadas: fuerza
-un nuevo despliegue o reinicio para que `migration` y `api` reciban los valores actualizados.
-Rotar claves JWT invalida tokens firmados con claves anteriores y puede cerrar sesiones activas.
-
-Sólo después de recrear el ambiente, use estos diagnósticos de sólo lectura para un incidente:
+Con una sesión y destino autorizados, estos diagnósticos son de sólo lectura; no copiar información
+sensible que pudiera aparecer en logs:
 
 ```bash
 aws cloudformation describe-stacks --region us-east-2 --stack-name PukStagingApplication
@@ -250,21 +283,23 @@ aws ecs describe-services --region us-east-2 --cluster puk-staging --services <s
 aws ecs list-tasks --region us-east-2 --cluster puk-staging --service-name <service-name>
 aws logs tail /puk/staging/migration --region us-east-2 --since 30m
 aws logs tail /puk/staging/api --region us-east-2 --since 30m
-```
-
-Valide la URL resultante sin exponer configuración:
-
-```bash
 TARGET_URL="http://<ipv4-publica-actual>" ./infra/scripts/smoke-test.sh
 ```
 
-Después de redeploy, el script comprueba `/health/live`, `/health/ready`, `/metrics` y `/docs/`. Si falla la migración,
-la API no inicia; conserve logs y revise la migración antes de reintentar. El circuit breaker de
-ECS está configurado para rollback de la aplicación. En un redeploy, `RETAIN` protegerá algunos
-recursos frente a eliminación del stack; no es un respaldo ni recupera los datos anteriores. No hay
-recursos de staging que generen costos actualmente. Después de redeploy, RDS, el host EC2 siempre
-encendido, EBS y su IPv4 pública generarán costos incluso sin tráfico. No presuponga que existan
-backups o contenido histórico.
+Consultar siempre la IPv4 actual con el procedimiento de la guía de staging. Antes de desplegar
+Drive, verificar lectura de las pestañas de pruebas y metadatos de la unidad compartida con las
+cuentas de servicio mediante un mecanismo seguro. Después, ejecutar smoke y pruebas funcionales
+con archivos y filas sintéticos. El smoke sólo comprueba `/health/live`, `/health/ready`,
+`/metrics` y `/docs/`; no certifica la integración con Google.
+
+Si falla la migración, la API no inicia; conservar logs y evaluar la migración antes de reintentar.
+El circuit breaker de ECS puede revertir la aplicación, pero no restaura automáticamente RDS.
+`RETAIN` protege algunos recursos al eliminar un stack; no es un backup. Usar sólo respaldos
+verificados y autorización operativa para restaurar o decidir el destino de datos.
+
+RDS, EC2, EBS, la IPv4 pública y los servicios asociados pueden generar costos incluso sin
+tráfico. La limpieza debe limitarse a recursos sin consumidores, después de validar Drive y
+revisar los exports entre stacks; no eliminar datos o el bucket para resolver una actualización.
 
 ## Desarrollo local
 
@@ -322,17 +357,18 @@ Los Dockerfiles son multi-stage. La imagen de API se ejecuta como usuario `node`
 
 ## Variables de entorno
 
-| Grupo             | Variables principales                                                                                             |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
-| HTTP              | `PORT`, `APP_ORIGIN`, `API_ORIGIN`, `TRUST_PROXY`                                                                 |
-| Base de datos     | `DATABASE_URL`, `DIRECT_URL` o variables `PUK_DATABASE_*` en ECS                                                  |
-| JWT               | Claves pública y privada, `JWT_ISSUER`, `JWT_AUDIENCE`, TTLs                                                      |
-| Cookies           | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`                                                              |
-| S3 (legado/local) | Endpoint, región, bucket, credenciales locales y path style; no es el proveedor declarado para staging/producción |
-| Sheets            | Spreadsheet, cuenta de servicio, clave privada y pestañas                                                         |
-| Límites           | Tamaños de evidencia y firma, TTL de URLs, caché                                                                  |
-| Resiliencia       | Timeouts, reintentos, circuit breaker y polling                                                                   |
-| Seed              | Correos y contraseña inicial                                                                                      |
+| Grupo             | Variables principales                                                                                     |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| HTTP              | `PORT`, `APP_ORIGIN`, `API_ORIGIN`, `TRUST_PROXY`                                                         |
+| Base de datos     | `DATABASE_URL`, `DIRECT_URL` o variables `PUK_DATABASE_*` en ECS                                          |
+| JWT               | Claves pública y privada, `JWT_ISSUER`, `JWT_AUDIENCE`, TTLs                                              |
+| Cookies           | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`                                                      |
+| S3 (legado/local) | Endpoint, región, bucket, credenciales locales y path style; activo en revisión 14, Drive es objetivo IaC |
+| Drive             | Cuenta de servicio, clave privada e ID de unidad compartida (`GOOGLE_DRIVE_*`)                            |
+| Sheets            | Spreadsheet, cuenta de servicio, clave privada y pestañas                                                 |
+| Límites           | Tamaños de evidencia y firma, TTL de URLs, caché                                                          |
+| Resiliencia       | Timeouts, reintentos, circuit breaker y polling                                                           |
+| Seed              | Correos y contraseña inicial                                                                              |
 
 La API valida su configuración al arrancar. Los valores `development-only` activan adaptadores simulados fuera de producción y nunca deben usarse en producción.
 
@@ -362,17 +398,17 @@ La guía operativa y el primer despliegue están en [staging-and-deployment.md](
 
 ## Evaluación para producción
 
-La arquitectura de staging definida en IaC prioriza costo y simplicidad, pero no está desplegada.
-La tabla compara esa configuración objetivo con el trabajo pendiente antes de producción:
+La arquitectura de staging prioriza costo y simplicidad. El cómputo está activo; Drive es una
+transición pendiente. La tabla compara la configuración objetivo con el trabajo previo a producción:
 
-| Pilar          | Configuración objetivo de IaC (no desplegada)                                                                | Trabajo pendiente                                                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Seguridad      | RDS cifrado; Google Drive privado; host con HTTP público; OIDC en CI; sin recursos ni permisos S3 en staging | Configurar dominio y TLS; limitar ingreso; definir controles de Workspace; agregar WAF según riesgo; auditar permisos con cdk-nag |
-| Confiabilidad  | Dos AZ para subredes; rollback de ECS; política de retención prevista para RDS                               | RDS Multi-AZ; alarmas; estrategia de migración única; restauraciones probadas                                                     |
-| Rendimiento    | Sin CDN ni caché de borde                                                                                    | Autoscaling ECS, pruebas de carga y dimensionamiento de RDS                                                                       |
-| Costos         | Sin NAT; host EC2 único con IPv4 pública y RDS micro                                                         | Presupuestos y alarmas de costo; revisar transferencia e IPv4 públicas                                                            |
-| Operación      | Logs por contenedor y smoke test                                                                             | Dashboards, alarmas, trazas, runbooks y objetivos SLO                                                                             |
-| Sostenibilidad | Contenedores dimensionados explícitamente                                                                    | Medir utilización y ajustar CPU, memoria y retenciones                                                                            |
+| Pilar          | Configuración objetivo de IaC                                                                    | Trabajo pendiente                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Seguridad      | RDS cifrado; Drive privado pendiente; HTTP público; OIDC en CI; S3 aún activo durante transición | Configurar dominio y TLS; limitar ingreso; definir controles de Workspace; agregar WAF según riesgo; auditar permisos con cdk-nag |
+| Confiabilidad  | Dos AZ para subredes; rollback de ECS; política de retención prevista para RDS                   | RDS Multi-AZ; alarmas; estrategia de migración única; restauraciones probadas                                                     |
+| Rendimiento    | Sin CDN ni caché de borde                                                                        | Autoscaling ECS, pruebas de carga y dimensionamiento de RDS                                                                       |
+| Costos         | Sin NAT; host EC2 único con IPv4 pública y RDS micro                                             | Presupuestos y alarmas de costo; revisar transferencia e IPv4 públicas                                                            |
+| Operación      | Logs por contenedor y smoke test                                                                 | Dashboards, alarmas, trazas, runbooks y objetivos SLO                                                                             |
+| Sostenibilidad | Contenedores dimensionados explícitamente                                                        | Medir utilización y ajustar CPU, memoria y retenciones                                                                            |
 
 ## Referencias oficiales AWS
 

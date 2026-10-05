@@ -1,6 +1,9 @@
 .env
 .env.*
 !.env.example
+# Local Google service-account keys
+/puk-drive-text.json
+/puk-excel-test.json
 .DS_Store
 node_modules/
 dist/

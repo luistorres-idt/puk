@@ -14,7 +14,6 @@ import type { Construct } from 'constructs';
 export class PukStagingFoundationStack extends Stack {
   public readonly applicationSecurityGroup: ec2.SecurityGroup;
   public readonly database: rds.DatabaseInstance;
-  public readonly loadBalancerSecurityGroup: ec2.SecurityGroup;
   public readonly runtimeSecret: secretsmanager.ISecret;
   public readonly vpc: ec2.Vpc;
 
@@ -46,14 +45,6 @@ export class PukStagingFoundationStack extends Stack {
       ec2.Port.tcp(80),
       'Public HTTP traffic to the web container',
     );
-    // Keep this cross-stack resource until the application stack has released its old import.
-    this.loadBalancerSecurityGroup = new ec2.SecurityGroup(this, 'LoadBalancerSecurityGroup', {
-      allowAllOutbound: true,
-      description: 'Legacy security group retained for safe cross-stack reference removal',
-      vpc: this.vpc,
-    });
-    this.loadBalancerSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
-
     const databaseSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       allowAllOutbound: false,
       description: 'PostgreSQL access from the PUK staging application only',

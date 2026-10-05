@@ -278,10 +278,5 @@ export class PukStagingApplicationStack extends Stack {
     new CfnOutput(this, 'EcsHostAutoScalingGroupName', {
       value: ecsHostGroup.autoScalingGroupName,
     });
-    // Preserve the old cross-stack export for this first update; remove it only after the
-    // Application stack has deployed and CloudFormation no longer has the legacy import in use.
-    new CfnOutput(this, 'LegacyLoadBalancerSecurityGroupReference', {
-      value: foundation.loadBalancerSecurityGroup.securityGroupId,
-    });
   }
 }
