@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import { App } from 'aws-cdk-lib';
+import { fileURLToPath } from 'node:url';
+import { App, IgnoreStrategy } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { PukStagingApplicationStack } from './application-stack.js';
 import { PukStagingFoundationStack } from './foundation-stack.js';
@@ -82,8 +85,29 @@ test('runs one bridge-mode ECS task on an IMDSv2-protected EC2 host', () => {
   template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 0);
   template.resourceCountIs('AWS::CloudFront::Distribution', 0);
   template.hasOutput('EcsHostAutoScalingGroupName', {});
+  assert.equal(template.toJSON().Outputs.LegacyLoadBalancerSecurityGroupReference, undefined);
+  assert.doesNotMatch(JSON.stringify(template.toJSON()), /LoadBalancerSecurityGroup/);
   template.resourceCountIs('AWS::EC2::EIP', 0);
   template.resourceCountIs('AWS::EC2::NatGateway', 0);
   template.resourceCountIs('AWS::S3::Bucket', 0);
   assert.doesNotMatch(JSON.stringify(template.toJSON()), /s3:(?:Get|Put|Delete|List)/i);
+});
+
+test('excludes local Google keys from Git and Docker assets without excluding package manifests', () => {
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const gitPatterns = readFileSync(join(root, '.gitignore'), 'utf8').split('\n');
+  const dockerPatterns = readFileSync(join(root, '.dockerignore'), 'utf8').split('\n');
+  const strategies = [
+    IgnoreStrategy.git(root, gitPatterns),
+    IgnoreStrategy.docker(root, dockerPatterns),
+    IgnoreStrategy.glob(root, dockerPatterns),
+  ];
+  for (const strategy of strategies) {
+    for (const name of ['puk-drive-text.json', 'puk-excel-test.json']) {
+      assert.equal(strategy.ignores(join(root, name)), true);
+    }
+    for (const name of ['package.json', 'apps/api/package.json', 'infra/cdk/cdk.json']) {
+      assert.equal(strategy.ignores(join(root, name)), false);
+    }
+  }
 });

@@ -2,6 +2,9 @@
 .env
 .env.*
 !.env.example
+# Local Google service-account keys must never enter image assets.
+puk-drive-text.json
+puk-excel-test.json
 **/node_modules
 **/dist
 **/coverage
