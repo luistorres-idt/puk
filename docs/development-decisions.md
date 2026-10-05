@@ -11,6 +11,7 @@ Registro de decisiones temporales tomadas durante el desarrollo. Las decisiones 
 - Cancelar una orden sincronizada no revierte Sheets ni crea una compensación automática; el caso requiere revisión administrativa.
 - Las unidades y equipos solo se modifican mientras la orden permanece en `DRAFT`; una corrección reabre la ejecución, no la configuración de unidades.
 - La columna `K` se actualiza a `INSTALADO` o `STOCK TECNICO` según el resultado. La base local también evita asignaciones concurrentes mientras la orden está activa.
+- Pendiente de decisión de negocio: evaluar si la finalización de una desinstalación (`UNINSTALLATION`) debe escribir `DESINSTALADO` en la columna `K` en lugar de `STOCK TECNICO` (o si se requiere un estado intermedio de transición antes de regresar a stock). Actualmente se preserva la regla de contrato que escribe `STOCK TECNICO` y limpia cliente/unidad.
 - Antes de asignar se fuerza una lectura fresca y se compara la fila actual con el snapshot. Para la columna J (`Cliente`), la comparación aplica `isMatchingClient` y `normalizeString` (insensible a mayúsculas, acentos, espacios y sufijos legales como `S.A. de C.V.`) contra el nombre y el ID del cliente de la orden. Una diferencia de cliente con una empresa ajena produce `409 SHEET_ROW_CONFLICT`.
 
 ## Evidencias

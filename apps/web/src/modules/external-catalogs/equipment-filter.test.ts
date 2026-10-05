@@ -102,6 +102,21 @@ describe('isInstalledEquipment', () => {
     expect(isInstalledEquipment(createMockEquipment({ serviceStatus: 'DISPONIBLE' }))).toBe(false);
     expect(isInstalledEquipment(createMockEquipment({ serviceStatus: null }))).toBe(false);
   });
+
+  it('returns false for uninstalled statuses', () => {
+    expect(isInstalledEquipment(createMockEquipment({ serviceStatus: 'DESINSTALADO' }))).toBe(
+      false,
+    );
+    expect(isInstalledEquipment(createMockEquipment({ serviceStatus: 'DESINSTALADA' }))).toBe(
+      false,
+    );
+    expect(isInstalledEquipment(createMockEquipment({ serviceStatus: 'Desinstalado' }))).toBe(
+      false,
+    );
+    expect(isInstalledEquipment(createMockEquipment({ serviceStatus: '  desinstalado  ' }))).toBe(
+      false,
+    );
+  });
 });
 
 describe('filterEquipmentByServiceType', () => {
@@ -185,6 +200,29 @@ describe('filterEquipmentByServiceType', () => {
     });
 
     expect(result).toEqual([]);
+  });
+
+  it('excludes uninstalled equipment for REVIEW and UNINSTALLATION', () => {
+    const uninstalledEquipment = createMockEquipment({
+      externalKey: 'UNINST-A1',
+      id: 'UNINST-A1',
+      serviceStatus: 'DESINSTALADO',
+      currentClient: 'Transportes Bull Dog S.A. de C.V.',
+      unit: 'Eco-999',
+    });
+    const itemsWithUninstalled = [...allItems, uninstalledEquipment];
+
+    const reviewResult = filterEquipmentByServiceType(itemsWithUninstalled, {
+      serviceType: 'REVIEW',
+      clientName: 'Transportes Bull Dog S.A. de C.V.',
+    });
+    expect(reviewResult.map((e) => e.externalKey)).toEqual(['INST-A1']);
+
+    const uninstResult = filterEquipmentByServiceType(itemsWithUninstalled, {
+      serviceType: 'UNINSTALLATION',
+      clientName: 'Transportes Bull Dog S.A. de C.V.',
+    });
+    expect(uninstResult.map((e) => e.externalKey)).toEqual(['INST-A1']);
   });
 
   it('excludes equipment specified in excludeKeys array', () => {

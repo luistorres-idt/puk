@@ -8,7 +8,7 @@ export { normalizeString, isMatchingClient };
  */
 export function isInstalledEquipment(equipment: ExternalEquipment): boolean {
   const status = normalizeString(equipment.serviceStatus);
-  return status.includes('instalad');
+  return status === 'instalado' || status === 'instalada';
 }
 
 export interface EquipmentFilterOptions {
