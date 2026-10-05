@@ -1,11 +1,12 @@
 import { ref, type Ref } from 'vue';
 import type { ExternalEquipment, OrderServiceType } from '@puk/contracts';
+import { generateUuid } from '@/shared/utils/uuid.js';
 import type { ConfiguredUnitItem } from './configured-order-unit.js';
 
 export function useManualUnitConfiguration(
   configuredUnits: Ref<ConfiguredUnitItem[]>,
   error: Ref<string | null>,
-  generateId: () => string = () => crypto.randomUUID(),
+  generateId: () => string = generateUuid,
 ) {
   const unitForm = ref({
     label: '',
