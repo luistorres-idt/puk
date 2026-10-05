@@ -1,3 +1,5 @@
+import { generateUuid } from '@/shared/utils/uuid.js';
+
 export function createEvidenceUploadRetryKeys() {
   const pendingUploadKeys = new Map<string, string>();
 
@@ -13,7 +15,7 @@ export function createEvidenceUploadRetryKeys() {
     } catch {
       // Private browsing may disable session storage; in-memory retry still works.
     }
-    const key = pendingUploadKeys.get(retryKey) ?? savedKey ?? crypto.randomUUID();
+    const key = pendingUploadKeys.get(retryKey) ?? savedKey ?? generateUuid();
     pendingUploadKeys.set(retryKey, key);
     try {
       sessionStorage.setItem(retryKey, key);

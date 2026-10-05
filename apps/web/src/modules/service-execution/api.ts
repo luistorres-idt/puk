@@ -11,6 +11,7 @@ import type {
   UpdateExecutionNotes,
 } from '@puk/contracts';
 import { api, type ApiResponse } from '../../shared/http/client.js';
+import { generateUuid } from '@/shared/utils/uuid.js';
 
 export type { ApiResponse };
 
@@ -154,7 +155,7 @@ export async function uploadSignatureFile(orderId: string, signerName: string, b
   } catch {
     // Private browsing may disable session storage.
   }
-  const idempotencyKey = pendingSignatureKeys.get(retryKey) ?? storedKey ?? crypto.randomUUID();
+  const idempotencyKey = pendingSignatureKeys.get(retryKey) ?? storedKey ?? generateUuid();
   pendingSignatureKeys.set(retryKey, idempotencyKey);
   try {
     sessionStorage.setItem(retryKey, idempotencyKey);
