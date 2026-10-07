@@ -153,6 +153,74 @@ test('wizard blocks an empty technician directory', async ({ page }) => {
   expect(submitted).toHaveLength(0);
 });
 
+test('ADMIN can register a missing installation equipment without losing the wizard unit', async ({
+  page,
+}) => {
+  await mockApi(page);
+  let registration: Record<string, unknown> | undefined;
+  const inventoryId = '11111111-1111-4111-8111-111111111112';
+  await page.route('**/api/v1/inventory/equipment', async (route) => {
+    registration = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 201,
+      json: {
+        data: {
+          source: 'DB',
+          inventoryEquipmentId: inventoryId,
+          externalKey: `DB:${inventoryId}`,
+          id: inventoryId,
+          imei: '123456789012345',
+          brand: 'GPS',
+          model: 'Nuevo',
+          line: null,
+          iccid: null,
+          carrier: null,
+          condition: null,
+          currentClientSheetId: null,
+          currentClient: null,
+          serviceStatus: 'DISPONIBLE',
+          unit: null,
+          unitMakeModel: null,
+          unitYear: null,
+          unitSerialNumber: null,
+          serviceType: null,
+          rowNumber: 0,
+          hasValidIdentity: true,
+          rawValues: {},
+        },
+        meta: {},
+      },
+    });
+  });
+
+  await page.goto('/orders/new');
+  await page.getByRole('textbox').first().click();
+  await page.getByText('Cliente de prueba (CLIENT-DEMO)', { exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByPlaceholder('ej. Camión 01, T-12...').fill('Unidad Preservada');
+  await page.getByPlaceholder('ej. Kenworth T680').fill('Modelo de unidad');
+  await page.getByPlaceholder('ej. 3AKJH567...').fill('SERIE-PRESERVADA');
+  const registrationButton = page.getByRole('button', { name: 'Registrar equipo nuevo' });
+  await registrationButton.focus();
+  await registrationButton.press('Enter');
+  await page.getByPlaceholder('Marca', { exact: true }).fill('GPS');
+  await page.getByPlaceholder('Modelo', { exact: true }).fill('Nuevo');
+  await page.getByPlaceholder('IMEI', { exact: true }).fill('123456789012345');
+  await page.getByRole('button', { name: 'Guardar equipo' }).press('Enter');
+
+  await expect.poll(() => registration?.['imei']).toBe('123456789012345');
+  expect(registration).toMatchObject({
+    brand: 'GPS',
+    model: 'Nuevo',
+    clientSheetId: 'CLIENT-DEMO',
+    clientName: 'Cliente de prueba',
+    serviceType: 'INSTALLATION',
+  });
+  await expect(page.getByPlaceholder('ej. Camión 01, T-12...')).toHaveValue('Unidad Preservada');
+  await page.getByRole('button', { name: '+ Agregar a Instalación' }).press('Enter');
+  await expect(page.getByText('Unidad Preservada', { exact: true })).toBeVisible();
+});
+
 for (const serviceType of OrderServiceTypeSchema.options) {
   test(`draft detail preserves existing items and allows additions: ${serviceType}`, async ({
     page,
@@ -223,5 +291,5 @@ test('order units tab forwards equipment actions to the parent', async ({ page }
   await expect(page.getByText('Equipo removido de la unidad.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Asignar Equipo' }).click();
-  await expect(page.getByText('Asignar Equipo desde Google Sheets')).toBeVisible();
+  await expect(page.getByText('Asignar Equipo del Catálogo')).toBeVisible();
 });

@@ -1,5 +1,6 @@
 import { toJsonSchema } from '@valibot/to-json-schema';
 import {
+  RegisterEquipmentSchema,
   HealthResponseSchema,
   LoginRequestSchema,
   CreateOrderSchema,
@@ -54,6 +55,27 @@ export const openApiDocument = {
   jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
   openapi: '3.1.0',
   paths: {
+    '/api/v1/inventory/equipment': {
+      post: {
+        operationId: 'registerInventoryEquipment',
+        summary: 'Register administrator-owned database inventory independently of an order',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: toJsonSchema(RegisterEquipmentSchema, schemaConfig) },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Equipment persisted, or the original registration returned on retry.',
+          },
+          '400': { description: 'Required equipment or installed unit context is invalid.' },
+          '403': { description: 'Administrator role required.' },
+          '409': { description: 'Duplicate IMEI or a reused registration key.' },
+          '503': { description: 'Registration paused until Sheets identity checks recover.' },
+        },
+      },
+    },
     '/health/live': {
       get: {
         operationId: 'getLiveness',

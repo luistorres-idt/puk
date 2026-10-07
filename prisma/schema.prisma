@@ -21,6 +21,16 @@ enum OrderServiceType {
   EQUIPMENT_REPLACEMENT
 }
 
+enum EquipmentSource {
+  SHEETS
+  DB
+}
+
+enum InventoryEquipmentState {
+  AVAILABLE
+  INSTALLED
+}
+
 enum OrderStatus {
   DRAFT
   ASSIGNED
@@ -85,26 +95,27 @@ enum ReportStatus {
 }
 
 model User {
-  id                         String           @id @default(uuid()) @db.Uuid
-  email                      String           @unique
+  id                         String                  @id @default(uuid()) @db.Uuid
+  email                      String                  @unique
   passwordHash               String
   name                       String
   role                       UserRole
-  technicianId               String?          @unique @db.Uuid
-  active                     Boolean          @default(true)
-  createdAt                  DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime         @updatedAt @db.Timestamptz(3)
-  technician                 Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
-  createdOrders              Order[]          @relation("OrderCreator")
-  verifiedEquipment          OrderEquipment[] @relation("EquipmentVerifier")
-  completedChecks            Checklist[]      @relation("ChecklistCompleter")
-  uploadedEvidence           Evidence[]       @relation("EvidenceUploader")
-  capturedSignatures         Signature[]      @relation("SignatureCapturer")
-  reportedDiscrepancies      Discrepancy[]    @relation("DiscrepancyReporter")
-  resolvedDiscrepancies      Discrepancy[]    @relation("DiscrepancyResolver")
+  technicianId               String?                 @unique @db.Uuid
+  active                     Boolean                 @default(true)
+  createdAt                  DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                @updatedAt @db.Timestamptz(3)
+  technician                 Technician?             @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  registeredEquipment        Equipment[]
+  createdOrders              Order[]                 @relation("OrderCreator")
+  verifiedEquipment          OrderEquipment[]        @relation("EquipmentVerifier")
+  completedChecks            Checklist[]             @relation("ChecklistCompleter")
+  uploadedEvidence           Evidence[]              @relation("EvidenceUploader")
+  capturedSignatures         Signature[]             @relation("SignatureCapturer")
+  reportedDiscrepancies      Discrepancy[]           @relation("DiscrepancyReporter")
+  resolvedDiscrepancies      Discrepancy[]           @relation("DiscrepancyResolver")
   refreshSessions            RefreshSession[]
-  auditLogs                  AuditLog[]       @relation("AuditActor")
-  resolvedFailedAppointments Order[]          @relation("FailedAppointmentResolver")
+  auditLogs                  AuditLog[]              @relation("AuditActor")
+  resolvedFailedAppointments Order[]                 @relation("FailedAppointmentResolver")
   sharedTechnicianAccess     SharedTechnicianAccess?
 
   @@index([role, active])
@@ -186,6 +197,7 @@ model Order {
   failedAppointmentResolvedBy       User?                        @relation("FailedAppointmentResolver", fields: [failedAppointmentResolvedById], references: [id], onDelete: SetNull)
   rescheduledFrom                   Order?                       @relation("OrderReschedule", fields: [rescheduledFromOrderId], references: [id], onDelete: Restrict)
   rescheduledOrder                  Order?                       @relation("OrderReschedule")
+  inventoryReservations             Equipment[]                  @relation("EquipmentReservation")
   units                             OrderUnit[]
   signature                         Signature?
   driveSignatureUploads             DriveSignatureUpload[]
@@ -254,8 +266,38 @@ model OrderUnit {
   @@index([orderId, serviceType])
 }
 
+model Equipment {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  imei                 String                  @unique
+  brand                String
+  model                String
+  state                InventoryEquipmentState
+  currentClientSheetId String?
+  currentClientName    String?
+  unitLabel            String?
+  unitMakeModel        String?
+  unitSerialNumber     String?
+  unitYear             Int?
+  registrationKey      String                  @unique @db.Uuid
+  registrationHash     String
+  createdById          String                  @db.Uuid
+  reservedOrderId      String?                 @db.Uuid
+  version              Int                     @default(1)
+  createdAt            DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                @updatedAt @db.Timestamptz(3)
+  createdBy            User                    @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  reservedOrder        Order?                  @relation("EquipmentReservation", fields: [reservedOrderId], references: [id], onDelete: Restrict)
+  snapshots            OrderEquipment[]
+
+  @@index([state, currentClientSheetId])
+  @@index([reservedOrderId])
+}
+
 model OrderEquipment {
   id                         String                      @id @default(uuid()) @db.Uuid
+  source                     EquipmentSource             @default(SHEETS)
+  inventoryEquipmentId       String?                     @db.Uuid
+  inventoryEquipment         Equipment?                  @relation(fields: [inventoryEquipmentId], references: [id], onDelete: Restrict)
   orderUnitId                String                      @db.Uuid
   sheetName                  String                      @default("SALIDAS")
   sheetRowHint               Int?
@@ -314,22 +356,22 @@ model ChecklistItem {
 }
 
 model Evidence {
-  id              String        @id @default(uuid()) @db.Uuid
-  orderUnitId     String        @db.Uuid
-  objectKey       String        @unique
-  idempotencyKey  String?       @unique @db.Uuid
-  mimeType        String
-  sizeBytes       Int
-  checksum        String?
-  width           Int?
-  height          Int?
-  status          UploadStatus  @default(PENDING)
-  uploadedById    String        @db.Uuid
-  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
-  completedAt     DateTime?     @db.Timestamptz(3)
-  deletedAt       DateTime?     @db.Timestamptz(3)
-  orderUnit       OrderUnit     @relation(fields: [orderUnitId], references: [id], onDelete: Cascade)
-  uploadedBy      User          @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  id             String       @id @default(uuid()) @db.Uuid
+  orderUnitId    String       @db.Uuid
+  objectKey      String       @unique
+  idempotencyKey String?      @unique @db.Uuid
+  mimeType       String
+  sizeBytes      Int
+  checksum       String?
+  width          Int?
+  height         Int?
+  status         UploadStatus @default(PENDING)
+  uploadedById   String       @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  completedAt    DateTime?    @db.Timestamptz(3)
+  deletedAt      DateTime?    @db.Timestamptz(3)
+  orderUnit      OrderUnit    @relation(fields: [orderUnitId], references: [id], onDelete: Cascade)
+  uploadedBy     User         @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
 
   @@index([orderUnitId, status])
   @@index([uploadedById])

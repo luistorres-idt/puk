@@ -89,6 +89,8 @@ defineExpose({ openAddUnitModal });
             v-model="unitModalEquipmentKey"
             service-type="UNINSTALLATION"
             :client-name="order?.clientNameSnapshot"
+            :client-sheet-id="order?.clientSheetId"
+            :unit-context="newUnit"
             :exclude-keys="excludeKeysForModalReplacementOld"
             @select="handleUnitModalEquipmentSelect"
           />
@@ -118,6 +120,8 @@ defineExpose({ openAddUnitModal });
             v-model="replacementNewEquipmentKey"
             service-type="INSTALLATION"
             :client-name="order?.clientNameSnapshot"
+            :client-sheet-id="order?.clientSheetId"
+            :unit-context="newUnit"
             :exclude-keys="excludeKeysForModalReplacementNew"
             @select="handleReplacementNewSelect"
           />
@@ -158,6 +162,8 @@ defineExpose({ openAddUnitModal });
           v-model="unitModalEquipmentKey"
           :service-type="newUnit.serviceType"
           :client-name="order?.clientNameSnapshot"
+          :client-sheet-id="order?.clientSheetId"
+          :unit-context="newUnit"
           :exclude-keys="assignedEquipmentKeys"
           @select="handleUnitModalEquipmentSelect"
         />
@@ -251,6 +257,8 @@ defineExpose({ openAddUnitModal });
             v-model="unitModalEquipmentKey"
             :service-type="newUnit.serviceType"
             :client-name="order?.clientNameSnapshot"
+            :client-sheet-id="order?.clientSheetId"
+            :unit-context="newUnit"
             :exclude-keys="assignedEquipmentKeys"
             @select="handleUnitModalEquipmentSelect"
           />

@@ -1,4 +1,4 @@
-import type { ExternalClient, ExternalEquipment } from '@puk/contracts';
+import type { ExternalClient, ExternalEquipment, RegisterEquipment } from '@puk/contracts';
 import { api } from '../../shared/http/client.js';
 
 export interface CatalogResponse<T> {
@@ -7,6 +7,9 @@ export interface CatalogResponse<T> {
     requestId: string;
     fetchedAt: string;
     total: number;
+    sheetsAvailable?: boolean;
+    registrationAllowed?: boolean;
+    warnings?: string[];
   };
 }
 
@@ -26,16 +29,25 @@ export async function fetchClients(search?: string): Promise<{
 export async function fetchEquipment(search?: string): Promise<{
   equipment: ExternalEquipment[];
   fetchedAt: string;
+  registrationAllowed: boolean;
+  warnings: string[];
 }> {
   const response = await api.get<CatalogResponse<ExternalEquipment>>('/external/equipment', {
     params: search ? { search } : undefined,
   });
   return {
     equipment: response.data.data,
+    registrationAllowed: response.data.meta.registrationAllowed ?? true,
+    warnings: response.data.meta.warnings ?? [],
     fetchedAt: response.data.meta.fetchedAt,
   };
 }
 
 export async function refreshCatalogs(): Promise<void> {
   await api.post('/external/refresh');
+}
+
+export async function registerEquipment(input: RegisterEquipment): Promise<ExternalEquipment> {
+  const response = await api.post<{ data: ExternalEquipment }>('/inventory/equipment', input);
+  return response.data.data;
 }

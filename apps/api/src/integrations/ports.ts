@@ -62,7 +62,13 @@ export interface EquipmentCatalogPort {
   getEquipment(options?: {
     forceFresh?: boolean;
     search?: string;
-  }): Promise<{ data: readonly ExternalEquipment[]; fetchedAt: string }>;
+  }): Promise<{
+    data: readonly ExternalEquipment[];
+    fetchedAt: string;
+    sheetsAvailable?: boolean;
+    registrationAllowed?: boolean;
+    warnings?: readonly string[];
+  }>;
 }
 
 export interface ClientCatalogPort {

@@ -46,7 +46,7 @@ defineExpose({ openAddEquipment });
   <n-modal
     v-model:show="showModal"
     preset="card"
-    title="Asignar Equipo desde Google Sheets"
+    title="Asignar Equipo del Catálogo"
     class="w-[92vw] max-w-lg"
   >
     <div class="space-y-4">
@@ -54,7 +54,9 @@ defineExpose({ openAddEquipment });
         v-model="selectedEquipmentKey"
         :service-type="targetUnit?.serviceType ?? order?.serviceType"
         :client-name="order?.clientNameSnapshot"
+        :client-sheet-id="order?.clientSheetId"
         :exclude-keys="assignedEquipmentKeys"
+        :unit-context="targetUnit"
         @select="handleEquipmentSelect"
       />
 

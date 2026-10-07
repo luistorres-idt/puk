@@ -100,6 +100,8 @@ export const administrationOrderSelect = {
       equipment: {
         select: {
           ...executionOrderSelect.units.select.equipment.select,
+          source: true,
+          inventoryEquipmentId: true,
           externalKey: true,
         },
       },
@@ -186,6 +188,8 @@ function mapAdministrationUnit(
       modelSnapshot: equipment.modelSnapshot,
       equipmentConditionSnapshot: equipment.equipmentConditionSnapshot,
       verificationStatus: equipment.verificationStatus,
+      source: equipment.source,
+      inventoryEquipmentId: equipment.inventoryEquipmentId,
       externalKey: equipment.externalKey,
     })),
     evidence: unit.evidence.map((evidence) => ({ id: evidence.id, status: evidence.status })),

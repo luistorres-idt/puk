@@ -16,6 +16,7 @@ import {
   createAdministrationRouter,
   type AdministrationRouterOptions,
 } from './modules/administration/index.js';
+import { createInventoryRouter, type InventoryService } from './modules/inventory/index.js';
 import { createCatalogsRouter } from './modules/catalogs/index.js';
 import {
   createOrdersRouter,
@@ -38,6 +39,7 @@ export interface AppOptions {
   allowedOrigins?: readonly string[];
   auth?: Omit<AuthRouterOptions, 'requireAccess'> & { minimumPasswordLength: number };
   catalogsService?: CatalogServicePort;
+  inventoryService?: InventoryService;
   ordersService?: OrdersService;
   orderPricingService?: OrderPricingService;
   syncService?: SyncService;
@@ -105,6 +107,8 @@ export function createApp(options: AppOptions = {}): Express {
         }),
       );
     }
+    if (options.inventoryService !== undefined)
+      app.use('/api/v1/inventory', createInventoryRouter(options.inventoryService, requireAccess));
     if (options.catalogsService !== undefined) {
       app.use(
         '/api/v1/external',

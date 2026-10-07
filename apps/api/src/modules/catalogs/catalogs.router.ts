@@ -37,10 +37,15 @@ export function createCatalogsRouter(options: {
     async (request, response) => {
       await rejectSharedCatalogAccess(options.prisma, request.auth!);
       const search = typeof request.query.search === 'string' ? request.query.search : undefined;
-      const { data, fetchedAt } = await options.catalogsService.getEquipment(
-        search !== undefined ? { search } : {},
-      );
-      sendSuccess(response, data, 200, { fetchedAt, total: data.length });
+      const { data, fetchedAt, sheetsAvailable, registrationAllowed, warnings } =
+        await options.catalogsService.getEquipment(search !== undefined ? { search } : {});
+      sendSuccess(response, data, 200, {
+        fetchedAt,
+        total: data.length,
+        ...(sheetsAvailable === undefined ? {} : { sheetsAvailable }),
+        ...(registrationAllowed === undefined ? {} : { registrationAllowed }),
+        ...(warnings === undefined ? {} : { warnings }),
+      });
     },
   );
 
