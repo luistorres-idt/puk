@@ -1,3 +1,4 @@
+import { HybridEquipmentCatalog, InventoryService } from './modules/inventory/index.js';
 import { createApp } from './app.js';
 import { TokenService } from './auth/tokens.js';
 import { loadEnvironment } from './config/environment.js';
@@ -84,10 +85,13 @@ const sheetsBreaker = new CircuitBreaker({
 });
 const sheetsPort = new CircuitBreakerSheetsPort(rawSheetsPort, sheetsBreaker);
 
-const catalogsService = new GoogleSheetsCatalogService(
+const sheetsCatalogService = new GoogleSheetsCatalogService(
   sheetsPort,
   environment.CATALOG_CACHE_TTL_SECONDS,
 );
+
+const catalogsService = new HybridEquipmentCatalog(prisma, sheetsCatalogService);
+const inventoryService = new InventoryService(prisma, sheetsCatalogService);
 
 const techniciansService = new TechniciansService(prisma, sheetsPort);
 const ordersService = new OrdersService(prisma, catalogsService);
@@ -199,6 +203,7 @@ const server = createApp({
     tokens,
   },
   catalogsService,
+  inventoryService,
   ordersService,
   orderPricingService,
   syncService,
