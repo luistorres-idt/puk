@@ -1,5 +1,6 @@
 import { computed, ref, type Ref } from 'vue';
 import type { AssignEquipment, ExternalEquipment } from '@puk/contracts';
+import { toEquipmentAssignment } from '../../external-catalogs/index.js';
 import type { OrderDetail } from '../api.js';
 
 interface AttachOrderEquipmentOptions {
@@ -47,23 +48,12 @@ export function useAttachOrderEquipment({
     if (!canAddItems.value) return;
     if (!targetUnitId.value || !selectedEquipment.value || !selectedEquipmentKey.value) return;
     try {
+      const data = toEquipmentAssignment(selectedEquipment.value);
+      delete data.sheetName;
       await attachEquipment({
         id: orderId,
         unitId: targetUnitId.value,
-        data: {
-          externalKey: selectedEquipmentKey.value,
-          externalId: selectedEquipment.value.id,
-          imei: selectedEquipment.value.imei,
-          sheetRowHint: selectedEquipment.value.rowNumber,
-          brandSnapshot: selectedEquipment.value.brand,
-          modelSnapshot: selectedEquipment.value.model,
-          lineSnapshot: selectedEquipment.value.line,
-          iccidSnapshot: selectedEquipment.value.iccid,
-          carrierSnapshot: selectedEquipment.value.carrier,
-          equipmentConditionSnapshot: selectedEquipment.value.condition,
-          serviceStatusSnapshot: selectedEquipment.value.serviceStatus,
-          rawSnapshot: selectedEquipment.value.rawValues,
-        },
+        data,
       });
       showModal.value = false;
       notifySuccess('Equipo asignado correctamente.');

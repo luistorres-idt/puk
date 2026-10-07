@@ -14,6 +14,7 @@ export function isInstalledEquipment(equipment: ExternalEquipment): boolean {
 export interface EquipmentFilterOptions {
   serviceType?: OrderServiceType | string | null | undefined;
   clientName?: string | null | undefined;
+  clientSheetId?: string | null | undefined;
   excludeKeys?: readonly string[] | Set<string> | null | undefined;
 }
 
@@ -28,9 +29,9 @@ export function filterEquipmentByServiceType(
   equipmentList: readonly ExternalEquipment[],
   options: EquipmentFilterOptions = {},
 ): ExternalEquipment[] {
-  const { serviceType, clientName, excludeKeys } = options;
+  const { serviceType, clientName, clientSheetId, excludeKeys } = options;
 
-  let filtered = equipmentList;
+  let filtered = equipmentList.filter((e) => !e.reservedOrderId);
 
   if (excludeKeys) {
     const excludeSet = excludeKeys instanceof Set ? excludeKeys : new Set(excludeKeys);
@@ -71,6 +72,13 @@ export function filterEquipmentByServiceType(
       }
 
       // Must match the specified client if provided
+      if (
+        eq.source === 'DB' &&
+        eq.currentClientSheetId &&
+        clientSheetId &&
+        eq.currentClientSheetId !== clientSheetId
+      )
+        return false;
       if (clientName && !isMatchingClient(eq.currentClient, clientName)) {
         return false;
       }
@@ -110,11 +118,15 @@ export function extractUnitFromEquipment(equipment: ExternalEquipment): {
 
 export function toEquipmentAssignment(equipment: ExternalEquipment): AssignEquipment {
   return {
+    ...(equipment.source ? { source: equipment.source } : {}),
+    ...(equipment.inventoryEquipmentId
+      ? { inventoryEquipmentId: equipment.inventoryEquipmentId }
+      : {}),
     externalKey: equipment.externalKey,
     externalId: equipment.id,
     imei: equipment.imei,
-    sheetName: 'SALIDAS',
-    sheetRowHint: equipment.rowNumber,
+    ...(equipment.source === 'DB' ? {} : { sheetName: 'SALIDAS' }),
+    sheetRowHint: equipment.source === 'DB' ? null : equipment.rowNumber,
     brandSnapshot: equipment.brand,
     modelSnapshot: equipment.model,
     lineSnapshot: equipment.line,

@@ -235,7 +235,7 @@ function canProceed(): boolean {
                 <p>
                   Selecciona los equipos actualmente instalados para
                   <strong>{{ selectedClient?.name }}</strong
-                  >. Los datos de la unidad se autocompletarán desde Google Sheets.
+                  >. Los datos de la unidad se autocompletarán desde el catálogo.
                 </p>
               </div>
 
@@ -243,6 +243,7 @@ function canProceed(): boolean {
                 v-model="reviewSelectedEquipmentKey"
                 :service-type="activeServiceType"
                 :client-name="selectedClient?.name"
+                :client-sheet-id="selectedClientId"
                 :exclude-keys="assignedEquipmentKeys"
                 @select="handleReviewEquipmentSelect"
               />
@@ -257,7 +258,7 @@ function canProceed(): boolean {
                   {{ reviewSelectedEquipment.imei || 'N/A' }}
                 </p>
                 <p>
-                  <strong>Unidad en Sheets:</strong>
+                  <strong>Unidad actual:</strong>
                   {{ reviewSelectedEquipment.unit || 'Sin registrar' }} ({{
                     reviewSelectedEquipment.unitMakeModel || 'Sin modelo'
                   }}
@@ -303,6 +304,7 @@ function canProceed(): boolean {
                   v-model="replacementOldEquipmentKey"
                   service-type="UNINSTALLATION"
                   :client-name="selectedClient?.name"
+                  :client-sheet-id="selectedClientId"
                   :exclude-keys="excludeKeysForReplacementOld"
                   @select="handleReplacementOldSelect"
                 />
@@ -335,6 +337,7 @@ function canProceed(): boolean {
                   v-model="replacementNewEquipmentKey"
                   service-type="INSTALLATION"
                   :client-name="selectedClient?.name"
+                  :client-sheet-id="selectedClientId"
                   :exclude-keys="excludeKeysForReplacementNew"
                   @select="handleReplacementNewSelect"
                 />
@@ -439,6 +442,7 @@ function canProceed(): boolean {
                   v-model="installationEquipmentKey"
                   :service-type="activeServiceType"
                   :client-name="selectedClient?.name"
+                  :client-sheet-id="selectedClientId"
                   :exclude-keys="assignedEquipmentKeys"
                   @select="handleInstallationEquipmentSelect"
                 />
