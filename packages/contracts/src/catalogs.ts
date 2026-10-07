@@ -8,6 +8,11 @@ export const ExternalClientSchema = v.object({
 export type ExternalClient = v.InferOutput<typeof ExternalClientSchema>;
 
 export const ExternalEquipmentSchema = v.object({
+  source: v.optional(v.picklist(['SHEETS', 'DB'])),
+  inventoryEquipmentId: v.optional(v.nullable(v.pipe(v.string(), v.uuid()))),
+  currentClientSheetId: v.optional(v.nullable(v.string())),
+  identityConflict: v.optional(v.boolean()),
+  reservedOrderId: v.optional(v.nullable(v.string())),
   externalKey: v.pipe(v.string(), v.nonEmpty()),
   id: v.nullable(v.string()),
   imei: v.nullable(v.string()),

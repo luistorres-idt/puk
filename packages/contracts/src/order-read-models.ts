@@ -105,6 +105,8 @@ export type OrderAdministrationTechnician = v.InferOutput<
 
 export const OrderAdministrationEquipmentDetailSchema = v.object({
   ...OrderExecutionEquipmentDetailSchema.entries,
+  source: v.optional(v.picklist(['SHEETS', 'DB'])),
+  inventoryEquipmentId: v.optional(v.nullable(v.string())),
   externalKey: v.string(),
 });
 export type OrderAdministrationEquipmentDetail = v.InferOutput<

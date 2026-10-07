@@ -149,3 +149,9 @@ export {
   type SyncOperationType,
   type UpdateTechnicalReportSyncSchedule,
 } from './sync.js';
+
+export {
+  RegisterEquipmentSchema,
+  initialEquipmentState,
+  type RegisterEquipment,
+} from './inventory.js';

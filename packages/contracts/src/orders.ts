@@ -123,6 +123,8 @@ export const SyncStatusSchema = v.picklist([
 export type SyncStatus = v.InferOutput<typeof SyncStatusSchema>;
 
 export const AssignEquipmentSchema = v.object({
+  source: v.optional(v.picklist(['SHEETS', 'DB'])),
+  inventoryEquipmentId: v.optional(v.nullable(v.pipe(v.string(), v.uuid()))),
   brandSnapshot: v.optional(v.nullable(v.string())),
   carrierSnapshot: v.optional(v.nullable(v.string())),
   equipmentConditionSnapshot: v.optional(v.nullable(v.string())),
