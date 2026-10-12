@@ -1,19 +1,21 @@
 # Infraestructura y operación
 
-**Estado documentado:** 2026-10-05
+**Inventario histórico:** 2026-10-05
 
-**Fuentes:** inventario AWS verificado el 2026-10-05 para el estado activo; `infra/cdk`,
+**Estado verificado después del inventario:** staging eliminado/no desplegado al 2026-10-09; producción no desplegada.
+
+**Fuentes:** inventario AWS verificado el 2026-10-05 para el estado observado entonces; `infra/cdk`,
 `docker-compose.yml`, `infra/docker` y `.github/workflows` para la configuración declarada.
 
-Staging está activo en la cuenta `075566976700`, región `us-east-2`: los stacks
-`PukStagingFoundation` y `PukStagingApplication` existen, ECS ejecuta una tarea en EC2 `t3.small`
-y RDS es independiente del host. La IPv4 observada es `18.222.63.51`, efímera. El secreto runtime
-`puk/staging/runtime` existe. Una validación segura de presencia confirmó los cuatro campos de
-Sheets y la ausencia de los tres campos de Drive, sin mostrar valores. No se inspeccionaron datos
-de RDS.
+El inventario del 2026-10-05 observó staging en la cuenta `075566976700`, región `us-east-2`: los
+stacks `PukStagingFoundation` y `PukStagingApplication`, una tarea ECS en EC2 `t3.small`, RDS
+independiente del host, la IPv4 efímera `18.222.63.51` y el secreto runtime `puk/staging/runtime`.
+Al 2026-10-09 staging está eliminado/no desplegado y producción no está desplegada. Los datos del
+inventario son referencias históricas, no evidencia de recursos activos. No se inspeccionaron
+datos de RDS.
 
-**Diferencia pendiente:** la revisión de tarea 14 todavía usa S3; la IaC local selecciona Drive.
-El bucket `EvidenceBucket` sigue referenciado por la aplicación. La consulta de versiones del
+**Diferencia observada históricamente:** la revisión de tarea 14 usaba S3; la IaC local selecciona Drive.
+El bucket `EvidenceBucket` estaba referenciado por esa revisión. La consulta de versiones del
 2026-10-05 devolvió cero versiones y marcadores de borrado, sin paginación pendiente; no habilita
 su eliminación mientras siga siendo un consumidor activo. La sincronización espera configuración
 segura y validación de los recursos de Google de pruebas. No se han eliminado datos ni recursos
@@ -25,14 +27,18 @@ como parte de esta sincronización. Producción no tiene stacks CDK propios.
 | ------------------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------- |
 | Desarrollo con hot reload | Vite y API en el host; PostgreSQL y MinIO en Docker Compose                               | Volúmenes locales      | `http://localhost:5173` y `http://localhost:3000` |
 | Desarrollo compilado      | Contenedores `web`, `api`, `postgres`, `minio` y `minio-init`                             | Volúmenes locales      | `http://localhost:4173` y `http://localhost:3000` |
-| Staging                   | ECS sobre EC2 activo; RDS privado, S3, Secrets Manager y CloudWatch Logs; Drive pendiente | RDS y bucket existente | `http://18.222.63.51` (IPv4 efímera)              |
+| Staging                   | No desplegado al 2026-10-09; la IaC describe ECS sobre EC2, RDS, almacenamiento y logs       | Por verificar          | Sin endpoint activo                               |
 | Producción                | No implementado como IaC en la rama actual                                                | Por definir            | Por definir                                       |
 
-## Arquitectura de staging en AWS: estado activo y configuración objetivo
+## Arquitectura de staging en AWS: topología declarada por CDK
+
+El diagrama y las secciones siguientes describen la infraestructura declarada en CDK, no recursos
+activos. Staging está eliminado/no desplegado al 2026-10-09; verificar el diff y el estado real de
+AWS antes de cualquier operación.
 
 ### Vista de despliegue
 
-> **Topología declarada por IaC:** el cómputo ECS sobre EC2 está activo. El almacenamiento activo es S3; Drive es el cambio pendiente, no una integración ya validada.
+> **Topología declarada por IaC:** los detalles corresponden al diseño en código. El inventario histórico observó S3; Drive es el proveedor seleccionado por la IaC local y requiere configuración y validación antes de un redeployment.
 
 ```mermaid
 flowchart TB
@@ -47,7 +53,7 @@ flowchart TB
             subgraph Public[Subredes públicas]
                 EC2[ECS-optimized AL2023<br/>t3.small - 1 host]
                 subgraph Task[Tarea ECS EC2 - bridge - 1 vCPU / 1792 MiB]
-                    Migration[migration<br/>Prisma migrate y seed]
+                    Migration[migration<br/>Prisma migrate deploy y seed]
                     API[api<br/>Express puerto 3000]
                     Web[web<br/>Nginx puerto 80]
                 end
@@ -78,7 +84,7 @@ flowchart TB
     CFN --> VPC
 ```
 
-El diagrama muestra la topología definida por CDK: subredes públicas, privadas para aplicación y privadas aisladas, una por zona de disponibilidad; un Auto Scaling Group fijo con una instancia EC2 `t3.small` en subred pública y una IPv4 efímera; HTTP directo por el puerto 80; sin NAT Gateway, Elastic IP, ALB ni CloudFront. Nginx enruta internamente al API y RDS queda en subredes privadas aisladas.
+El diagrama muestra la topología definida por CDK: subredes públicas, privadas para aplicación y privadas aisladas, una por zona de disponibilidad; un Auto Scaling Group fijo con una instancia EC2 `t3.small` en subred pública y una IPv4 efímera; HTTP directo por el puerto 80; sin NAT Gateway, Elastic IP, ALB ni CloudFront. Nginx enruta internamente al API y RDS queda en subredes privadas aisladas. Esto no confirma la existencia actual de esos recursos.
 
 ### Recorrido de una solicitud
 
@@ -99,9 +105,9 @@ Esta entrada no usa TLS: las credenciales y cookies de sesión viajan sin cifrad
 
 El host EC2 recibe IPv4 pública efímera para conexiones entrantes y salientes sin NAT Gateway ni Elastic IP. Su security group sólo permite TCP/80 desde Internet; el API en el puerto 3000 no se publica. La API requiere salida HTTPS para Google Sheets, Google Drive y AWS. La tarea usa modo `bridge` y conserva sus roles ECS propios; IMDSv2 es obligatorio y el hop limit es 1 para impedir que contenedores alcancen las credenciales del instance profile. La instancia no recibe permisos de Secrets Manager ni de S3. Esta configuración evita el costo horario y de procesamiento del NAT, aunque la IPv4 pública sigue teniendo costo y la salida no pasa por un NAT controlado.
 
-### Tarea ECS sobre EC2 y orden de arranque
+### Tarea ECS sobre EC2 y orden de arranque declarado
 
-> **Orden definido por IaC:** la API y web están ejecutándose en la tarea activa; la migración es un contenedor que termina antes de la API.
+> **Orden definido por IaC:** al iniciarse una tarea, el contenedor de migración termina antes de que pueda iniciar la API; no implica que haya una tarea activa actualmente.
 
 ```mermaid
 flowchart LR
@@ -121,9 +127,9 @@ flowchart LR
     ApiHealth -->|UNHEALTHY| Replace[ECS reemplaza o revierte]
 ```
 
-Los tres contenedores comparten la tarea; ECS la ejecuta en modo `bridge` dentro del host EC2. Nginx se vincula al contenedor `api` por el alias `api`. Nginx publica el puerto de host 80; el API también mapea el puerto de host 3000, pero el security group bloquea el ingreso externo a ese puerto:
+Los tres contenedores comparten la tarea; ECS la ejecuta en modo `bridge` dentro del host EC2. Nginx se vincula al contenedor `api` por el alias `api`. Nginx publica el puerto de host 80; el API también mapea el puerto de host 3000, pero el security group bloquea el ingreso externo a ese puerto. Estas son propiedades de la definición CDK, no una observación del entorno actual:
 
-- `migration` no es esencial. Ejecuta migraciones y seed una vez por cada arranque de tarea; la API depende de que termine con éxito.
+- `migration` no es esencial. Cada vez que se inicia una tarea nueva, ejecuta `prisma migrate deploy` y después `prisma/seed.ts`; la API depende de que termine con éxito (`SUCCESS`). `migrate deploy` aplica sólo las migraciones pendientes presentes en `prisma/migrations/`. Un cambio únicamente en `prisma/schema.prisma` no modifica la base de datos: hay que crear y versionar la migración correspondiente. Las imágenes de API y migración generan el cliente Prisma durante el build Docker con una URL de base de datos ficticia de build; esa generación no se conecta a la base de datos de producción ni ejecuta migraciones. Un despliegue sólo de código puede iniciar el contenedor de migración, pero no cambia el esquema si no hay migraciones pendientes.
 - `api` es esencial y expone el puerto 3000. Su health check interno consulta `/health/live`.
 - `web` es esencial y expone el puerto 80. Sólo inicia cuando la API está saludable.
 - El servicio usa `desiredCount: 1` en un ASG de capacidad fija (mínimo/máximo/deseado 1). El despliegue usa 0 % mínimo y 100 % máximo para detener la tarea anterior antes de iniciar la nueva: hay una interrupción breve durante cada despliegue y no se garantiza alta disponibilidad ante falla del host.
@@ -133,22 +139,23 @@ La migración dentro de cada tarea mantiene el orden de arranque, pero con más 
 
 ### Persistencia
 
-| Recurso                    | Configuración declarada / diferencia activa                                                                           | Política IaC al eliminar en el futuro                |
+| Recurso                    | Configuración declarada / diferencia histórica                                                                         | Política IaC al eliminar en el futuro                |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | RDS PostgreSQL 17          | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection                       |
-| Almacenamiento de archivos | S3 en la revisión activa; Google Drive compartido pendiente de configuración y despliegue                             | Conservar archivos y bucket hasta validar transición |
+| Almacenamiento de archivos | Históricamente S3; Drive seleccionado por la IaC local y pendiente de configuración para redeploy                    | Conservar archivos y bucket hasta validar transición |
 | Logs                       | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                                             |
 
 El objetivo de producto es usar una unidad compartida de Google Drive para evidencias, firmas y
 reportes; PostgreSQL conserva referencias y metadatos. La IaC local selecciona
 `STORAGE_PROVIDER=drive`, no declara buckets ni permisos S3 nuevos, y requiere los tres campos
-`GOOGLE_DRIVE_*`. La revisión desplegada sigue usando S3. Conservar bucket, referencias y permisos
-necesarios hasta validar el reemplazo; cambiar de proveedor no migra archivos existentes.
+`GOOGLE_DRIVE_*`. La última revisión de tarea observada históricamente usaba S3; no hay una
+revisión desplegada actualmente. Conservar bucket, referencias y permisos necesarios hasta validar
+el reemplazo; cambiar de proveedor no migra archivos existentes.
 La política de respaldo independiente sigue pendiente antes de producción.
 
 ### Stacks CDK
 
-> **Dependencias entre stacks existentes:** revisar los exports consumidos antes de desplegar cualquier limpieza.
+> **Dependencias declaradas entre stacks:** revisar los exports consumidos antes de desplegar cualquier limpieza o redeployment.
 
 ```mermaid
 flowchart LR
@@ -158,7 +165,7 @@ flowchart LR
         V[VPC y subredes]
         SG[Security groups]
         DB[RDS y secreto generado]
-        B[Bucket S3 activo - transición pendiente]
+        B[Referencia a bucket S3 histórico]
         RS[Referencia a secreto runtime]
         Role[Rol OIDC para GitHub]
     end
@@ -194,7 +201,7 @@ No se deben renombrar construct IDs ni mover recursos persistentes sin revisar p
 ### Identidades y configuración de ejecución
 
 - ECS inyecta credenciales de RDS desde su secreto generado al iniciar `migration` y `api`.
-- El secreto runtime existente es `puk/staging/runtime` en Secrets Manager, `us-east-2`.
+- El inventario del 2026-10-05 observó el secreto runtime `puk/staging/runtime` en Secrets Manager, `us-east-2`; staging está actualmente eliminado/no desplegado.
 - La configuración desplegada histórica contenía referencias de Sheets. La configuración CDK local de Drive agrega
   `GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY` y `GOOGLE_DRIVE_SHARED_DRIVE_ID`;
   requiere configurar y verificar una identidad y una unidad compartida de pruebas.
@@ -230,7 +237,7 @@ Esta sección describe los checks y logs definidos por la IaC y la aplicación; 
 
 ## Integración y despliegue continuo
 
-> **Workflow declarado:** el valor actual de `AWS_STAGING_READY` no se verificó ni modificó. Resolver configuración de Google y exports entre stacks antes de habilitar despliegues automáticos.
+> **Workflow declarado:** `.github/workflows/deploy-staging.yml` corre después de un CI exitoso sobre `main` sólo si `AWS_STAGING_READY == 'true'`. El valor actual no se verificó ni modificó. Resolver configuración de Google y exports entre stacks antes de habilitar despliegues automáticos.
 
 ```mermaid
 sequenceDiagram
@@ -250,7 +257,7 @@ sequenceDiagram
         OIDC-->>GH: asume puk-staging-github-deploy
         GH->>CDK: pnpm infra:deploy
         CDK->>ECS: actualiza infraestructura y tarea
-        ECS->>ECS: migration -> api healthy -> web
+        ECS->>ECS: migration (migrate deploy + seed) -> api healthy -> web
         GH->>Smoke: prueba URL HTTP de la IPv4 actual
         Smoke-->>GH: live, ready, metrics y docs
     else validación fallida o staging no habilitado
@@ -258,7 +265,7 @@ sequenceDiagram
     end
 ```
 
-El workflow `.github/workflows/ci.yml` instala dependencias, valida Prisma, ejecuta lint, typecheck, pruebas, validación OpenAPI, build, `infra:synth`, auditoría y E2E. Después de un CI exitoso sobre `main`, `.github/workflows/deploy-staging.yml` despliega si la variable de repositorio `AWS_STAGING_READY` vale `true`. La concurrencia está serializada y no cancela un despliegue en curso.
+El workflow `.github/workflows/ci.yml` instala dependencias, valida Prisma, ejecuta lint, typecheck, pruebas, validación OpenAPI, build, `infra:synth`, auditoría y E2E. Después de un CI exitoso sobre `main`, `.github/workflows/deploy-staging.yml` hace checkout de `workflow_run.head_sha`, ejecuta `pnpm infra:deploy` y smoke-tests sólo si la variable de repositorio `AWS_STAGING_READY` vale exactamente `true`. La concurrencia está serializada y no cancela un despliegue en curso. Aunque éste sea el flujo declarado, staging actualmente no está desplegado.
 
 Los assets Docker de CDK se construyen y publican mediante el bootstrap de CDK. El repositorio no define ECR repositories ni tags de aplicación explícitos.
 
@@ -406,12 +413,13 @@ La guía operativa y el primer despliegue están en [staging-and-deployment.md](
 
 ## Evaluación para producción
 
-La arquitectura de staging prioriza costo y simplicidad. El cómputo está activo; Drive es una
-transición pendiente. La tabla compara la configuración objetivo con el trabajo previo a producción:
+La arquitectura declarada de staging prioriza costo y simplicidad. AWS staging no está desplegado;
+Drive sigue pendiente de validación antes de un redeployment. La tabla compara la configuración
+objetivo con el trabajo previo a producción:
 
 | Pilar          | Configuración objetivo de IaC                                                                    | Trabajo pendiente                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Seguridad      | RDS cifrado; Drive privado pendiente; HTTP público; OIDC en CI; S3 aún activo durante transición | Configurar dominio y TLS; limitar ingreso; definir controles de Workspace; agregar WAF según riesgo; auditar permisos con cdk-nag |
+| Seguridad      | RDS cifrado; Drive privado pendiente; HTTP público; OIDC en CI; el inventario histórico observó S3 | Configurar dominio y TLS; limitar ingreso; definir controles de Workspace; agregar WAF según riesgo; auditar permisos con cdk-nag |
 | Confiabilidad  | Dos AZ para subredes; rollback de ECS; política de retención prevista para RDS                   | RDS Multi-AZ; alarmas; estrategia de migración única; restauraciones probadas                                                     |
 | Rendimiento    | Sin CDN ni caché de borde                                                                        | Autoscaling ECS, pruebas de carga y dimensionamiento de RDS                                                                       |
 | Costos         | Sin NAT; host EC2 único con IPv4 pública y RDS micro                                             | Presupuestos y alarmas de costo; revisar transferencia e IPv4 públicas                                                            |

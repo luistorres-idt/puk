@@ -34,27 +34,45 @@ Esta sección describe el objetivo general para producción. La arquitectura de 
 
 - **Frontend & API:** Despliegue bajo el mismo dominio público o mediante reverse proxy (ej. Nginx, Caddy o Cloudflare) mapeando `/api` directamente a la instancia de Express y `/` al frontend estático SPA/PWA. Esto elimina complejidades de cookies de terceros y simplifica CORS.
 - **Base de Datos:** PostgreSQL gestionado (ej. Neon, Supabase o AWS RDS PostgreSQL) con migración ejecutada mediante `infra/scripts/migrate.sh` antes de conmutar tráfico.
-- **Archivos de aplicación:** Google Drive compartido privado para evidencias, firmas y reportes. S3 permanece como adaptador alternativo en el código y todavía es el proveedor desplegado en staging; Drive es el objetivo pendiente.
+- **Archivos de aplicación:** Google Drive compartido privado para evidencias, firmas y reportes. S3 permanece como adaptador alternativo en el código; el último inventario histórico observó S3 en staging y Drive es el proveedor seleccionado por la IaC local, pendiente de validación antes de redeploy.
 
 ## 4. Procedimiento de Migración y Despliegue
 
-1. **Ejecución de migraciones:**
-   ```bash
-   ./infra/scripts/migrate.sh
-   ```
-2. **Despliegue de versión:** Inicio de contenedores de API y actualización de artefactos frontend.
-3. **Smoke Tests Automáticos:**
+### Staging mediante CDK
+
+El despliegue automatizado de staging se ejecuta desde `.github/workflows/deploy-staging.yml` después de un CI exitoso sobre `main`, únicamente cuando `AWS_STAGING_READY` vale exactamente `true`. El workflow hace checkout del `head_sha` validado, ejecuta `pnpm infra:deploy` y luego el smoke test. Al 2026-10-09 staging está eliminado/no desplegado; el workflow no implica que haya recursos activos.
+
+CDK construye las imágenes Docker. Las imágenes de API y migración generan el cliente Prisma durante el build con un `DATABASE_URL` ficticio de compilación; esa generación no conecta a la base de datos de producción ni ejecuta migraciones. Al iniciar una nueva tarea ECS, el contenedor `migration` ejecuta `prisma migrate deploy` y después `prisma/seed.ts`. La API depende de que ese contenedor termine con éxito (`SUCCESS`), y web espera la salud de la API.
+
+`prisma migrate deploy` aplica las migraciones pendientes que estén versionadas en `prisma/migrations/`; editar únicamente `prisma/schema.prisma` no cambia la base de datos. Crear y revisar la migración, incluirla en el commit y desplegarla junto con la versión de la aplicación. El contenedor de migración se ejecuta al iniciar una tarea nueva; si no hay migraciones pendientes, un despliegue de sólo código no modifica el esquema.
+
+Las migraciones deben ser compatibles con la versión anterior de la aplicación mientras ECS reemplaza tareas. Para cambios incompatibles, usar una secuencia expand/contract en despliegues separados. Si la migración falla, la API no inicia; el rollback de ECS no revierte automáticamente cambios ya aplicados en la base de datos.
+
+### Ejecución manual fuera del flujo CDK
+
+Para un entorno que no use el contenedor de migración de CDK, el script manual es:
+
+```bash
+./infra/scripts/migrate.sh
+```
+
+No ejecutar este paso como si fuera un paso previo independiente del workflow CDK: en staging las migraciones y el seed corren dentro de la tarea ECS.
+
+1. **Despliegue de versión:** actualización de las imágenes y del task definition mediante el mecanismo propio del entorno.
+2. **Smoke Tests Automáticos:**
    ```bash
    TARGET_URL="http://<ipv4-publica-actual>" ./infra/scripts/smoke-test.sh
    ```
    El script verifica automáticamente liveness (`/health/live`), readiness (`/health/ready`), métricas (`/metrics`) y documentación OpenAPI.
-4. **Procedimiento de Rollback:** En caso de fallo crítico detectado en smoke tests o métricas, se revierte el contenedor a la versión de imagen previa y se restaura el respaldo de base de datos previo mediante `infra/scripts/restore.sh`.
+3. **Procedimiento de Rollback:** En caso de fallo crítico detectado en smoke tests o métricas, se revierte el contenedor a la versión de imagen previa y se restaura el respaldo de base de datos previo mediante `infra/scripts/restore.sh`.
 
-## 5. Staging activo y sincronización pendiente
+## 5. Diseño de staging e inventario histórico
+
+La configuración CDK y el inventario histórico de esta sección no representan recursos actualmente activos. AWS staging está eliminado/no desplegado desde la verificación del 2026-10-09; producción tampoco está desplegada. No asumir que el workflow está habilitado: el valor de `AWS_STAGING_READY` no se verificó.
 
 ### Último inventario histórico conocido (2026-10-05; no representa el estado actual)
 
-| Componente      | Estado actual / última observación histórica                      |
+| Componente      | Última observación histórica (2026-10-05)                          |
 | --------------- | ----------------------------------------------------------------- |
 | Cuenta y región | `075566976700`, `us-east-2`                                       |
 | CloudFormation  | Los stacks estaban activos en la fecha indicada; ahora eliminados |
@@ -70,7 +88,7 @@ lo referenciaba; devolvió cero versiones y marcadores de borrado. Es sólo una 
 no evidencia del estado actual ni autorización para borrar recursos. No se ha comprobado ni declarado
 pérdida de datos de RDS o de archivos históricos.
 
-La IaC local define un host público `t3.small`, tarea ECS en modo `bridge`, migración/seed antes de
+La IaC local describe un host público `t3.small`, tarea ECS en modo `bridge`, migración/seed antes de
 API y web después de su health check. No declara ALB, CloudFront, NAT Gateway ni Elastic IP. RDS
 queda privado; los detalles están en [Infraestructura y operación](./technical/infrastructure-and-operations.md).
 

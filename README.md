@@ -6,7 +6,7 @@ Sistema web responsivo para preparar, asignar, ejecutar y auditar órdenes multi
 
 La documentación del estado técnico implementado, incluidos los diagramas de arquitectura y entidad-relación, está disponible en [docs/technical/README.md](./docs/technical/README.md).
 
-> **Estado de AWS (2026-10-02):** staging está completamente eliminado. No hay URL ni IP pública ni quedan base de datos, archivos o secretos de staging; los datos anteriores se borraron sin respaldo recuperable. `infra/cdk` describe sólo la arquitectura prevista para un futuro redeploy. Consultá [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) antes de usar los procedimientos de despliegue.
+> **Estado de AWS (verificado al 2026-10-09):** staging está eliminado/no desplegado y producción no está desplegada. No hay endpoint activo conocido. El estado y la conservación de datos históricos de RDS o archivos no se han confirmado; no asumir que se perdieron ni que siguen disponibles. `infra/cdk` describe la arquitectura prevista para un futuro redeploy, no recursos activos. Consultá [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) antes de usar procedimientos de despliegue.
 
 ## Descripción
 
@@ -17,7 +17,8 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Los técnicos pueden guardar una nota general de ejecución antes del cierre; las notas no se separan por unidad.
 - Google Sheets conserva la autoridad sobre los catálogos de clientes y equipos.
 - PostgreSQL mantiene los datos transaccionales, el historial y el estado de sincronización.
-- Las fotografías, firmas y reportes se almacenan de forma privada en el proveedor configurado. Google Drive compartido está integrado y es el proveedor objetivo de staging; S3 permanece como adaptador alternativo/legado en el código. La infraestructura de staging no está desplegada actualmente.
+- Las fotografías, firmas y reportes se almacenan de forma privada mediante un adaptador de proveedor. La IaC local configura Google Drive compartido, pero la integración aún requiere configuración y validación antes de un redeploy; el último inventario histórico observó S3. S3 permanece como adaptador alternativo en el código.
+- Los reportes PDF de órdenes completadas pueden enviarse manualmente por Gmail a destinatarios guardados para el cliente. No se envían automáticamente; Gmail usa delegación de dominio y todavía no está conectado al task definition CDK.
 
 ## Funcionalidades principales
 
@@ -305,7 +306,7 @@ Los escenarios automatizados nunca escriben en la hoja de producción.
 
 ## Despliegue
 
-El producto se despliega con entornos separados de desarrollo, staging y producción:
+La estrategia objetivo separa desarrollo, staging y producción. Actualmente sólo está disponible el desarrollo local; staging no está desplegado y producción no cuenta con infraestructura propia:
 
 - Frontend estático servido mediante CDN o reverse proxy.
 - API ejecutada como contenedor Node.js.
@@ -314,9 +315,11 @@ El producto se despliega con entornos separados de desarrollo, staging y producc
 - Reverse proxy con TLS y, preferentemente, API bajo el mismo dominio público.
 - Google Sheets distinto para staging y producción.
 
-El pipeline ejecuta instalación reproducible, lint, typecheck, pruebas, generación de OpenAPI, builds, escaneos, migraciones controladas, despliegue y smoke tests.
+CI ejecuta instalación reproducible, lint, typecheck, pruebas, generación de OpenAPI, builds, escaneos y síntesis de CDK. El workflow declarado despliega después de un CI exitoso sobre `main` sólo si `AWS_STAGING_READY` vale exactamente `true`; actualmente staging no está desplegado.
 
-La IaC define staging en AWS `us-east-2` con ECS sobre un host EC2, RDS PostgreSQL, Secrets Manager y CloudWatch, pero el ambiente fue eliminado y no está desplegado. CDK configura Google Drive compartido para evidencias, firmas y reportes, e inyecta sus credenciales dedicadas desde Secrets Manager; ya no provisiona S3 ni le concede permisos al task role. Para recrearlo se requieren credenciales dedicadas de Drive y el ID del Drive compartido. No hay URL/IP ni datos persistentes; la arquitectura prevista usa HTTP a una IPv4 efímera sin CloudFront ni ALB. Producción aún no tiene stacks IaC propios en la rama actual. Consulte [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) para el estado, diagramas objetivo, persistencia, CI/CD y brechas antes de producción, y [Staging y despliegue](./docs/staging-and-deployment.md) para recrearlo desde cero.
+La IaC local define staging en AWS `us-east-2` con ECS sobre EC2, RDS PostgreSQL, Secrets Manager y CloudWatch; no confirma que esos recursos existan actualmente. CDK configura Google Drive compartido para evidencias, firmas y reportes, e inyecta sus credenciales desde Secrets Manager; su configuración debe validarse antes de redeploy. La topología declarada usa HTTP en una IPv4 efímera, sin CloudFront ni ALB, y no debe usarse con datos reales.
+
+Durante el build Docker, las imágenes de API y migración generan Prisma Client con una URL ficticia de compilación; no se conectan a la base real para generarlo. Al iniciar una nueva tarea ECS, el contenedor de migración ejecuta `prisma migrate deploy` y luego el seed; la API espera que termine con éxito. Sólo se aplican migraciones pendientes versionadas en `prisma/migrations/`: cambiar únicamente `prisma/schema.prisma` no modifica la base de datos. Producción aún no tiene stacks IaC propios en la rama actual. Consulte [Infraestructura y operación](./docs/technical/infrastructure-and-operations.md) para el estado, diagramas objetivo, persistencia, CI/CD y brechas antes de producción, y [Staging y despliegue](./docs/staging-and-deployment.md) para los pasos de un futuro redeploy.
 
 ## Alcance del MVP
 
