@@ -83,6 +83,7 @@ flowchart TD
     API --> DB[(PostgreSQL)]
     API --> Storage[Almacenamiento privado de archivos]
     API --> Sheets[Google Sheets API]
+    API --> Gmail[Google Gmail API<br/>Envío manual de reportes PDF]
     Worker[Worker de sincronización] --> DB
     Worker --> Sheets
 ```
@@ -95,7 +96,7 @@ flowchart TD
 | API             | Node.js, Express 5, Valibot                                                           |
 | Persistencia    | PostgreSQL, Prisma                                                                    |
 | Autenticación   | JWT, Argon2id                                                                         |
-| Integraciones   | Google Sheets API, Google Drive compartido privado para evidencias, firmas y reportes |
+| Integraciones   | Google Sheets API, Google Drive privado, Gmail para envío manual de reportes PDF       |
 | Documentación   | OpenAPI 3.1, Swagger UI                                                               |
 | Pruebas         | Vitest, Supertest, Playwright                                                         |
 | Infraestructura | Docker Compose local; AWS CDK para staging                                            |

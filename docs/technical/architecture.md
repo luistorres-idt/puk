@@ -37,9 +37,13 @@ flowchart TB
         Domain[Servicios de dominio]
         SyncWorker[Worker de sincronización]
         ReportWorker[Worker de reportes]
+        MailService[ReportEmailService]
+        GmailAdapter[GmailClient]
         Express --> Domain
         SyncWorker --> Domain
         ReportWorker --> Domain
+        Domain --> MailService
+        MailService --> GmailAdapter
     end
 
     Browser --> Nginx
@@ -47,6 +51,7 @@ flowchart TB
     Domain --> Postgres[(PostgreSQL)]
     Domain --> ObjectStore[(Proveedor de almacenamiento configurado)]
     Domain --> Google[Google Sheets]
+    GmailAdapter --> Gmail[Google Gmail API]
 ```
 
 La topología CDK declarada usa ECS sobre EC2 con tareas en modo `bridge`: Nginx y Express comparten la tarea, y Nginx llega a la API mediante el enlace de contenedor `api` en el puerto 3000. El host publica HTTP por el puerto 80, sin TLS; esta infraestructura no está desplegada actualmente y no debe usarse con datos reales. Docker Compose ofrece MinIO como proveedor local de desarrollo, no como modelo del almacenamiento en staging. La topología detallada, su estado y las diferencias del proxy local están documentados en [Infraestructura y operación](./infrastructure-and-operations.md).
@@ -67,12 +72,15 @@ flowchart TD
     Router[Express routers y middleware]
     Service[Servicios de aplicación y dominio]
     Port[Puertos de integración]
+    MailPort[ReportMailPort]
     Prisma[Prisma Client]
     Adapter[Adaptadores Sheets y almacenamiento]
+    GmailAdapter[GmailClient]
 
     View --> Query --> Http --> Router --> Service
     Service --> Prisma --> DB[(PostgreSQL)]
     Service --> Port --> Adapter
+    Service --> MailPort --> GmailAdapter --> Gmail[Google Gmail API]
     Adapter --> External[Servicios externos]
 ```
 
