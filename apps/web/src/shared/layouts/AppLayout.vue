@@ -136,6 +136,13 @@ async function logout(): Promise<void> {
                 <router-link
                   class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
                   active-class="bg-blue-50 text-blue-900 font-semibold"
+                  to="/admin/clients"
+                >
+                  Clientes
+                </router-link>
+                <router-link
+                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                  active-class="bg-blue-50 text-blue-900 font-semibold"
                   to="/admin/users"
                 >
                   Administradores
@@ -263,6 +270,14 @@ async function logout(): Promise<void> {
                 @click="isMobileMenuOpen = false"
               >
                 Cuentas Técnicas
+              </router-link>
+              <router-link
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/admin/clients"
+                @click="isMobileMenuOpen = false"
+              >
+                Clientes
               </router-link>
               <router-link
                 class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"

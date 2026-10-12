@@ -155,3 +155,26 @@ export {
   initialEquipmentState,
   type RegisterEquipment,
 } from './inventory.js';
+
+export {
+  CreateClientSchema,
+  UpdateClientSchema,
+  SaveClientEmailSchema,
+  ClientEmailParamsSchema,
+  ClientEmailSchema,
+  ClientSchema,
+  type CreateClient,
+  type UpdateClient,
+  type SaveClientEmail,
+  type ClientEmail,
+  type Client,
+} from './clients.js';
+
+export {
+  SendReportEmailSchema,
+  ReportEmailRecipientsSchema,
+  ReportEmailResultSchema,
+  type SendReportEmail,
+  type ReportEmailRecipients,
+  type ReportEmailResult,
+} from './report-email.js';

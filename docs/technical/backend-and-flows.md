@@ -2,17 +2,18 @@
 
 ## Módulos de la API
 
-| Módulo                     | Responsabilidad                                                             |
-| -------------------------- | --------------------------------------------------------------------------- |
-| `auth`                     | login, refresh, revocación y consulta de sesión                             |
-| `administration`           | gestión administrativa unificada de usuarios y técnicos (con DI)            |
-| `shared-technician-access` | configuración auditable del acceso compartido y consulta del modo de acceso |
-| `catalogs`                 | consulta y caché de clientes/equipos de Sheets                              |
-| `orders`                   | borradores, unidades, equipos, asignación, cancelación y outbox             |
-| `execution`                | inicio, verificación, discrepancias, checklist, evidencias, firma y cierre  |
-| `reports`                  | generación, versionado y descarga privada del PDF                           |
-| `health`                   | liveness y readiness                                                        |
-| `observability`            | logs estructurados y métricas                                               |
+| Módulo                     | Responsabilidad                                                                |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `auth`                     | login, refresh, revocación y consulta de sesión                                |
+| `administration`           | gestión administrativa unificada de usuarios y técnicos (con DI)               |
+| `shared-technician-access` | configuración auditable del acceso compartido y consulta del modo de acceso    |
+| `catalogs`                 | consulta y caché de clientes/equipos de Sheets                                 |
+| `clients`                  | registro local de clientes validados contra Sheets y sus correos destinatarios |
+| `orders`                   | borradores, unidades, equipos, asignación, cancelación y outbox                |
+| `execution`                | inicio, verificación, discrepancias, checklist, evidencias, firma y cierre     |
+| `reports`                  | generación, versionado, descarga privada y envío manual por correo del PDF     |
+| `health`                   | liveness y readiness                                                           |
+| `observability`            | logs estructurados y métricas                                                  |
 
 Dentro de `orders`, `reschedule-failed-appointment.ts` concentra la resolución de una cita fallida y la clonación de la orden dentro de una sola transacción de dominio; `OrdersService` conserva la API pública del módulo. En `execution`, `OrderFinalizationService` concentra validación de completitud, cierre, cita fallida y corrección, mientras `ExecutionService` conserva la fachada pública y los flujos de evidencias y firma. Ambos servicios comparten la carga de la orden con autorización mediante `execution-order-access.ts`.
 
@@ -116,17 +117,20 @@ como `SUPERSEDED` para no escribir dos veces el mismo folio.
 El cálculo de liquidación y costos de las órdenes se gestiona mediante componentes desacoplados de alta precisión:
 
 ### Motor de cálculo financiero (`pricing.ts`)
+
 - Utiliza aritmética de precisión arbitraria (`Prisma.Decimal` / `decimal.js`) con redondeo `ROUND_HALF_UP` a dos decimales.
 - Determina el costo base por unidad multiplicando la tarifa del servicio por la cantidad de equipos (o tarifa única en reemplazo de equipos).
 - Aplica viáticos / costo de salida según la configuración de la orden o tarifas del técnico.
 - Genera el desglose estructurado `pricingBreakdown` congelado al completar la orden.
 
 ### Servicio de ajuste: `OrderPricingService`
+
 - Permite la sobreescritura de tarifas acordadas (`pricingOverrides`) por administradores (`orders:manage`).
 - **Órdenes no finalizadas y no canceladas:** guarda los overrides para ser tomados durante el cierre y emite auditoría `ORDER_PRICING_CONFIGURED`.
 - **Órdenes finalizadas (`COMPLETED`, `FAILED_APPOINTMENT`):** ejecuta recálculo financiero completo, incrementa `pricingVersion`, actualiza snapshots de precios y encola la re-sincronización hacia Google Sheets invalidando versiones previas (`SUPERSEDED`), registrando auditoría `ORDER_PRICING_ADJUSTED`.
 
 ### Formato en Reporte Técnico de Google Sheets (`technical-report-formatter.ts`)
+
 - Para órdenes multiservicio o con múltiples unidades (excluyendo citas fallidas), las columnas F (`economico`), G (`serie`), H (`imeiId`), K (`servicio`) y L (`costo`) se sincronizan renglón por renglón usando saltos de línea (`\n`).
 - La columna L (`costo`) desglosa el costo correspondiente a cada unidad en estricto orden cronológico alineado con el servicio, preservando la coherencia visual y contable en la hoja de cálculo.
 
@@ -182,6 +186,23 @@ sequenceDiagram
 
 PDFKit compone páginas Carta; Sharp corrige orientación y normaliza imágenes. Una evidencia por página ocupa el área útil sin mostrar la categoría del checklist. Un proceso `PROCESSING` abandonado por más de diez minutos vuelve a `PENDING`. Los errores públicos se sanitizan y un reintento no duplica la versión vigente.
 `ReportsService` carga la orden y conserva la transición `READY` y su auditoría; `report-storage.ts` gestiona la reserva/reutilización de IDs en Drive o el almacenamiento del proveedor de objetos. En Drive el checksum se calcula sobre los bytes remotos cuando se reutiliza un archivo.
+
+### Envío manual de reportes por Gmail
+
+El envío se inicia desde la vista web; completar una orden no envía correo. El backend obtiene las
+direcciones seleccionadas de los correos asociados al cliente y entrega el PDF mediante Gmail. La
+cuenta de servicio suplantada usa el scope `https://www.googleapis.com/auth/gmail.send`, autorizado
+por el superadministrador de Workspace para la delegación de dominio. `GOOGLE_GMAIL_SENDER_EMAIL`
+define tanto el usuario suplantado como el encabezado `From`; modificarlo requiere reiniciar la API.
+El envío puede suplantar cualquier usuario activo del dominio autorizado.
+
+La auditoría registra `SERVICE_ORDER_REPORT_EMAIL_ATTEMPTED`, `SERVICE_ORDER_REPORT_EMAIL_SENT` y
+`SERVICE_ORDER_REPORT_EMAIL_FAILED`. `SENT` significa que Gmail aceptó el mensaje y devolvió un ID,
+no que la entrega al buzón esté confirmada. Un fallo queda como no confirmado y puede requerir
+revisión de la carpeta Enviados antes de un reintento. Ver [entrega de reportes por correo](../report-email-delivery.md).
+
+En AWS la integración aún no está habilitada: CDK no mapea las variables `GOOGLE_GMAIL_*` al task
+definition. Agregar credenciales al secreto no basta; hay que actualizar ese mapeo antes de desplegar.
 
 ## Transacciones y auditoría
 

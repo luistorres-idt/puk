@@ -4,6 +4,8 @@ import { hasCapability, ownsAssignedOrder } from './capabilities.js';
 
 describe('authorization policies', () => {
   it('separates administrative and technician capabilities', () => {
+    expect(hasCapability('ADMIN', 'clients:manage')).toBe(true);
+    expect(hasCapability('TECHNICIAN', 'clients:manage')).toBe(false);
     expect(hasCapability('ADMIN', 'users:manage')).toBe(true);
     expect(hasCapability('TECHNICIAN', 'users:manage')).toBe(false);
     expect(hasCapability('TECHNICIAN', 'orders:execute')).toBe(true);

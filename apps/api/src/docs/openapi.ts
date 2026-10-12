@@ -1,5 +1,13 @@
 import { toJsonSchema } from '@valibot/to-json-schema';
 import {
+  SendReportEmailSchema,
+  ReportEmailResultSchema,
+  ReportEmailRecipientsSchema,
+  ClientSchema,
+  ClientEmailSchema,
+  CreateClientSchema,
+  UpdateClientSchema,
+  SaveClientEmailSchema,
   RegisterEquipmentSchema,
   HealthResponseSchema,
   LoginRequestSchema,
@@ -46,6 +54,35 @@ const orderIdParameter = {
   schema: { type: 'string', format: 'uuid' },
 };
 
+const clientResponses = {
+  '400': { description: 'Invalid request or unknown Sheets client identity.' },
+  '401': { description: 'Authentication required.' },
+  '403': { description: 'Administrator role required.' },
+  '404': { description: 'Client or recipient not found for this client.' },
+  '409': { description: 'Client identity or normalized recipient already registered.' },
+};
+function clientRequest(schema: Parameters<typeof toJsonSchema>[0]) {
+  return {
+    required: true,
+    content: { 'application/json': { schema: toJsonSchema(schema, schemaConfig) } },
+  };
+}
+function clientResponse(schema: Parameters<typeof toJsonSchema>[0]) {
+  return {
+    description: 'Successful administrator operation.',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: { data: toJsonSchema(schema, schemaConfig), meta: { type: 'object' } },
+          required: ['data', 'meta'],
+        },
+      },
+    },
+  };
+}
+const emailIdParameter = { ...orderIdParameter, name: 'emailId' };
+
 export const openApiDocument = {
   info: {
     title: 'Service Orders API — Bull Dog Solution',
@@ -55,6 +92,92 @@ export const openApiDocument = {
   jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
   openapi: '3.1.0',
   paths: {
+    '/api/v1/orders/{id}/report/recipients': {
+      get: {
+        operationId: 'getReportEmailRecipients',
+        summary: 'Read registered recipients for a completed order (ADMIN only)',
+        parameters: [orderIdParameter],
+        responses: { ...clientResponses, '200': clientResponse(ReportEmailRecipientsSchema) },
+      },
+    },
+    '/api/v1/orders/{id}/report/send': {
+      post: {
+        operationId: 'sendReportEmail',
+        summary: 'Manually send the selected READY report individually through Gmail (ADMIN only)',
+        parameters: [orderIdParameter],
+        requestBody: clientRequest(SendReportEmailSchema),
+        responses: {
+          ...clientResponses,
+          '200': clientResponse(ReportEmailResultSchema),
+          '413': { description: 'PDF exceeds the 20 MiB application attachment cap.' },
+          '503': {
+            description: 'Dedicated Gmail sender is not configured or PDF storage is unavailable.',
+          },
+        },
+      },
+    },
+    '/api/v1/clients': {
+      get: {
+        operationId: 'listClients',
+        summary: 'List stored clients and recipients (ADMIN only)',
+        responses: {
+          ...clientResponses,
+          '200': { description: 'Stored clients with recipient emails.' },
+        },
+      },
+      post: {
+        operationId: 'createClient',
+        summary: 'Register an existing Sheets client without editing Sheets (ADMIN only)',
+        requestBody: clientRequest(CreateClientSchema),
+        responses: {
+          ...clientResponses,
+          '201': clientResponse(ClientSchema),
+          '503': { description: 'Sheets identity verification unavailable; no client saved.' },
+        },
+      },
+    },
+    '/api/v1/clients/{id}': {
+      get: {
+        operationId: 'getClient',
+        summary: 'Read a stored client (ADMIN only)',
+        parameters: [orderIdParameter],
+        responses: { ...clientResponses, '200': clientResponse(ClientSchema) },
+      },
+      patch: {
+        operationId: 'updateClient',
+        summary: 'Edit the local name; Sheets identity is immutable (ADMIN only)',
+        parameters: [orderIdParameter],
+        requestBody: clientRequest(UpdateClientSchema),
+        responses: { ...clientResponses, '200': clientResponse(ClientSchema) },
+      },
+    },
+    '/api/v1/clients/{id}/emails': {
+      post: {
+        operationId: 'addClientEmail',
+        summary: 'Add a format-validated recipient (ADMIN only)',
+        parameters: [orderIdParameter],
+        requestBody: clientRequest(SaveClientEmailSchema),
+        responses: { ...clientResponses, '201': clientResponse(ClientEmailSchema) },
+      },
+    },
+    '/api/v1/clients/{id}/emails/{emailId}': {
+      patch: {
+        operationId: 'updateClientEmail',
+        summary: 'Edit a recipient belonging to the client (ADMIN only)',
+        parameters: [orderIdParameter, emailIdParameter],
+        requestBody: clientRequest(SaveClientEmailSchema),
+        responses: { ...clientResponses, '200': clientResponse(ClientEmailSchema) },
+      },
+      delete: {
+        operationId: 'deleteClientEmail',
+        summary: 'Remove a recipient belonging to the client (ADMIN only)',
+        parameters: [orderIdParameter, emailIdParameter],
+        responses: {
+          ...clientResponses,
+          '200': { description: 'Recipient removed; data.deleted is true.' },
+        },
+      },
+    },
     '/api/v1/inventory/equipment': {
       post: {
         operationId: 'registerInventoryEquipment',

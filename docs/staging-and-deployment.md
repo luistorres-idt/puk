@@ -2,7 +2,7 @@
 
 Este documento detalla los procedimientos de integración continua, despliegue y operación del ambiente de Staging y Producción para Bull Dog Solution.
 
-> **Estado verificado al 2026-10-05:** staging sigue activo en AWS, cuenta `075566976700`, región `us-east-2`, con ECS sobre EC2 y RDS separado. La revisión desplegada 14 todavía usa S3; la IaC local selecciona Drive, pero su configuración y validación están pendientes. No se ha redesplegado ni eliminado almacenamiento durante esta sincronización. Las secciones de producción son orientación, no un procedimiento productivo ya disponible.
+> **Estado al 2026-10-09:** AWS staging está eliminado/no desplegado y producción no está desplegada. Los inventarios y procedimientos de AWS de este documento son referencias históricas o pasos para un futuro redeployment; verificá los recursos y el diff CDK antes de operar. Gmail tampoco está conectado al despliegue CDK.
 
 ## 1. Pipeline de Integración Continua (CI)
 
@@ -23,7 +23,7 @@ El archivo `.github/workflows/ci.yml` define el flujo de validación automática
 Se deben mantener tres ambientes completamente aislados:
 
 - **Desarrollo (Local):** `docker-compose.yml` local con PostgreSQL, MinIO y catálogo simulado de Sheets.
-- **Staging (pruebas):** ECS sobre EC2, PostgreSQL dedicada y almacenamiento S3 en la revisión activa. El objetivo es usar una unidad compartida de Drive y documentos de Sheets exclusivos de pruebas. CDK selecciona `STORAGE_PROVIDER=drive`; no desplegar ese cambio hasta configurar y verificar las identidades y los recursos de Google de pruebas.
+- **Staging (pruebas):** no desplegado actualmente. La IaC describe ECS, PostgreSQL y Google Drive; verificar y desplegar explícitamente esa infraestructura antes de considerarla activa.
 - **Producción:** Infraestructura productiva con políticas de respaldo continuo y hoja principal de clientes y salidas.
 
 Cada entorno cuenta con sus propias claves criptográficas asimétricas para JWT (`JWT_ACCESS_PRIVATE_KEY`, `JWT_REFRESH_PRIVATE_KEY`), credenciales de base de datos y configuración de la cuenta de servicio y el Drive compartido que utilizará.
@@ -52,50 +52,59 @@ Esta sección describe el objetivo general para producción. La arquitectura de 
 
 ## 5. Staging activo y sincronización pendiente
 
-### Inventario verificado al 2026-10-05
+### Último inventario histórico conocido (2026-10-05; no representa el estado actual)
 
-| Componente      | Estado observado                                                        |
-| --------------- | ----------------------------------------------------------------------- |
-| Cuenta y región | `075566976700`, `us-east-2`                                             |
-| CloudFormation  | `PukStagingFoundation` y `PukStagingApplication` activos                |
-| Cómputo         | Un host EC2 `t3.small`, instancia `i-05dab87f12229d17c`                 |
-| Acceso          | `http://18.222.63.51`, IPv4 efímera; consultar de nuevo antes de operar |
-| ECS             | Cluster `puk-staging`, un servicio y una tarea; API y web ejecutándose  |
-| Persistencia    | RDS separado del host; secreto runtime existente                        |
-| Archivos        | Revisión de tarea 14 con configuración S3; Drive aún no aplicado        |
-| Recursos de red | Sin ALB ni NAT Gateway en el inventario regional consultado             |
+| Componente      | Estado actual / última observación histórica                      |
+| --------------- | ----------------------------------------------------------------- |
+| Cuenta y región | `075566976700`, `us-east-2`                                       |
+| CloudFormation  | Los stacks estaban activos en la fecha indicada; ahora eliminados |
+| Cómputo         | Un host EC2 `t3.small`, instancia `i-05dab87f12229d17c`           |
+| Acceso          | `http://18.222.63.51`, IPv4 efímera en esa fecha                  |
+| ECS             | Cluster `puk-staging`, servicio y tarea de API/web ejecutándose   |
+| Persistencia    | RDS separado del host; secreto runtime existente en esa fecha     |
+| Archivos        | Revisión histórica de tarea 14 con configuración S3               |
+| Recursos de red | Sin ALB ni NAT Gateway en el inventario regional consultado       |
 
-El bucket `EvidenceBucket` sigue existiendo y la aplicación desplegada lo referencia. La consulta
-acotada de versiones realizada el 2026-10-05 devolvió cero versiones y cero marcadores de borrado,
-sin paginación pendiente; es una observación de ese momento, no autorización para borrar el bucket.
-Debe conservarse hasta completar y validar la transición a Drive. No se ha comprobado ni declarado
+En la consulta del 2026-10-05, el bucket `EvidenceBucket` seguía existiendo y la aplicación desplegada
+lo referenciaba; devolvió cero versiones y marcadores de borrado. Es sólo una observación histórica,
+no evidencia del estado actual ni autorización para borrar recursos. No se ha comprobado ni declarado
 pérdida de datos de RDS o de archivos históricos.
 
 La IaC local define un host público `t3.small`, tarea ECS en modo `bridge`, migración/seed antes de
 API y web después de su health check. No declara ALB, CloudFront, NAT Gateway ni Elastic IP. RDS
 queda privado; los detalles están en [Infraestructura y operación](./technical/infrastructure-and-operations.md).
 
-> **Sólo pruebas:** el acceso por IP usa HTTP sin TLS. No ingresar contraseñas reutilizadas,
-> datos reales ni información de producción. La IP puede cambiar al reemplazar o reiniciar el host.
+Los valores de acceso de los inventarios históricos son sólo referencias de pruebas y no implican
+que exista un endpoint activo. No ingresar datos reales ni información de producción en un futuro
+staging sin TLS.
 
-### Dónde configurar Sheets y Drive
+### Configuración de Sheets, Drive y Gmail para un futuro despliegue
 
-La validación segura de presencia confirmó los cuatro campos de Sheets; los tres campos de Drive
-aún faltan. No se mostraron sus valores.
+Para un futuro despliegue, los valores de Google se almacenarían en AWS Secrets Manager; el secreto
+de staging anterior ya no está disponible. No se almacenan como variables de GitHub Actions ni en
+el repositorio. La configuración local de referencia está en `.env.example`; no contiene valores reales.
 
-Los valores de Google se guardan en **AWS Secrets Manager → región `us-east-2` →
-`puk/staging/runtime`**. No se almacenan como variables de GitHub Actions ni en el repositorio.
-La configuración local de referencia está en `.env.example`; no contiene valores reales.
+| Campo del secreto runtime           | Uso / origen                                                 |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `GOOGLE_SPREADSHEET_ID`             | Documento de pruebas para clientes y equipos                 |
+| `GOOGLE_TECHNICIANS_SPREADSHEET_ID` | Documento de pruebas para directorio y reportes técnicos     |
+| `GOOGLE_CLIENT_EMAIL`               | `client_email` del JSON de la cuenta de servicio de Sheets   |
+| `GOOGLE_PRIVATE_KEY`                | `private_key` del mismo JSON                                 |
+| `GOOGLE_DRIVE_SHARED_DRIVE_ID`      | ID de la raíz de la unidad compartida de pruebas             |
+| `GOOGLE_DRIVE_CLIENT_EMAIL`         | `client_email` del JSON de la cuenta de servicio de Drive    |
+| `GOOGLE_DRIVE_PRIVATE_KEY`          | `private_key` del mismo JSON de Drive                        |
+| `GOOGLE_GMAIL_CLIENT_EMAIL`         | `client_email` de la cuenta de servicio con delegación Gmail |
+| `GOOGLE_GMAIL_PRIVATE_KEY`          | `private_key` del mismo JSON de la cuenta Gmail              |
+| `GOOGLE_GMAIL_SENDER_EMAIL`         | Buzón Workspace suplantado y encabezado `From`               |
 
-| Campo del secreto runtime           | Uso / origen                                               |
-| ----------------------------------- | ---------------------------------------------------------- |
-| `GOOGLE_SPREADSHEET_ID`             | Documento de pruebas para clientes y equipos               |
-| `GOOGLE_TECHNICIANS_SPREADSHEET_ID` | Documento de pruebas para directorio y reportes técnicos   |
-| `GOOGLE_CLIENT_EMAIL`               | `client_email` del JSON de la cuenta de servicio de Sheets |
-| `GOOGLE_PRIVATE_KEY`                | `private_key` del mismo JSON                               |
-| `GOOGLE_DRIVE_SHARED_DRIVE_ID`      | ID de la raíz de la unidad compartida de pruebas           |
-| `GOOGLE_DRIVE_CLIENT_EMAIL`         | `client_email` del JSON de la cuenta de servicio de Drive  |
-| `GOOGLE_DRIVE_PRIVATE_KEY`          | `private_key` del mismo JSON de Drive                      |
+**Gmail no está conectado al task definition de CDK.** `ApplicationStack` inyecta credenciales
+de Sheets y Drive, pero no `GOOGLE_GMAIL_*`; configurar esos valores en Secrets Manager no basta
+para habilitar envíos en AWS. Se requiere primero mapearlos en IaC/tarea y desplegar. En ejecución
+local, el envío manual funciona con las tres variables, delegación de dominio autorizada y API
+reiniciada al cambiar el remitente. El superadministrador de Workspace debe autorizar el scope
+`https://www.googleapis.com/auth/gmail.send`. La identidad de Gmail separada es recomendada, pero
+la aplicación permite reutilizar la identidad de Sheets/Drive. El envío es manual; no se envía al
+completar órdenes automáticamente. Ver [entrega de reportes por correo](./report-email-delivery.md).
 
 Para un documento de Sheets con URL `https://docs.google.com/spreadsheets/d/<ID>/edit`, usar el
 segmento `<ID>`, no el `gid` de una pestaña. Véase [operaciones de Sheets](https://developers.google.com/workspace/sheets/api/samples/sheet).

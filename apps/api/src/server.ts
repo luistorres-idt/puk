@@ -1,3 +1,4 @@
+import { ClientsService } from './modules/clients/index.js';
 import { HybridEquipmentCatalog, InventoryService } from './modules/inventory/index.js';
 import { createApp } from './app.js';
 import { TokenService } from './auth/tokens.js';
@@ -18,7 +19,8 @@ import { DevMockStorageClient } from './integrations/object-storage/dev-mock-sto
 import { DisabledStorageClient } from './integrations/object-storage/disabled.client.js';
 import { GoogleDriveClient } from './integrations/google-drive/google-drive.client.js';
 import { DriveFolderResolver } from './integrations/google-drive/drive-folder-resolver.js';
-import { ReportsService } from './modules/reports/index.js';
+import { GmailClient } from './integrations/gmail/gmail.client.js';
+import { ReportsService, ReportEmailService } from './modules/reports/index.js';
 import { SharedTechnicianAccessService } from './modules/shared-technician-access/index.js';
 import { TechniciansService } from './modules/technicians/index.js';
 import {
@@ -162,6 +164,17 @@ const reportsService = new ReportsService(prisma, storagePort, {
   downloadUrlTtlSeconds: environment.PRESIGNED_URL_TTL_SECONDS,
   ...(driveStorage ? { drive: driveStorage } : {}),
 });
+const gmailSender =
+  environment.GOOGLE_GMAIL_CLIENT_EMAIL &&
+  environment.GOOGLE_GMAIL_PRIVATE_KEY &&
+  environment.GOOGLE_GMAIL_SENDER_EMAIL
+    ? new GmailClient({
+        clientEmail: environment.GOOGLE_GMAIL_CLIENT_EMAIL,
+        privateKey: environment.GOOGLE_GMAIL_PRIVATE_KEY,
+        senderEmail: environment.GOOGLE_GMAIL_SENDER_EMAIL,
+      })
+    : undefined;
+const reportEmailService = new ReportEmailService(prisma, reportsService, gmailSender);
 const sharedTechnicianAccessService = new SharedTechnicianAccessService(prisma);
 
 const reportsInterval = setInterval(() => {
@@ -203,12 +216,14 @@ const server = createApp({
     tokens,
   },
   catalogsService,
+  clientsService: new ClientsService(prisma, sheetsCatalogService),
   inventoryService,
   ordersService,
   orderPricingService,
   syncService,
   executionService,
   reportsService,
+  reportEmailService,
   sharedTechnicianAccessService,
   dependencyCheck: async () => {
     try {

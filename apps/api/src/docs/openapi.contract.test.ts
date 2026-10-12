@@ -6,6 +6,24 @@ import { openApiDocument } from './openapi.js';
 describe('OpenAPI Contract Tests', () => {
   const app = createApp();
 
+  it('documents pinned report and scoped recipient IDs for manual Gmail sending', () => {
+    const operation = openApiDocument.paths['/api/v1/orders/{id}/report/send'].post;
+    expect(operation.summary).toContain('ADMIN only');
+    expect(operation.requestBody.content['application/json'].schema.required).toEqual(
+      expect.arrayContaining(['reportId', 'recipientIds']),
+    );
+    expect(operation.responses['503']).toBeDefined();
+    expect(openApiDocument.paths['/api/v1/orders/{id}/report/recipients']).toBeDefined();
+  });
+
+  it('documents ADMIN-only client management with immutable Sheets identity', () => {
+    const paths = openApiDocument.paths;
+    expect(paths['/api/v1/clients'].post.responses['503']).toBeDefined();
+    expect(paths['/api/v1/clients/{id}'].patch.summary).toContain('immutable');
+    expect(paths['/api/v1/clients/{id}/emails'].post.responses['403']).toBeDefined();
+    expect(paths['/api/v1/clients/{id}/emails/{emailId}'].delete.parameters).toHaveLength(2);
+  });
+
   it('matches paths declared in the OpenAPI document with reachable endpoints', async () => {
     const paths = Object.keys(openApiDocument.paths);
     expect(paths).toContain('/health/live');

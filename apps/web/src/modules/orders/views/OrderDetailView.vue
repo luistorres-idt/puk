@@ -93,9 +93,7 @@ const canManagePricing = computed(
   () => isAdmin.value && !!order.value && order.value.status !== 'CANCELLED',
 );
 const isOrderFinalized = computed(
-  () =>
-    order.value?.status === 'COMPLETED' ||
-    order.value?.status === 'FAILED_APPOINTMENT',
+  () => order.value?.status === 'COMPLETED' || order.value?.status === 'FAILED_APPOINTMENT',
 );
 const hasPricingOverrides = computed(() => {
   const o = order.value?.pricingOverrides;
@@ -396,12 +394,7 @@ const statusColor = orderStatusTagType;
               Modo Técnico →
             </n-button>
 
-            <n-button
-              v-if="canManagePricing"
-              type="primary"
-              secondary
-              @click="openPricingModal"
-            >
+            <n-button v-if="canManagePricing" type="primary" secondary @click="openPricingModal">
               {{ isOrderFinalized ? 'Ajustar Precios' : 'Configurar Tarifas' }}
             </n-button>
 
@@ -473,6 +466,7 @@ const statusColor = orderStatusTagType;
 
         <order-report-card
           v-if="order.status === 'COMPLETED'"
+          :order-id="orderId"
           :report="report"
           :report-versions="reportVersions"
           :drive-mode="driveMode"

@@ -4,7 +4,7 @@
 
 Bull Dog Solution es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
 
-PostgreSQL conserva el estado transaccional. Google Sheets sigue siendo la fuente externa de clientes y equipos. Google Drive compartido es el proveedor configurado por la IaC de staging para fotografías, firmas y PDFs; el adaptador de almacenamiento de objetos permanece en el código para compatibilidad/otros entornos. PostgreSQL conserva únicamente metadatos y referencias. Staging AWS está eliminado y producción no tiene infraestructura propia.
+PostgreSQL conserva el estado transaccional, incluyendo contactos de correo por cliente. Google Sheets sigue siendo la fuente externa de clientes y equipos. Google Drive compartido es el proveedor configurado por la IaC para fotografías, firmas y PDFs; el adaptador de almacenamiento de objetos permanece en el código para compatibilidad/otros entornos. Gmail permite el envío manual del PDF cuando la API está configurada; no hay envío automático. AWS staging está eliminado/no desplegado y producción no tiene infraestructura propia. El task definition CDK todavía no inyecta credenciales Gmail.
 
 ## Diagrama de contexto
 
@@ -16,6 +16,7 @@ flowchart LR
     API --> DB[(PostgreSQL)]
     API --> Storage[(Almacenamiento privado de archivos)]
     API --> Sheets[Google Sheets API]
+    API --> Gmail[Google Gmail API\nEnvío manual de reportes]
     API --> Metrics[Prometheus / colector]
 ```
 
@@ -104,6 +105,7 @@ docs/                    requisitos, decisiones y documentación técnica
 - Escrituras a Sheets mediante outbox persistente y reintentos.
 - Almacenamiento privado de evidencias, firmas y reportes detrás de adaptadores de proveedor.
 - Reportes PDF generados en segundo plano y versionados mediante abstracción `ReportGeneratorPort`.
+- Envío manual por Gmail separado de la generación del PDF; destinatarios provienen de `ClientEmail`, y la identidad del remitente se configura en la API.
 - Ciclo de vida y transiciones de orden gobernados por una máquina de estados de dominio explícita (`order-state-machine`).
 - Validación de cierre y completitud técnica desacoplada mediante patrón de especificación pura (`order-completeness`).
 - Tolerancia a fallos en adaptadores externos (Sheets y almacenamiento) protegida por Circuit Breaker con estados CLOSED, OPEN y HALF-OPEN.
@@ -129,6 +131,9 @@ docs/                    requisitos, decisiones y documentación técnica
 - Evidencias, firmas y reportes usan el proveedor configurado; Google Drive está integrado y el
   adaptador de objetos se conserva para entornos que lo seleccionen. Cada proveedor mantiene sus
   protocolos de permisos, reintento y confirmación.
+- El envío manual de reportes utiliza Gmail con delegación de dominio y las variables `GOOGLE_GMAIL_*`;
+  `GOOGLE_GMAIL_SENDER_EMAIL` es el usuario suplantado y el encabezado `From`. CDK aún no pasa estas
+  variables a la tarea, por lo que esta integración no está disponible en AWS hasta conectar el secret mapping.
 - Las tarifas de órdenes admiten personalización acordada previa y ajuste contable post-cierre
   mediante `OrderPricingService` y cálculo puro en `pricing.ts`, con precisión arbitraria, auditoría,
   versiones contables y publicación multilínea en la columna de costo del reporte técnico de Sheets.
