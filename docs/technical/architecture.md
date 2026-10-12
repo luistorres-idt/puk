@@ -4,7 +4,7 @@
 
 Bull Dog Solution es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
 
-PostgreSQL conserva el estado transaccional, incluyendo contactos de correo por cliente. Google Sheets sigue siendo la fuente externa de clientes y equipos. Google Drive compartido es el proveedor configurado por la IaC para fotografías, firmas y PDFs; el adaptador de almacenamiento de objetos permanece en el código para compatibilidad/otros entornos. Gmail permite el envío manual del PDF cuando la API está configurada; no hay envío automático. AWS staging está eliminado/no desplegado y producción no tiene infraestructura propia. El task definition CDK todavía no inyecta credenciales Gmail.
+PostgreSQL conserva el estado transaccional, incluyendo contactos de correo por cliente. Google Sheets sigue siendo la fuente externa de clientes y equipos. La IaC local configura Google Drive compartido para fotografías, firmas y PDFs, pero staging está eliminado/no desplegado y Drive aún requiere configuración y validación antes de volver a desplegar; el último inventario histórico observó S3. El adaptador de almacenamiento de objetos permanece en el código para compatibilidad y otros entornos. Gmail permite el envío manual del PDF cuando la API está configurada; no hay envío automático. Producción no tiene infraestructura propia y CDK todavía no inyecta credenciales Gmail.
 
 ## Diagrama de contexto
 
@@ -12,7 +12,7 @@ PostgreSQL conserva el estado transaccional, incluyendo contactos de correo por 
 flowchart LR
     Admin[Administrador] --> Web[Bull Dog Solution Web]
     Tech[Técnico] --> Web
-    Web -->|HTTPS / JSON| API[Bull Dog Solution API]
+    Web -->|HTTP / JSON en la topología CDK actual| API[Bull Dog Solution API]
     API --> DB[(PostgreSQL)]
     API --> Storage[(Almacenamiento privado de archivos)]
     API --> Sheets[Google Sheets API]
@@ -49,7 +49,13 @@ flowchart TB
     Domain --> Google[Google Sheets]
 ```
 
-En AWS, Nginx y Express viven en la misma tarea Fargate y Nginx puede alcanzar la API en `127.0.0.1:3000`. Docker Compose ofrece un proveedor de objetos local mediante MinIO y un volumen persistente; es una configuración de desarrollo, no el modelo arquitectónico del almacenamiento. La topología detallada y la divergencia conocida del proxy local están documentadas en [Infraestructura y operación](./infrastructure-and-operations.md).
+La topología CDK declarada usa ECS sobre EC2 con tareas en modo `bridge`: Nginx y Express comparten la tarea, y Nginx llega a la API mediante el enlace de contenedor `api` en el puerto 3000. El host publica HTTP por el puerto 80, sin TLS; esta infraestructura no está desplegada actualmente y no debe usarse con datos reales. Docker Compose ofrece MinIO como proveedor local de desarrollo, no como modelo del almacenamiento en staging. La topología detallada, su estado y las diferencias del proxy local están documentados en [Infraestructura y operación](./infrastructure-and-operations.md).
+
+### Despliegue y migraciones
+
+El workflow de staging espera un CI exitoso sobre `main`, y sólo despliega si la variable `AWS_STAGING_READY` vale exactamente `true`. En la revisión validada ejecuta `pnpm infra:deploy`; staging está eliminado/no desplegado, por lo que esta automatización no implica que haya un entorno disponible.
+
+Durante el build Docker, las imágenes de API y migración generan Prisma Client usando una URL ficticia de compilación; la generación no se conecta a la base de datos real ni ejecuta migraciones. Cuando inicia una nueva tarea ECS, el contenedor de migración ejecuta `prisma migrate deploy` y luego el seed. La API espera que la migración termine con éxito y la web espera a que la API esté saludable. Sólo se aplican migraciones pendientes versionadas en `prisma/migrations/`: cambiar únicamente `prisma/schema.prisma` no modifica la base de datos. Un despliegue sólo de código no cambia el esquema si no hay migraciones pendientes. Las migraciones deben ser compatibles con la versión previa de la aplicación durante el reemplazo de tareas; un rollback de ECS no revierte los cambios ya aplicados a la base.
 
 ## Capas lógicas
 
@@ -112,9 +118,9 @@ docs/                    requisitos, decisiones y documentación técnica
 - JWT de acceso en memoria del navegador; refresh token en cookie HTTP-only.
 - TanStack Query para estado remoto; Pinia se limita a sesión y estado global de UI.
 - Mocks de Sheets, almacenamiento y claves JWT únicamente en desarrollo con valores `development-only`.
-- Staging definido como infraestructura inmutable en dos stacks CDK: foundation para estado/red y application para cómputo/entrega.
+- Staging descrito en dos stacks CDK: foundation para estado/red y application para cómputo/entrega. Los stacks no están desplegados actualmente; verificar estado y diff antes de operar.
 
-## Estado implementado al 2026-09-30
+## Estado implementado al 2026-10-12
 
 - El acceso técnico compartido se modela como configuración versionada y auditable; las políticas
   distinguen ejecución individual de tablero multiorden.
@@ -129,8 +135,9 @@ docs/                    requisitos, decisiones y documentación técnica
   servicios/vistas públicas conservan fachadas y contratos compatibles. El alcance y la deuda
   residual se detallan en la [auditoría de mantenibilidad](../maintainability-audit.md).
 - Evidencias, firmas y reportes usan el proveedor configurado; Google Drive está integrado y el
-  adaptador de objetos se conserva para entornos que lo seleccionen. Cada proveedor mantiene sus
-  protocolos de permisos, reintento y confirmación.
+  adaptador de objetos se conserva para entornos que lo seleccionen. Drive está configurado en la
+  IaC local, pero falta validar sus credenciales y recursos antes de un redeploy. Cada proveedor
+  mantiene sus protocolos de permisos, reintento y confirmación.
 - El envío manual de reportes utiliza Gmail con delegación de dominio y las variables `GOOGLE_GMAIL_*`;
   `GOOGLE_GMAIL_SENDER_EMAIL` es el usuario suplantado y el encabezado `From`. CDK aún no pasa estas
   variables a la tarea, por lo que esta integración no está disponible en AWS hasta conectar el secret mapping.
