@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { NButton, NCard, NTag } from 'naive-ui';
+import ReportEmailPanel from './ReportEmailPanel.vue';
 import type { ServiceOrderReport } from '../api.js';
 
 defineProps<{
+  orderId: string;
   report: ServiceOrderReport | null | undefined;
   reportVersions: ServiceOrderReport[];
   driveMode: boolean;
@@ -62,7 +64,13 @@ function reportStatusLabel(status?: string): string {
         </p>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
+        <report-email-panel
+          v-if="isAdmin && report?.status === 'READY'"
+          :order-id="orderId"
+          :report-id="report.id"
+          :version="report.version"
+        />
         <n-button
           v-if="report?.status === 'READY'"
           type="primary"

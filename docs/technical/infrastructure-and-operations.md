@@ -195,9 +195,16 @@ No se deben renombrar construct IDs ni mover recursos persistentes sin revisar p
 
 - ECS inyecta credenciales de RDS desde su secreto generado al iniciar `migration` y `api`.
 - El secreto runtime existente es `puk/staging/runtime` en Secrets Manager, `us-east-2`.
-- La revisión activa contiene referencias de Sheets. El cambio local a Drive agrega
+- La configuración desplegada histórica contenía referencias de Sheets. La configuración CDK local de Drive agrega
   `GOOGLE_DRIVE_CLIENT_EMAIL`, `GOOGLE_DRIVE_PRIVATE_KEY` y `GOOGLE_DRIVE_SHARED_DRIVE_ID`;
   requiere configurar y verificar una identidad y una unidad compartida de pruebas.
+- AWS staging está eliminado/no desplegado. Gmail funciona localmente sólo con las variables
+  `GOOGLE_GMAIL_CLIENT_EMAIL`, `GOOGLE_GMAIL_PRIVATE_KEY` y `GOOGLE_GMAIL_SENDER_EMAIL`, más
+  delegación Workspace para `https://www.googleapis.com/auth/gmail.send`; el remitente es tanto
+  el usuario suplantado como el encabezado `From`, y cambiarlo requiere reiniciar la API.
+- El CDK de Application no mapea `GOOGLE_GMAIL_*` al entorno de la tarea. Gmail no puede habilitarse
+  en AWS agregando únicamente los valores al secreto: primero se debe actualizar la IaC/task secret
+  mapping y desplegar. El envío de reportes es manual, no automático.
 - Las identidades de Sheets y Drive pueden ser distintas; no inferir ni reutilizar sus claves
   automáticamente. Permisos IAM de Google Cloud no sustituyen compartir los recursos de Workspace.
 - La IaC define el rol OIDC `puk-staging-github-deploy`, limitado a `main` del repositorio configurado.
@@ -357,18 +364,19 @@ Los Dockerfiles son multi-stage. La imagen de API se ejecuta como usuario `node`
 
 ## Variables de entorno
 
-| Grupo             | Variables principales                                                                                     |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| HTTP              | `PORT`, `APP_ORIGIN`, `API_ORIGIN`, `TRUST_PROXY`                                                         |
-| Base de datos     | `DATABASE_URL`, `DIRECT_URL` o variables `PUK_DATABASE_*` en ECS                                          |
-| JWT               | Claves pública y privada, `JWT_ISSUER`, `JWT_AUDIENCE`, TTLs                                              |
-| Cookies           | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`                                                      |
-| S3 (legado/local) | Endpoint, región, bucket, credenciales locales y path style; activo en revisión 14, Drive es objetivo IaC |
-| Drive             | Cuenta de servicio, clave privada e ID de unidad compartida (`GOOGLE_DRIVE_*`)                            |
-| Sheets            | Spreadsheet, cuenta de servicio, clave privada y pestañas                                                 |
-| Límites           | Tamaños de evidencia y firma, TTL de URLs, caché                                                          |
-| Resiliencia       | Timeouts, reintentos, circuit breaker y polling                                                           |
-| Seed              | Correos y contraseña inicial                                                                              |
+| Grupo             | Variables principales                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| HTTP              | `PORT`, `APP_ORIGIN`, `API_ORIGIN`, `TRUST_PROXY`                                                            |
+| Base de datos     | `DATABASE_URL`, `DIRECT_URL` o variables `PUK_DATABASE_*` en ECS                                             |
+| JWT               | Claves pública y privada, `JWT_ISSUER`, `JWT_AUDIENCE`, TTLs                                                 |
+| Cookies           | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`                                                         |
+| S3 (legado/local) | Endpoint, región, bucket, credenciales locales y path style; revisión histórica 14 usó S3, Drive está en IaC |
+| Drive             | Cuenta de servicio, clave privada e ID de unidad compartida (`GOOGLE_DRIVE_*`)                               |
+| Gmail             | Cuenta de servicio, clave privada y buzón suplantado (`GOOGLE_GMAIL_*`); no mapeado por CDK                  |
+| Sheets            | Spreadsheet, cuenta de servicio, clave privada y pestañas                                                    |
+| Límites           | Tamaños de evidencia y firma, TTL de URLs, caché                                                             |
+| Resiliencia       | Timeouts, reintentos, circuit breaker y polling                                                              |
+| Seed              | Correos y contraseña inicial                                                                                 |
 
 La API valida su configuración al arrancar. Los valores `development-only` activan adaptadores simulados fuera de producción y nunca deben usarse en producción.
 

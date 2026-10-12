@@ -17,6 +17,7 @@ import {
   type AdministrationRouterOptions,
 } from './modules/administration/index.js';
 import { createInventoryRouter, type InventoryService } from './modules/inventory/index.js';
+import { createClientsRouter, type ClientsService } from './modules/clients/index.js';
 import { createCatalogsRouter } from './modules/catalogs/index.js';
 import {
   createOrdersRouter,
@@ -25,7 +26,11 @@ import {
   type SyncService,
 } from './modules/orders/index.js';
 import { createExecutionRouter, type ExecutionService } from './modules/execution/index.js';
-import { createReportsRouter, type ReportsService } from './modules/reports/index.js';
+import {
+  createReportsRouter,
+  type ReportsService,
+  type ReportEmailService,
+} from './modules/reports/index.js';
 import {
   createSharedTechnicianAccessRouter,
   type SharedTechnicianAccessService,
@@ -39,12 +44,14 @@ export interface AppOptions {
   allowedOrigins?: readonly string[];
   auth?: Omit<AuthRouterOptions, 'requireAccess'> & { minimumPasswordLength: number };
   catalogsService?: CatalogServicePort;
+  clientsService?: ClientsService;
   inventoryService?: InventoryService;
   ordersService?: OrdersService;
   orderPricingService?: OrderPricingService;
   syncService?: SyncService;
   executionService?: ExecutionService;
   reportsService?: ReportsService;
+  reportEmailService?: ReportEmailService;
   sharedTechnicianAccessService?: SharedTechnicianAccessService;
   dependencyCheck?: () => Promise<boolean>;
   trustProxy?: boolean;
@@ -107,6 +114,8 @@ export function createApp(options: AppOptions = {}): Express {
         }),
       );
     }
+    if (options.clientsService !== undefined)
+      app.use('/api/v1/clients', createClientsRouter(options.clientsService, requireAccess));
     if (options.inventoryService !== undefined)
       app.use('/api/v1/inventory', createInventoryRouter(options.inventoryService, requireAccess));
     if (options.catalogsService !== undefined) {
@@ -146,6 +155,7 @@ export function createApp(options: AppOptions = {}): Express {
         '/api/v1/orders',
         createReportsRouter({
           reportsService: options.reportsService,
+          ...(options.reportEmailService ? { reportEmailService: options.reportEmailService } : {}),
           requireAccess,
         }),
       );

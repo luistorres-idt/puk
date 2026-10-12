@@ -1,5 +1,5 @@
 import { Router, type Request, type RequestHandler, type Response } from 'express';
-import { IdParamsSchema } from '@puk/contracts';
+import { IdParamsSchema, SendReportEmailSchema } from '@puk/contracts';
 import * as v from 'valibot';
 
 import { authorize } from '../../auth/authenticate.js';
@@ -7,9 +7,11 @@ import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import { AppError } from '../../shared/errors.js';
 import type { ReportsService } from './reports.service.js';
+import type { ReportEmailService } from './report-email.service.js';
 
 export function createReportsRouter(options: {
   reportsService: ReportsService;
+  reportEmailService?: ReportEmailService;
   requireAccess: RequestHandler;
 }): Router {
   const router = Router();
@@ -27,6 +29,45 @@ export function createReportsRouter(options: {
     response.setHeader('Cache-Control', 'private, no-store');
     response.send(Buffer.from(file.bytes));
   }
+
+  router.get(
+    '/:id/report/recipients',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema }),
+    async (request, response) => {
+      if (!options.reportEmailService)
+        throw new AppError(
+          503,
+          'REPORT_EMAIL_UNAVAILABLE',
+          'El envío por Gmail no está configurado.',
+        );
+      sendSuccess(
+        response,
+        await options.reportEmailService.recipients(String(request.params.id), request.auth!),
+      );
+    },
+  );
+  router.post(
+    '/:id/report/send',
+    authorize('orders:manage'),
+    validate({ params: IdParamsSchema, body: SendReportEmailSchema }),
+    async (request, response) => {
+      if (!options.reportEmailService)
+        throw new AppError(
+          503,
+          'REPORT_EMAIL_UNAVAILABLE',
+          'El envío por Gmail no está configurado.',
+        );
+      sendSuccess(
+        response,
+        await options.reportEmailService.send(
+          String(request.params.id),
+          request.auth!,
+          request.body,
+        ),
+      );
+    },
+  );
 
   router.get('/:id/report', validate({ params: IdParamsSchema }), async (request, response) => {
     const report = await options.reportsService.getCurrent(

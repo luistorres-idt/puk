@@ -187,6 +187,39 @@ export class ReportsService {
     };
   }
 
+  public async readReadyPdfForDelivery(orderId: string, reportId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true, folio: true },
+    });
+    if (!order) throw new AppError(404, 'ORDER_NOT_FOUND', 'La orden no existe.');
+    if (order.status !== OrderStatus.COMPLETED)
+      throw new AppError(409, 'ORDER_NOT_COMPLETED', 'La orden debe estar completada.');
+    const report = await this.prisma.serviceOrderReport.findFirst({
+      where: { id: reportId, orderId },
+    });
+    if (!report)
+      throw new AppError(404, 'REPORT_NOT_FOUND', 'El reporte no pertenece a esta orden.');
+    if (report.status !== ReportStatus.READY || !report.objectKey)
+      throw new AppError(409, 'REPORT_NOT_READY', 'El reporte todavía no está listo.');
+    let bytes: Uint8Array | null;
+    try {
+      bytes = this.drive
+        ? await this.drive.client.getFile(report.objectKey)
+        : await this.storage.getObject(report.objectKey);
+    } catch {
+      throw new AppError(503, 'REPORT_FILE_UNAVAILABLE', 'No se pudo leer el PDF para el envío.');
+    }
+    if (!bytes)
+      throw new AppError(404, 'REPORT_FILE_NOT_FOUND', 'El archivo del reporte no existe.');
+    return {
+      bytes,
+      reportId: report.id,
+      version: report.version,
+      fileName: `orden-servicio-${this.safeFileName(order.folio)}-v${report.version}.pdf`,
+    };
+  }
+
   public async processPendingReports(limit = 2): Promise<number> {
     await this.prisma.serviceOrderReport.updateMany({
       where: {

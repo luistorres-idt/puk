@@ -61,6 +61,26 @@ describe('parseEnvironment', () => {
     expect(environment.TECHNICAL_REPORT_SYNC_TIMEZONE).toBe('America/Hermosillo');
   });
 
+  it('keeps Gmail optional and validates account/mailbox formats without secret values', () => {
+    expect(parseEnvironment(validEnvironment).GOOGLE_GMAIL_CLIENT_EMAIL).toBeUndefined();
+    const configured = {
+      ...validEnvironment,
+      GOOGLE_GMAIL_CLIENT_EMAIL: 'gmail-service@example.invalid',
+      GOOGLE_GMAIL_PRIVATE_KEY: 'synthetic-test-only',
+      GOOGLE_GMAIL_SENDER_EMAIL: 'reports@example.invalid',
+    };
+    expect(parseEnvironment(configured).GOOGLE_GMAIL_SENDER_EMAIL).toBe('reports@example.invalid');
+    expect(() =>
+      parseEnvironment({ ...configured, GOOGLE_GMAIL_SENDER_EMAIL: 'invalid' }),
+    ).toThrowError(new EnvironmentValidationError(['GOOGLE_GMAIL_SENDER_EMAIL']));
+    expect(
+      parseEnvironment({
+        ...configured,
+        GOOGLE_GMAIL_CLIENT_EMAIL: validEnvironment.GOOGLE_CLIENT_EMAIL,
+      }).GOOGLE_GMAIL_CLIENT_EMAIL,
+    ).toBe(validEnvironment.GOOGLE_CLIENT_EMAIL);
+  });
+
   it('reports invalid field names without exposing their values', () => {
     const invalidEnvironment = {
       ...validEnvironment,

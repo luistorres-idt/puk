@@ -1,4 +1,5 @@
 export const capabilities = [
+  'clients:manage',
   'users:manage',
   'technicians:manage',
   'orders:manage',
@@ -12,6 +13,7 @@ export type Role = 'ADMIN' | 'TECHNICIAN';
 
 const roleCapabilities: Record<Role, ReadonlySet<Capability>> = {
   ADMIN: new Set([
+    'clients:manage',
     'users:manage',
     'technicians:manage',
     'orders:manage',

@@ -8,7 +8,7 @@
 
 **Versión:** 0.1
 
-**Estado al 2026-10-02:** Implementación del reporte PDF privada y versionada; plantilla/logotipo oficial y pruebas de regresión visual siguen pendientes de aprobación.
+**Estado al 2026-10-09:** Reporte PDF privado y versionado; se permite el envío manual por correo desde la vista web. El envío automático no está implementado.
 
 ## 1. Objetivo
 
@@ -29,12 +29,13 @@ El reporte funciona como comprobante de atención para Bull Dog Solution y para 
 - Evidencias fotográficas agrupadas por unidad; son una galería general y no se vinculan a una categoría del checklist.
 - Regeneración controlada cuando una orden pase por corrección y vuelva a completarse.
 - Acceso privado y auditado al documento.
+- Envío manual del reporte PDF a las direcciones registradas para el cliente, con resultado por destinatario y auditoría.
 
 ### 2.2 Fuera de alcance inicial
 
 - Edición manual del PDF después de generarlo.
 - Plantillas diferentes por cliente.
-- Envío automático por correo o mensajería.
+- Envío automático por correo o mensajería; el envío es iniciado manualmente por un usuario desde la web.
 - Reportes consolidados de varias órdenes.
 - Reporte equivalente para citas fallidas.
 - Firma criptográfica o sello fiscal del PDF.
@@ -176,6 +177,13 @@ El reporte usa los snapshots guardados en la orden y no vuelve a consultar Googl
 - La descarga usa una URL temporal o un proxy autenticado; el objeto no es público.
 - El nombre sugerido del archivo es `orden-servicio-{folio}-v{version}.pdf`, normalizando caracteres no seguros.
 - Cada consulta, descarga, reintento y generación queda registrada en auditoría.
+
+### Envío manual por correo
+
+- Un usuario autorizado puede seleccionar destinatarios entre los correos registrados para el cliente y enviarles el PDF desde el detalle de la orden. No se envían correos automáticamente al completar una orden.
+- Gmail usa `GOOGLE_GMAIL_CLIENT_EMAIL` y `GOOGLE_GMAIL_PRIVATE_KEY` para autenticarse, y suplanta el buzón configurado en `GOOGLE_GMAIL_SENDER_EMAIL`; esa dirección también aparece como `From`. Cambiarla requiere actualizar la configuración de la API y reiniciar el proceso. No hay selector web de remitente ni configuración independiente de alias.
+- Un superadministrador de Workspace debe autorizar la delegación de todo el dominio para el scope `https://www.googleapis.com/auth/gmail.send`. Puede suplantarse cualquier usuario activo del dominio autorizado. Una identidad Gmail separada es recomendable, aunque la aplicación permite reutilizar la cuenta de servicio de Sheets o Drive.
+- Auditoría: `SERVICE_ORDER_REPORT_EMAIL_ATTEMPTED`, `SERVICE_ORDER_REPORT_EMAIL_SENT` y `SERVICE_ORDER_REPORT_EMAIL_FAILED`. `SENT` confirma que Gmail aceptó el mensaje y devolvió un ID, no que llegó al buzón. Un fallo es no confirmado: antes de reintentar, revisar Enviados para evitar duplicados. Véase [entrega de reportes por correo](./report-email-delivery.md).
 
 ## 8. Persistencia propuesta
 

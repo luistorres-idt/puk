@@ -1,6 +1,6 @@
 # Modelo de datos
 
-**Estado:** esquema relacional documentado según `prisma/schema.prisma` (revisado 2026-10-02).
+**Estado:** esquema relacional documentado según `prisma/schema.prisma` (revisado 2026-10-09).
 Las referencias de almacenamiento son opacas y dependen del proveedor; Drive usa IDs de archivo y
 una tabla de mapeo de carpetas. La base conserva metadatos, no bytes.
 
@@ -16,6 +16,7 @@ erDiagram
     ORDER ||--o{ DISCREPANCY : registra
     ORDER ||--o{ SHEET_SYNC_OPERATION : sincroniza
     ORDER ||--o{ SERVICE_ORDER_REPORT : genera
+    CLIENT ||--o{ CLIENT_EMAIL : recibe
     ORDER ||--o| SHARED_TECHNICIAN_ACCESS : "puede habilitarse para"
     ORDER_UNIT ||--o{ ORDER_EQUIPMENT : equipa
     ORDER_UNIT ||--o| CHECKLIST : inspecciona
@@ -30,6 +31,17 @@ erDiagram
     USER ||--o{ ORDER : "resuelve cita fallida"
     USER ||--o| SHARED_TECHNICIAN_ACCESS : "cuenta compartida designada"
     ORDER o|--o| ORDER : "reprograma como"
+
+    CLIENT {
+        uuid id PK
+        string clientSheetId UK
+        string name
+    }
+    CLIENT_EMAIL {
+        uuid id PK
+        uuid clientId FK
+        string email
+    }
 
     USER {
         uuid id PK
@@ -234,6 +246,10 @@ registra mediante `FailedAppointmentResolution`: `CANCELLED` cierra el servicio 
 crea una nueva orden enlazada mediante `rescheduledFromOrderId`. La nueva orden comienza en
 `DRAFT`, copia cliente, servicio, técnico, unidades y snapshots de equipos, y reinicia todos los
 datos de ejecución.
+
+`Client` registra localmente la identidad del cliente después de validar su ID contra el catálogo
+de Sheets; `ClientEmail` almacena las direcciones de destinatario administradas en la aplicación. La relación admite varias direcciones por cliente;
+el par `(clientId, email)` es único y las direcciones se eliminan en cascada con el cliente.
 
 ## Enumeraciones de estado
 

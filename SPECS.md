@@ -43,6 +43,8 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 - Reporte de discrepancias sin bloquear el trabajo del técnico.
 - Una firma del cliente por orden.
 - Reporte PDF de la orden de servicio completada, conforme a [docs/service-order-report-spec.md](./docs/service-order-report-spec.md).
+- Envío manual del reporte PDF a correos registrados para el cliente; no se envía automáticamente al completar una orden.
+- Gestión administrativa de direcciones de correo de destinatarios por cliente.
 - Almacenamiento privado de archivos, con proveedor intercambiable.
 - Auditoría de acciones relevantes.
 - Registro y reintento de sincronizaciones con Google Sheets.
@@ -54,8 +56,9 @@ Google Sheets continuará siendo la fuente oficial de los catálogos de clientes
 
 - Modo offline completo.
 - Aplicaciones móviles nativas.
-- Edición de clientes dentro de la aplicación.
+- Edición del catálogo maestro de clientes dentro de la aplicación (los datos maestros siguen en Sheets; la app registra el cliente localmente y administra sus destinatarios).
 - Alta o edición de equipos dentro de la aplicación.
+- Envío automático de reportes por correo.
 - Facturación.
 - Administración de cuentas bancarias.
 - Pago o dispersión de tarifas a técnicos.
@@ -1194,6 +1197,10 @@ GOOGLE_SPREADSHEET_ID
 GOOGLE_TECHNICIANS_SPREADSHEET_ID
 GOOGLE_CLIENT_EMAIL
 GOOGLE_PRIVATE_KEY
+# Opcionales para habilitar el envío manual de reportes por Gmail; ver docs/report-email-delivery.md
+GOOGLE_GMAIL_CLIENT_EMAIL
+GOOGLE_GMAIL_PRIVATE_KEY
+GOOGLE_GMAIL_SENDER_EMAIL
 GOOGLE_CLIENTS_SHEET=Clientes
 GOOGLE_EQUIPMENT_SHEET=SALIDAS
 GOOGLE_TECHNICIANS_SHEET_NAME="DIRECTORIO TECNICO"
@@ -1225,7 +1232,7 @@ Docker Compose incluirá:
 - PostgreSQL.
 - MinIO como almacenamiento compatible con S3.
 - API.
-- Opcionalmente una interfaz de correo de desarrollo si se añade recuperación de contraseña.
+- El envío manual de reportes usa Gmail cuando está configurado; no es una interfaz local ni un flujo automático.
 
 Google Sheets utilizará un documento de prueba separado. Las pruebas automatizadas nunca escribirán en la hoja de producción.
 

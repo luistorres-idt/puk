@@ -3,7 +3,10 @@ import { resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import * as v from 'valibot';
 
-loadDotenv({ path: resolve(import.meta.dirname, '../../../../.env'), quiet: true });
+loadDotenv({
+  path: process.env['DOTENV_CONFIG_PATH'] ?? resolve(import.meta.dirname, '../../../../.env'),
+  quiet: true,
+});
 
 const integerFromString = (minimum: number, maximum: number) =>
   v.pipe(
@@ -43,6 +46,9 @@ export const EnvironmentSchema = v.object({
   GOOGLE_DRIVE_CLIENT_EMAIL: optionalString,
   GOOGLE_DRIVE_PRIVATE_KEY: optionalString,
   GOOGLE_DRIVE_SHARED_DRIVE_ID: optionalString,
+  GOOGLE_GMAIL_CLIENT_EMAIL: optionalString,
+  GOOGLE_GMAIL_PRIVATE_KEY: optionalString,
+  GOOGLE_GMAIL_SENDER_EMAIL: optionalString,
   GOOGLE_EQUIPMENT_SHEET: v.pipe(v.string(), v.nonEmpty()),
   GOOGLE_PRIVATE_KEY: v.pipe(v.string(), v.nonEmpty()),
   GOOGLE_SPREADSHEET_ID: v.pipe(v.string(), v.nonEmpty()),
@@ -145,6 +151,11 @@ export function parseEnvironment(input: Record<string, string | undefined>): Run
       ) {
         throw new EnvironmentValidationError(['GOOGLE_DRIVE_CLIENT_EMAIL']);
       }
+    }
+    for (const field of ['GOOGLE_GMAIL_CLIENT_EMAIL', 'GOOGLE_GMAIL_SENDER_EMAIL'] as const) {
+      const value = result.output[field];
+      if (value && !v.safeParse(v.pipe(v.string(), v.email()), value).success)
+        throw new EnvironmentValidationError([field]);
     }
     return result.output;
   }
