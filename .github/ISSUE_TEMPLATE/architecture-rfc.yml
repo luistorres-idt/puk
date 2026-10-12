@@ -1,0 +1,62 @@
+name: Propuesta de arquitectura
+description: RFC para una decisión o refactor arquitectónico respaldado por evidencia.
+title: "[RFC] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema y fricción actual
+      description: Describe qué dificulta entender, cambiar o probar el comportamiento actual.
+      placeholder: Incluye ejemplos verificables; evita proponer una solución antes de explicar el problema.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia y contexto
+      description: Indica los módulos, archivos, flujos, pruebas y decisiones existentes que sustentan la propuesta.
+      placeholder: Añade rutas y líneas aproximadas, comportamiento observado y decisiones que deben conservarse.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Diseño propuesto
+      description: Explica la responsabilidad del módulo, la interfaz y qué implementación escondería.
+      placeholder: Describe la localidad y el apalancamiento esperados, sin convertir el RFC en una lista de tareas.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas y compromisos
+      description: Resume las alternativas consideradas y por qué se prefiere la propuesta.
+      placeholder: Incluye costos, riesgos y razones para no elegir cada alternativa relevante.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Alcance y comportamiento que se conserva
+      description: Separa lo incluido y lo excluido; registra las invariantes que el refactor no debe cambiar.
+      placeholder: Considera transacciones, snapshots, errores, concurrencia e integraciones cuando apliquen.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación y pruebas
+      description: Define resultados observables y qué pruebas existentes o nuevas demostrarán que se preservan.
+      placeholder: Usa una lista de criterios comprobables, incluida la prueba de eliminación del módulo anterior.
+    validations:
+      required: true
+  - type: textarea
+    id: open_questions
+    attributes:
+      label: Preguntas abiertas
+      description: Registra dudas o dependencias aún sin resolver.
+      placeholder: Escribe “Ninguna” si no quedan preguntas.
+    validations:
+      required: false
