@@ -1,7 +1,6 @@
 import {
-  completeInventoryEquipment,
-  isDatabaseEquipment,
-  releaseInventory,
+  completeInventoryAssignments,
+  releaseOrderInventory,
 } from '../inventory/index.js';
 import * as v from 'valibot';
 import {
@@ -16,7 +15,6 @@ import { logger } from '../../observability/logger.js';
 import { AppError } from '../../shared/errors.js';
 import {
   assertValidOrderTransition,
-  buildEquipmentSheetAssignment,
   calculateOrderPricing,
   createPricingBreakdownSnapshot,
 } from '../orders/index.js';
@@ -181,49 +179,15 @@ export class OrderFinalizationService {
         },
       });
 
-      for (const unit of fullOrder.units) {
-        for (const equipment of unit.equipment) {
-          if (isDatabaseEquipment(equipment)) {
-            if (!equipment.inventoryEquipmentId)
-              throw new AppError(
-                409,
-                'INVALID_INVENTORY_REFERENCE',
-                'El equipo no tiene una referencia de inventario válida.',
-              );
-            await completeInventoryEquipment(tx, {
-              orderId,
-              equipmentId: equipment.inventoryEquipmentId,
-              service: unit.serviceType ?? fullOrder.serviceType,
-              initiallyInstalled:
-                equipment.serviceStatusSnapshot?.trim().toUpperCase() === 'INSTALADO',
-              clientId: fullOrder.clientSheetId,
-              clientName: fullOrder.clientNameSnapshot,
-              unit,
-            });
-            continue;
-          }
-          const values = buildEquipmentSheetAssignment({
-            clientName: fullOrder.clientNameSnapshot,
-            equipmentServiceStatus: equipment.serviceStatusSnapshot,
-            serviceType: unit.serviceType ?? fullOrder.serviceType,
-            unit,
-          });
-          if (!values) {
-            continue;
-          }
-
-          effects.enqueue({
-            idempotencyKey: `COMPLETE_ASSIGNMENT:${order.id}:${equipment.id}:${pricing.pricingVersion}`,
-            operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
-            orderId: order.id,
-            payload: {
-              externalKey: equipment.externalKey,
-              row: equipment.sheetRowHint ?? 0,
-              values,
-            },
-          });
-        }
-      }
+      await completeInventoryAssignments(tx, {
+        orderId,
+        service: fullOrder.serviceType,
+        clientId: fullOrder.clientSheetId,
+        clientName: fullOrder.clientNameSnapshot,
+        pricingVersion: pricing.pricingVersion,
+        enqueue: effects.enqueue,
+        units: fullOrder.units,
+      });
 
       const reportPayload = formatTechnicalReportRow(updated);
       await tx.sheetSyncOperation.updateMany({
@@ -324,8 +288,7 @@ export class OrderFinalizationService {
     const technicalReportScheduledFor =
       await this.options.technicalReportScheduling?.getNextScheduledAt(completionTime);
     return domainTransaction(this.prisma, async (tx, effects) => {
-      if (fullOrder.units.some((u) => u.equipment.some(isDatabaseEquipment)))
-        await releaseInventory(tx, orderId);
+      await releaseOrderInventory(tx, orderId, fullOrder.units);
       // Release equipment
       const units = await tx.orderUnit.findMany({
         where: { orderId },
