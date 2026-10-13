@@ -1,15 +1,11 @@
-import { toCatalogEquipment } from '../inventory/index.js';
 import {
-  assertInventoryCompatibility,
-  inventoryAssignment,
-  isDatabaseEquipment,
-  validateInventoryReference,
-  reserveInventory,
-  releaseInventory,
+  buildInventoryAssignmentReservations,
+  confirmOrderInventoryAssignment,
+  InventoryAssignmentPreparer,
+  releaseOrderInventory,
+  toOrderEquipmentCreateData,
 } from '../inventory/index.js';
 import {
-  isMatchingClient,
-  normalizeString,
   type AssignEquipment,
   type CreateOrder,
   type CreateUnit,
@@ -38,7 +34,6 @@ import {
   assertServiceConfigurationSupported,
   assertValidOrderTransition,
 } from './order-state-machine.js';
-import { buildEquipmentSheetAssignment } from './equipment-sheet-assignment.js';
 import { createOrderFolio } from './order-folio.js';
 import { rescheduleFailedAppointment } from './reschedule-failed-appointment.js';
 import { assertSelectableTechnician } from './selectable-technician.js';
@@ -51,14 +46,17 @@ type OrderWithEquipment = Prisma.OrderGetPayload<{
 export class OrdersService {
   public constructor(
     private readonly prisma: PrismaClient,
-    private readonly sheetsCatalogService?: EquipmentCatalogPort,
+    sheetsCatalogService?: EquipmentCatalogPort,
   ) {
     this.queries = new OrdersQueryService(prisma);
+    this.inventoryAssignmentPreparer = new InventoryAssignmentPreparer(
+      prisma,
+      sheetsCatalogService,
+    );
   }
 
   private readonly queries: OrdersQueryService;
-  private freshEquipmentCatalogRequest:
-    ReturnType<EquipmentCatalogPort['getEquipment']> | undefined;
+  private readonly inventoryAssignmentPreparer: InventoryAssignmentPreparer;
 
   public async listOrders(
     actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
@@ -91,7 +89,7 @@ export class OrdersService {
         units: await Promise.all(
           input.units.map(async (unit) => ({
             ...unit,
-            equipment: await this.resolveInventoryInputs(
+            equipment: await this.inventoryAssignmentPreparer.prepare(
               unit.equipment ?? [],
               unit.serviceType ?? primaryServiceType,
               { id: input.clientSheetId, name: input.clientNameSnapshot },
@@ -117,7 +115,7 @@ export class OrdersService {
         equipmentInputs.push(...(unit.equipment ?? []));
       }
 
-      await this.assertEquipmentAvailable(null, equipmentInputs);
+      await this.inventoryAssignmentPreparer.assertEquipmentAvailable(null, equipmentInputs);
     }
 
     const folio = createOrderFolio();
@@ -164,7 +162,7 @@ export class OrdersService {
               serviceType: unitServiceType,
               status: 'PENDING',
               equipment: {
-                create: (unitInput.equipment ?? []).map(buildEquipmentCreateInput),
+                create: (unitInput.equipment ?? []).map(toOrderEquipmentCreateData),
               },
             },
             include: { equipment: true },
@@ -268,14 +266,14 @@ export class OrdersService {
     assertServiceConfigurationSupported(unitServiceType);
     input = {
       ...input,
-      equipment: await this.resolveInventoryInputs(
+      equipment: await this.inventoryAssignmentPreparer.prepare(
         input.equipment ?? [],
         unitServiceType,
         { id: order.clientSheetId, name: order.clientNameSnapshot },
         orderId,
       ),
     };
-    await this.assertEquipmentAvailable(orderId, input.equipment ?? []);
+    await this.inventoryAssignmentPreparer.assertEquipmentAvailable(orderId, input.equipment ?? []);
 
     return domainTransaction(this.prisma, async (tx, effects) => {
       const unit = await tx.orderUnit.create({
@@ -287,7 +285,7 @@ export class OrdersService {
           serialNumber: input.serialNumber,
           serviceType: unitServiceType,
           equipment: {
-            create: (input.equipment ?? []).map(buildEquipmentCreateInput),
+            create: (input.equipment ?? []).map(toOrderEquipmentCreateData),
           },
         },
         include: { equipment: true },
@@ -408,7 +406,7 @@ export class OrdersService {
     }
 
     input = (
-      await this.resolveInventoryInputs(
+      await this.inventoryAssignmentPreparer.prepare(
         [input],
         unit.serviceType,
         { id: order.clientSheetId, name: order.clientNameSnapshot },
@@ -434,29 +432,13 @@ export class OrdersService {
       );
     }
 
-    // Check PostgreSQL constraint: equipment cannot be actively assigned to another active order
-    const conflict = await this.prisma.orderEquipment.findFirst({
-      where: {
-        ...(isDatabaseEquipment(input) && input.imei
-          ? { OR: [{ externalKey: input.externalKey }, { imei: input.imei }] }
-          : { externalKey: input.externalKey }),
-        activeAssignment: true,
-      },
-    });
-
-    if (conflict) {
-      throw new AppError(
-        409,
-        'EQUIPMENT_ALREADY_ASSIGNED',
-        'El equipo ya se encuentra asignado a otra orden activa',
-      );
-    }
+    await this.inventoryAssignmentPreparer.assertNoActiveAssignmentConflict(input);
 
     return domainTransaction(this.prisma, async (tx, effects) => {
       const equipment = await tx.orderEquipment.create({
         data: {
           orderUnitId: unitId,
-          ...buildEquipmentCreateInput(input),
+          ...toOrderEquipmentCreateData(input),
         },
       });
 
@@ -527,8 +509,7 @@ export class OrdersService {
     );
 
     return domainTransaction(this.prisma, async (tx, effects) => {
-      if (order.units.some((u) => u.equipment.some(isDatabaseEquipment)))
-        await releaseInventory(tx, orderId);
+      await releaseOrderInventory(tx, orderId, order.units);
       // Release any active equipment
       for (const unit of order.units) {
         for (const eq of unit.equipment) {
@@ -616,137 +597,34 @@ export class OrdersService {
       throw new AppError(400, 'NO_EQUIPMENT', 'La orden debe tener al menos un equipo asignado');
     }
 
-    // Fresh re-validation against Google Sheets
-    if (this.sheetsCatalogService && allEquipments.some((e) => !isDatabaseEquipment(e))) {
-      const freshEquipmentCatalog = await this.sheetsCatalogService.getEquipment({
-        forceFresh: options.forceFresh ?? true,
-      });
-
-      if (freshEquipmentCatalog.sheetsAvailable === false)
-        throw new AppError(
-          503,
-          'SHEETS_UNAVAILABLE',
-          'No se pueden confirmar equipos de Sheets mientras su catálogo no está disponible.',
-        );
-      for (const item of allEquipments.filter((e) => !isDatabaseEquipment(e))) {
-        const fresh = freshEquipmentCatalog.data.find((e) => e.externalKey === item.externalKey);
-        if (!fresh || !fresh.hasValidIdentity) {
-          throw new AppError(
-            409,
-            'SHEET_ROW_CONFLICT',
-            `El equipo ${item.externalKey} ya no es válido o no existe en Sheets`,
-          );
-        }
-
-        // If client was modified externally in Sheets to another client
-        const matchesClientName = isMatchingClient(fresh.currentClient, order.clientNameSnapshot);
-        const matchesClientId =
-          normalizeString(fresh.currentClient) === normalizeString(order.clientSheetId);
-        if (fresh.currentClient && !matchesClientName && !matchesClientId) {
-          throw new AppError(
-            409,
-            'SHEET_ROW_CONFLICT',
-            `Conflicto en Sheets: el equipo ${item.externalKey} pertenece al cliente ${fresh.currentClient}`,
-          );
-        }
-      }
-    }
-
-    const inventoryVersions = new Map<string, number>();
-    for (const item of allEquipments.filter(isDatabaseEquipment)) {
-      const id = validateInventoryReference(item);
-      await this.resolveInventoryInputs(
-        [
-          {
-            source: item.source,
-            inventoryEquipmentId: item.inventoryEquipmentId,
-            externalKey: item.externalKey,
-          },
-        ],
-        item.unit.serviceType ?? order.serviceType,
-        { id: order.clientSheetId, name: order.clientNameSnapshot },
-        orderId,
-      );
-      const equipment = await this.prisma.equipment.findUnique({ where: { id } });
-      if (!equipment)
-        throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'Equipo registrado no encontrado.');
-      assertInventoryCompatibility(
-        toCatalogEquipment(equipment),
-        item.unit.serviceType ?? order.serviceType,
-        { id: order.clientSheetId, name: order.clientNameSnapshot },
-        orderId,
-      );
-      inventoryVersions.set(id, equipment.version);
-    }
-
-    // Check Postgres that none of the equipment is active elsewhere
-    for (const item of allEquipments) {
-      const activeConflict = await this.prisma.orderEquipment.findFirst({
-        where: {
-          ...(isDatabaseEquipment(item) && item.imei
-            ? { OR: [{ externalKey: item.externalKey }, { imei: item.imei }] }
-            : { externalKey: item.externalKey }),
-          activeAssignment: true,
-          id: { not: item.id },
-        },
-      });
-      if (activeConflict) {
-        throw new AppError(
-          409,
-          'EQUIPMENT_ALREADY_ASSIGNED',
-          `El equipo ${item.externalKey} está activo en otra orden`,
-        );
-      }
-    }
+    const inventoryVersions = await this.inventoryAssignmentPreparer.prepareOrderAssignment(
+      allEquipments.map((item) => ({
+        id: item.id,
+        source: item.source,
+        inventoryEquipmentId: item.inventoryEquipmentId,
+        externalKey: item.externalKey,
+        imei: item.imei,
+        serviceType: item.unit.serviceType ?? order.serviceType,
+      })),
+      { id: order.clientSheetId, name: order.clientNameSnapshot },
+      orderId,
+      options,
+    );
 
     return domainTransaction(this.prisma, async (tx, effects) => {
-      // A versioned conditional update prevents concurrent orders claiming one inventory item.
-      for (const [id, version] of inventoryVersions) {
-        await reserveInventory(tx, id, orderId, version);
-        const item = allEquipments.find((e) => e.inventoryEquipmentId === id)!;
-        const aliasConflict = await tx.orderEquipment.findFirst({
-          where: {
-            imei: item.imei,
-            activeAssignment: true,
-            orderUnit: { orderId: { not: orderId } },
-          },
-        });
-        if (aliasConflict)
-          throw new AppError(
-            409,
-            'EQUIPMENT_ALREADY_ASSIGNED',
-            'El mismo IMEI está activo en otra orden, aunque use otra referencia de catálogo.',
-          );
-      }
-      // Mark all equipment as active assignment
-      for (const item of allEquipments) {
-        await tx.orderEquipment.update({
-          where: { id: item.id },
-          data: { activeAssignment: true },
-        });
-
-        const effectiveServiceType = item.unit.serviceType ?? order.serviceType;
-        const syncValues = buildEquipmentSheetAssignment({
+      // All inventory claims use this caller-owned transaction; catalog reads stay outside it.
+      await confirmOrderInventoryAssignment(
+        tx,
+        orderId,
+        buildInventoryAssignmentReservations(inventoryVersions, allEquipments),
+        allEquipments,
+        {
           clientName: order.clientNameSnapshot,
-          equipmentServiceStatus: item.serviceStatusSnapshot,
-          serviceType: effectiveServiceType,
-          unit: item.unit,
-        });
-
-        // Enqueue sync operation for Sheets
-        if (syncValues && !isDatabaseEquipment(item)) {
-          effects.enqueue({
-            idempotencyKey: `ASSIGN:${order.id}:${item.id}:${order.version}`,
-            operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
-            orderId: order.id,
-            payload: {
-              externalKey: item.externalKey,
-              row: item.sheetRowHint ?? 0,
-              values: syncValues,
-            },
-          });
-        }
-      }
+          serviceType: order.serviceType,
+          orderVersion: order.version,
+          enqueue: effects.enqueue,
+        },
+      );
 
       const updated = await tx.order.update({
         where: { id: orderId },
@@ -823,124 +701,7 @@ export class OrdersService {
     });
   }
 
-  private async resolveInventoryInputs(
-    inputs: readonly AssignEquipment[],
-    service: OrderServiceType,
-    client: { id: string; name: string },
-    orderId?: string | null,
-  ): Promise<AssignEquipment[]> {
-    if (!inputs.some(isDatabaseEquipment)) return [...inputs];
-    const catalog = await this.getFreshEquipmentCatalog();
-    return Promise.all(
-      inputs.map(async (input) => {
-        if (!isDatabaseEquipment(input)) return input;
-        const id = validateInventoryReference(input);
-        const equipment = await this.prisma.equipment.findUnique({ where: { id } });
-        if (!equipment)
-          throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'Equipo registrado no encontrado.');
-        const fresh =
-          catalog?.data.find((e) => e.externalKey === input.externalKey) ??
-          toCatalogEquipment(equipment);
-        assertInventoryCompatibility(
-          {
-            ...toCatalogEquipment(equipment),
-            identityConflict: fresh.identityConflict,
-            hasValidIdentity: fresh.hasValidIdentity,
-          },
-          service,
-          client,
-          orderId,
-        );
-        return inventoryAssignment(toCatalogEquipment(equipment));
-      }),
-    );
-  }
-
-  private async getFreshEquipmentCatalog() {
-    if (!this.sheetsCatalogService) return null;
-    const request =
-      this.freshEquipmentCatalogRequest ??
-      this.sheetsCatalogService.getEquipment({ forceFresh: true });
-    this.freshEquipmentCatalogRequest = request;
-    try {
-      return await request;
-    } finally {
-      if (this.freshEquipmentCatalogRequest === request)
-        this.freshEquipmentCatalogRequest = undefined;
-    }
-  }
-
-  private async assertEquipmentAvailable(
-    orderId: string | null,
-    equipmentInputs: readonly AssignEquipment[],
-  ): Promise<void> {
-    const keys = equipmentInputs.map((equipment) => equipment.externalKey);
-    const duplicateKey = keys.find((key, index) => keys.indexOf(key) !== index);
-    if (duplicateKey) {
-      throw new AppError(
-        409,
-        'DUPLICATE_EQUIPMENT',
-        `El equipo ${duplicateKey} está duplicado en la orden`,
-      );
-    }
-
-    for (const externalKey of keys) {
-      if (orderId) {
-        const existingInOrder = await this.prisma.orderEquipment.findFirst({
-          where: { externalKey, orderUnit: { orderId } },
-        });
-        if (existingInOrder) {
-          throw new AppError(
-            409,
-            'DUPLICATE_EQUIPMENT',
-            `El equipo ${externalKey} ya se encuentra asignado a esta orden`,
-          );
-        }
-      }
-
-      const input = equipmentInputs.find((e) => e.externalKey === externalKey)!;
-      const activeConflict = await this.prisma.orderEquipment.findFirst({
-        where: {
-          ...(isDatabaseEquipment(input) && input.imei
-            ? { OR: [{ externalKey }, { imei: input.imei }] }
-            : { externalKey }),
-          activeAssignment: true,
-        },
-      });
-      if (activeConflict) {
-        throw new AppError(
-          409,
-          'EQUIPMENT_ALREADY_ASSIGNED',
-          `El equipo ${externalKey} ya se encuentra asignado a otra orden activa`,
-        );
-      }
-    }
-  }
-
   public async getOrderAuditLogs(orderId: string) {
     return this.queries.getOrderAuditLogs(orderId);
   }
-}
-
-function buildEquipmentCreateInput(
-  input: AssignEquipment,
-): Prisma.OrderEquipmentUncheckedCreateWithoutOrderUnitInput {
-  return {
-    source: input.source ?? 'SHEETS',
-    inventoryEquipmentId: input.inventoryEquipmentId ?? null,
-    externalKey: input.externalKey,
-    externalId: input.externalId ?? null,
-    imei: input.imei ?? null,
-    sheetName: input.sheetName ?? 'SALIDAS',
-    sheetRowHint: input.sheetRowHint ?? null,
-    brandSnapshot: input.brandSnapshot ?? null,
-    modelSnapshot: input.modelSnapshot ?? null,
-    lineSnapshot: input.lineSnapshot ?? null,
-    iccidSnapshot: input.iccidSnapshot ?? null,
-    carrierSnapshot: input.carrierSnapshot ?? null,
-    equipmentConditionSnapshot: input.equipmentConditionSnapshot ?? null,
-    serviceStatusSnapshot: input.serviceStatusSnapshot ?? null,
-    rawSnapshot: (input.rawSnapshot ?? {}) as Prisma.InputJsonValue,
-    activeAssignment: false,
-  };
 }
