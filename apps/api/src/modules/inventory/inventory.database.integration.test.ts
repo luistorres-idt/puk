@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { config as loadDotenv } from 'dotenv';
 import type {
   RegisterEquipment,
   AssignEquipment,
@@ -18,6 +20,7 @@ import { OrdersService } from '../orders/index.js';
 import { OrderFinalizationService } from '../execution/index.js';
 import type { CatalogServicePort } from '../../integrations/ports.js';
 
+loadDotenv({ path: fileURLToPath(new URL('../../../../../.env', import.meta.url)), quiet: true });
 const databaseUrl = process.env['TEST_DATABASE_URL'];
 function isolatedLocalDatabase(url?: string): boolean {
   if (!url) return false;
@@ -225,6 +228,25 @@ describe.runIf(isolatedLocalDatabase(databaseUrl))('isolated PostgreSQL inventor
     });
     await prisma.$transaction((tx) => releaseInventory(tx, first.id));
     await prisma.$transaction((tx) => releaseInventory(tx, second.id));
+  });
+  it('rolls back a reservation when the caller transaction fails afterward', async () => {
+    const equipment = await inventory.register({ id: userId, role: 'ADMIN' }, input());
+    const order = await createOrder([assignment(equipment)]);
+    const equipmentId = equipment.inventoryEquipmentId!;
+    const before = await prisma.equipment.findUniqueOrThrow({ where: { id: equipmentId } });
+
+    await expect(
+      prisma.$transaction(async (tx) => {
+        await reserveInventory(tx, equipmentId, order.id, before.version);
+        throw new Error('forced failure after reservation');
+      }),
+    ).rejects.toThrow('forced failure after reservation');
+
+    const after = await prisma.equipment.findUniqueOrThrow({ where: { id: equipmentId } });
+    expect(after).toMatchObject({
+      reservedOrderId: before.reservedOrderId,
+      version: before.version,
+    });
   });
   it('uses authoritative DB snapshots, reserves without physical changes and preserves installed context on cancellation', async () => {
     const equipment = await inventory.register({ id: userId, role: 'ADMIN' }, input('REVIEW'));
