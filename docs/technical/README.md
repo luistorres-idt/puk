@@ -18,6 +18,7 @@ Este directorio describe la arquitectura y operación técnica del sistema. A di
 6. [Infraestructura y operación](./infrastructure-and-operations.md): Docker, configuración, despliegue, observabilidad y comandos.
 7. [Seguridad y calidad](./security-and-quality.md): controles implementados y estrategia de pruebas.
 8. [Línea de tiempo del proyecto](../project-timeline.md): evolución por fases, fechas y commits.
+9. [Ciclo de vida del inventario](./inventory-lifecycle.md): límites de preparación, confirmación, transacción y sincronización con Sheets.
 
 ## Fuentes de verdad
 
