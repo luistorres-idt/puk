@@ -5,12 +5,20 @@ export {
   inventoryKey,
   toCatalogEquipment,
 } from './equipment-catalog.js';
+export { buildEquipmentSheetAssignment } from './equipment-sheet-assignment.js';
 export {
   assertInventoryCompatibility,
+  buildInventoryAssignmentReservations,
+  confirmInventoryAssignment,
+  confirmOrderInventoryAssignment,
+  InventoryAssignmentPreparer,
   completeInventoryEquipment,
+  completeInventoryAssignments,
   inventoryAssignment,
+  toOrderEquipmentCreateData,
   isDatabaseEquipment,
   releaseInventory,
+  releaseOrderInventory,
   reserveInventory,
   validateInventoryReference,
 } from './order-inventory.js';
