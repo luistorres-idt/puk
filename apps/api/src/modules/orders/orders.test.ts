@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { OrderServiceTypeSchema, type ExternalEquipment } from '@puk/contracts';
 import { OrdersService } from './orders.service.js';
+import { getOrderCreationRequestHash } from './order-create-idempotency.js';
 import { SyncService } from './sync.service.js';
 import { GoogleSheetsCatalogService } from '../../integrations/google-sheets/google-sheets.service.js';
 import type { SheetsPort } from '../../integrations/ports.js';
@@ -66,10 +67,12 @@ interface MockDatabase {
   orderUnit: {
     findUnique: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   orderEquipment: {
     findFirst: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   technician: {
     findUnique: ReturnType<typeof vi.fn>;
@@ -102,7 +105,12 @@ describe('OrdersService & SyncService', () => {
     mockPrisma = {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
         const tx = {
+          $queryRaw: vi.fn(async () => [{ id: 'order-1' }]),
           order: {
+            findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({
+              id: where.id,
+              status: OrderStatus.DRAFT,
+            })),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
               id: 'order-1',
               ...data,
@@ -122,6 +130,12 @@ describe('OrdersService & SyncService', () => {
             })),
           },
           orderUnit: {
+            count: vi.fn(async () => 0),
+            findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({
+              id: where.id,
+              orderId: 'order-1',
+              serviceType: 'INSTALLATION',
+            })),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
               const nestedEquipment = (
                 data.equipment as { create?: Array<Record<string, unknown>> } | undefined
@@ -147,6 +161,7 @@ describe('OrdersService & SyncService', () => {
             delete: vi.fn(),
           },
           orderEquipment: {
+            count: vi.fn(async () => 0),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
               id: 'eq-1',
               ...data,
@@ -180,10 +195,12 @@ describe('OrdersService & SyncService', () => {
       orderUnit: {
         findUnique: vi.fn(),
         findMany: vi.fn(),
+        count: vi.fn(),
       },
       orderEquipment: {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
+        count: vi.fn(),
       },
       technician: {
         findUnique: vi.fn(),
@@ -311,6 +328,75 @@ describe('OrdersService & SyncService', () => {
     expect(result.folio).toMatch(/^OS-/);
     expect(result.version).toBe(1);
     expect(result.technicianId).toBe('tech-1');
+  });
+
+  it('returns the original order for an identical idempotent retry without creating again', async () => {
+    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
+    const input = {
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      serviceType: 'INSTALLATION' as const,
+      scheduledAt: new Date().toISOString(),
+      technicianId: 'tech-1',
+    };
+    const key = '00000000-0000-4000-8000-000000000014';
+    mockPrisma.order.findUnique.mockResolvedValueOnce(null);
+
+    const created = await ordersService.createOrder('user-admin-1', input, key);
+    mockPrisma.order.findUnique.mockResolvedValueOnce({
+      ...created,
+      creationIdempotencyKey: key,
+      creationRequestHash: getOrderCreationRequestHash(input),
+    });
+    const replayed = await ordersService.createOrder('user-admin-1', input, key);
+
+    expect(replayed).toEqual(created);
+    expect(replayed).not.toHaveProperty('creationRequestHash');
+    expect(replayed).not.toHaveProperty('creationIdempotencyKey');
+    expect(mockPrisma.$transaction).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an idempotency key reused with a different order payload', async () => {
+    const input = {
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      serviceType: 'INSTALLATION' as const,
+      scheduledAt: new Date().toISOString(),
+      technicianId: 'tech-1',
+    };
+    const key = '00000000-0000-4000-8000-000000000015';
+    mockPrisma.order.findUnique.mockResolvedValueOnce({
+      id: 'existing-order',
+      creationRequestHash: getOrderCreationRequestHash({ ...input, generalNotes: 'different' }),
+    });
+
+    await expect(ordersService.createOrder('user-admin-1', input, key)).rejects.toMatchObject({
+      status: 409,
+      code: 'IDEMPOTENCY_KEY_REUSED',
+    });
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('recovers the winner after a concurrent idempotency insert loses the unique race', async () => {
+    mockPrisma.technician.findUnique.mockResolvedValue({ id: 'tech-1', active: true });
+    const input = {
+      clientSheetId: 'CLI-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      serviceType: 'INSTALLATION' as const,
+      scheduledAt: new Date().toISOString(),
+      technicianId: 'tech-1',
+    };
+    const key = '00000000-0000-4000-8000-000000000016';
+    const winner = {
+      id: 'winner-order',
+      creationRequestHash: getOrderCreationRequestHash(input),
+    };
+    mockPrisma.order.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(winner);
+    mockPrisma.$transaction.mockRejectedValueOnce({ code: 'P2002' });
+
+    await expect(ordersService.createOrder('user-admin-1', input, key)).resolves.toEqual({
+      id: winner.id,
+    });
   });
 
   it('creates an order with units and equipment atomically', async () => {
@@ -1247,6 +1333,94 @@ describe('failed appointment administrative resolution', () => {
     expect(harness.tx.sheetSyncOperation.createMany).not.toHaveBeenCalled();
   });
 
+  it('preserves every historical unit when rescheduling an order above the new item limit', async () => {
+    const harness = createResolutionHarness();
+    const historicalUnits = Array.from({ length: 101 }, (_, index) => ({
+      id: `unit-${index}`,
+      label: `Unidad ${index}`,
+      makeModel: 'Modelo histórico',
+      serialNumber: `SERIAL-${index}`,
+      year: 2024,
+      serviceType: 'INSTALLATION' as const,
+      status: 'IN_PROGRESS' as const,
+      equipment: [],
+    }));
+    harness.prisma.order.findUnique.mockResolvedValue({
+      ...failedOrder,
+      units: historicalUnits,
+    });
+
+    await harness.service.rescheduleFailedAppointment('admin-1', failedOrder.id, {
+      scheduledAt: '2099-09-15T18:00:00.000Z',
+      version: 4,
+    });
+
+    const createdData = harness.create.mock.calls[0]?.[0]?.data;
+    expect(createdData).toMatchObject({
+      units: {
+        create: historicalUnits.map(({ label, makeModel, serialNumber, year, serviceType }) => ({
+          label,
+          makeModel,
+          serialNumber,
+          year,
+          serviceType,
+          status: 'PENDING',
+          equipment: { create: [] },
+        })),
+      },
+    });
+    expect((createdData?.units as { create: unknown[] } | undefined)?.create).toHaveLength(101);
+  });
+
+  it('preserves every historical equipment item when rescheduling above the new equipment limit', async () => {
+    const harness = createResolutionHarness();
+    const equipmentTemplate = failedOrder.units[0]!.equipment[0]!;
+    const historicalEquipment = Array.from({ length: 501 }, (_, index) => ({
+      ...equipmentTemplate,
+      id: `equipment-${index}`,
+      externalId: `EQ-${index}`,
+      externalKey: `EQ-${index}`,
+    }));
+    harness.prisma.order.findUnique.mockResolvedValue({
+      ...failedOrder,
+      units: [{ ...failedOrder.units[0]!, equipment: historicalEquipment }],
+    });
+
+    await harness.service.rescheduleFailedAppointment('admin-1', failedOrder.id, {
+      scheduledAt: '2099-09-15T18:00:00.000Z',
+      version: 4,
+    });
+
+    const createdData = harness.create.mock.calls[0]?.[0]?.data;
+    const clonedUnits = (
+      createdData?.units as { create: Array<{ equipment: { create: unknown[] } }> }
+    ).create;
+    expect(clonedUnits).toHaveLength(1);
+    const clonedEquipment = clonedUnits[0]!.equipment.create as Array<{
+      externalKey: string;
+      activeAssignment: boolean;
+      verificationStatus: string;
+      brandSnapshot: string;
+      rawSnapshot: unknown;
+    }>;
+    expect(clonedEquipment).toHaveLength(501);
+    expect(clonedEquipment.map(({ externalKey }) => externalKey)).toEqual(
+      historicalEquipment.map(({ externalKey }) => externalKey),
+    );
+    expect(clonedEquipment[0]).toMatchObject({
+      activeAssignment: false,
+      verificationStatus: 'PENDING',
+      brandSnapshot: equipmentTemplate.brandSnapshot,
+      rawSnapshot: equipmentTemplate.rawSnapshot,
+    });
+    expect(clonedEquipment[500]).toMatchObject({
+      activeAssignment: false,
+      verificationStatus: 'PENDING',
+      brandSnapshot: equipmentTemplate.brandSnapshot,
+      rawSnapshot: equipmentTemplate.rawSnapshot,
+    });
+  });
+
   it('copies equipment snapshots without reactivating its assignment and uses the selected technician', async () => {
     const harness = createResolutionHarness();
     harness.prisma.technician.findUnique.mockResolvedValue({
@@ -1332,5 +1506,102 @@ describe('failed appointment administrative resolution', () => {
     ).rejects.toMatchObject({ code: 'ORDER_VERSION_CONFLICT', status: 409 });
     expect(harness.create).not.toHaveBeenCalled();
     expect(harness.tx.auditLog.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('equipment removal ownership chain', () => {
+  function harness() {
+    const equipment = { id: 'eq-1', orderUnitId: 'unit-1' };
+    const tx = {
+      orderEquipment: { delete: vi.fn() },
+      auditLog: { createMany: vi.fn() },
+      sheetSyncOperation: { createMany: vi.fn() },
+    };
+    const database = {
+      order: {
+        findUnique: vi.fn(
+          async () =>
+            ({ id: 'order-1', status: OrderStatus.DRAFT as OrderStatus }) as {
+              id: string;
+              status: OrderStatus;
+            } | null,
+        ),
+      },
+      orderUnit: {
+        findUnique: vi.fn(
+          async () =>
+            ({ id: 'unit-1', orderId: 'order-1' }) as { id: string; orderId: string } | null,
+        ),
+      },
+      orderEquipment: { findUnique: vi.fn(async () => equipment as typeof equipment | null) },
+      $transaction: vi.fn(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx)),
+    };
+    const service = new OrdersService(database as unknown as PrismaClient);
+    return {
+      database,
+      tx,
+      equipment,
+      invoke: () => service.removeEquipment('admin-1', 'order-1', 'unit-1', 'eq-1'),
+    };
+  }
+
+  it.each(['missing', 'foreign'])(
+    'rejects a %s unit before equipment lookup or a transaction',
+    async (kind) => {
+      const h = harness();
+      h.database.orderUnit.findUnique.mockResolvedValue(
+        kind === 'missing' ? null : { id: 'unit-1', orderId: 'order-2' },
+      );
+      await expect(h.invoke()).rejects.toMatchObject({ status: 404, code: 'UNIT_NOT_FOUND' });
+      expect(h.database.orderEquipment.findUnique).not.toHaveBeenCalled();
+      expect(h.database.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['missing', 'foreign'])('rejects %s equipment before a transaction', async (kind) => {
+    const h = harness();
+    h.database.orderEquipment.findUnique.mockResolvedValue(
+      kind === 'missing' ? null : { id: 'eq-1', orderUnitId: 'unit-2' },
+    );
+    await expect(h.invoke()).rejects.toMatchObject({ status: 404, code: 'EQUIPMENT_NOT_FOUND' });
+    expect(h.database.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('preserves missing-order precedence', async () => {
+    const h = harness();
+    h.database.order.findUnique.mockResolvedValue(null);
+    await expect(h.invoke()).rejects.toMatchObject({ status: 404, code: 'ORDER_NOT_FOUND' });
+    expect(h.database.orderUnit.findUnique).not.toHaveBeenCalled();
+    expect(h.database.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('preserves order-state precedence', async () => {
+    const h = harness();
+    h.database.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.IN_PROGRESS,
+    });
+    await expect(h.invoke()).rejects.toMatchObject({ status: 400, code: 'INVALID_ORDER_STATE' });
+    expect(h.database.orderUnit.findUnique).not.toHaveBeenCalled();
+    expect(h.database.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('removes valid equipment and preserves the transactional audit only', async () => {
+    const h = harness();
+    await h.invoke();
+    expect(h.database.$transaction).toHaveBeenCalledTimes(1);
+    expect(h.tx.orderEquipment.delete).toHaveBeenCalledExactlyOnceWith({ where: { id: 'eq-1' } });
+    expect(h.tx.auditLog.createMany).toHaveBeenCalledExactlyOnceWith({
+      data: [
+        {
+          action: 'EQUIPMENT_REMOVED',
+          actorUserId: 'admin-1',
+          entityType: 'OrderEquipment',
+          entityId: 'eq-1',
+          before: h.equipment,
+        },
+      ],
+    });
+    expect(h.tx.sheetSyncOperation.createMany).not.toHaveBeenCalled();
   });
 });

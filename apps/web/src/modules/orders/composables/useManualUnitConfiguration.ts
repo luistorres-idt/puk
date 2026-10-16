@@ -1,5 +1,12 @@
 import { ref, type Ref } from 'vue';
-import type { ExternalEquipment, OrderServiceType } from '@puk/contracts';
+import {
+  isValidUnitYear,
+  MAX_ORDER_UNIT_LABEL_LENGTH,
+  MAX_ORDER_UNIT_MAKE_MODEL_LENGTH,
+  MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH,
+  type ExternalEquipment,
+  type OrderServiceType,
+} from '@puk/contracts';
 import { generateUuid } from '@/shared/utils/uuid.js';
 import type { ConfiguredUnitItem } from './configured-order-unit.js';
 
@@ -25,6 +32,26 @@ export function useManualUnitConfiguration(
     const { label, makeModel, serialNumber, year } = unitForm.value;
     if (!label.trim() || !makeModel.trim() || !serialNumber.trim()) {
       error.value = 'Por favor completa la etiqueta, marca/modelo y número de serie de la unidad.';
+      return;
+    }
+
+    if (label.trim().length > MAX_ORDER_UNIT_LABEL_LENGTH) {
+      error.value = `La etiqueta de la unidad no puede superar ${MAX_ORDER_UNIT_LABEL_LENGTH} caracteres.`;
+      return;
+    }
+
+    if (makeModel.trim().length > MAX_ORDER_UNIT_MAKE_MODEL_LENGTH) {
+      error.value = `La marca/modelo de la unidad no puede superar ${MAX_ORDER_UNIT_MAKE_MODEL_LENGTH} caracteres.`;
+      return;
+    }
+
+    if (serialNumber.trim().length > MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH) {
+      error.value = `El número de serie no puede superar ${MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH} caracteres.`;
+      return;
+    }
+
+    if (!isValidUnitYear(year)) {
+      error.value = 'El año debe ser un entero entre 1900 y el límite vigente.';
       return;
     }
 
@@ -54,7 +81,7 @@ export function useManualUnitConfiguration(
       label: label.trim(),
       makeModel: makeModel.trim(),
       serialNumber: serialNumber.trim(),
-      year: typeof year === 'number' && year >= 1900 && year <= 2100 ? year : null,
+      year,
       equipment: installationEquipment.value,
     });
 

@@ -17,6 +17,7 @@ export {
 } from './order-state-machine.js';
 export {
   calculateOrderPricing,
+  calculatePersistableOrderPricing,
   createPricingBreakdownSnapshot,
   resolveServiceRate,
   type CalculatedOrderPricing,

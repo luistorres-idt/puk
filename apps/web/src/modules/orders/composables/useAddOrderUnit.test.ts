@@ -1,6 +1,12 @@
 import { nextTick, ref } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
-import type { ExternalEquipment } from '@puk/contracts';
+import {
+  getMaxUnitYear,
+  MAX_ORDER_UNIT_LABEL_LENGTH,
+  MAX_ORDER_UNIT_MAKE_MODEL_LENGTH,
+  MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH,
+  type ExternalEquipment,
+} from '@puk/contracts';
 import type { OrderDetail } from '../api.js';
 import { useAddOrderUnit } from './useAddOrderUnit.js';
 
@@ -143,6 +149,104 @@ describe('useAddOrderUnit', () => {
       'Debes seleccionar el equipo nuevo de reemplazo (sin instalar de almacén).',
     );
     expect(insertUnit).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid year without submitting or clearing the modal form', async () => {
+    const { form, insertUnit, notifyWarning } = createForm();
+    form.openAddUnitModal();
+    form.newUnit.value.label = 'Truck 1';
+    form.newUnit.value.makeModel = 'Kenworth';
+    form.newUnit.value.serialNumber = 'VIN-1';
+    form.newUnit.value.year = getMaxUnitYear() + 1;
+
+    await form.handleAddUnit();
+
+    expect(notifyWarning).toHaveBeenCalledWith(
+      'El año debe ser un entero entre 1900 y el límite vigente.',
+    );
+    expect(insertUnit).not.toHaveBeenCalled();
+    expect(form.newUnit.value.year).toBe(getMaxUnitYear() + 1);
+    expect(form.showAddUnitModal.value).toBe(true);
+  });
+
+  it('rejects an overlong trimmed label without submitting or clearing the modal selection', async () => {
+    const { form, insertUnit, notifyWarning } = createForm();
+    form.openAddUnitModal();
+    const label = ` ${'x'.repeat(MAX_ORDER_UNIT_LABEL_LENGTH + 1)} `;
+    form.newUnit.value.label = label;
+    form.newUnit.value.makeModel = 'Kenworth';
+    form.newUnit.value.serialNumber = 'VIN-1';
+    form.handleUnitModalEquipmentSelect(equipment('EQ-1'));
+
+    await form.handleAddUnit();
+
+    expect(notifyWarning).toHaveBeenCalledWith(
+      expect.stringContaining(`${MAX_ORDER_UNIT_LABEL_LENGTH}`),
+    );
+    expect(insertUnit).not.toHaveBeenCalled();
+    expect(form.newUnit.value.label).toBe(label);
+    expect(form.unitModalEquipment.value?.externalKey).toBe('EQ-1');
+    expect(form.showAddUnitModal.value).toBe(true);
+  });
+
+  it('rejects an overlong trimmed make/model before posting and retains the modal draft', async () => {
+    const { form, insertUnit, notifyWarning } = createForm();
+    form.openAddUnitModal();
+    const makeModel = `  ${'x'.repeat(MAX_ORDER_UNIT_MAKE_MODEL_LENGTH + 1)}  `;
+    form.newUnit.value.makeModel = makeModel;
+    form.newUnit.value.label = 'Truck 1';
+    form.newUnit.value.serialNumber = 'VIN-1';
+
+    await form.handleAddUnit();
+
+    expect(notifyWarning).toHaveBeenCalledWith(
+      expect.stringContaining(`${MAX_ORDER_UNIT_MAKE_MODEL_LENGTH}`),
+    );
+    expect(insertUnit).not.toHaveBeenCalled();
+    expect(form.newUnit.value.makeModel).toBe(makeModel);
+    expect(form.showAddUnitModal.value).toBe(true);
+  });
+
+  it('rejects an overlong serial before posting and retains the modal draft and selection', async () => {
+    const { form, order, insertUnit, notifyWarning } = createForm();
+    const selectedEquipment = equipment('EQ-SERIAL');
+    order.value = { id: 'order-1', serviceType: 'INSTALLATION' } as OrderDetail;
+    form.showAddUnitModal.value = true;
+    form.newUnit.value.label = 'Truck 1';
+    form.newUnit.value.makeModel = 'Model';
+    form.newUnit.value.serialNumber = 's'.repeat(MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH + 1);
+    form.unitModalEquipment.value = selectedEquipment;
+
+    await form.handleAddUnit();
+
+    expect(insertUnit).not.toHaveBeenCalled();
+    expect(form.newUnit.value.serialNumber).toHaveLength(MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH + 1);
+    expect(form.unitModalEquipment.value).toEqual(selectedEquipment);
+    expect(notifyWarning).toHaveBeenCalledWith(
+      expect.stringContaining(`${MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH}`),
+    );
+  });
+
+  it('rejects an overlong label auto-filled from the selected installed equipment', async () => {
+    const { form, insertUnit, notifyWarning } = createForm();
+    form.openAddUnitModal();
+    form.newUnit.value.serviceType = 'REVIEW';
+    await nextTick();
+    const selectedEquipment = equipment('EQ-LONG');
+    selectedEquipment.unit = 'x'.repeat(MAX_ORDER_UNIT_LABEL_LENGTH + 1);
+    form.unitModalEquipmentKey.value = selectedEquipment.externalKey;
+    form.handleUnitModalEquipmentSelect(selectedEquipment);
+
+    await form.handleAddUnit();
+
+    expect(notifyWarning).toHaveBeenCalledWith(
+      `La etiqueta de la unidad no puede superar ${MAX_ORDER_UNIT_LABEL_LENGTH} caracteres.`,
+    );
+    expect(insertUnit).not.toHaveBeenCalled();
+    expect(form.newUnit.value.label).toBe(selectedEquipment.unit);
+    expect(form.unitModalEquipment.value).toEqual(selectedEquipment);
+    expect(form.unitModalEquipmentKey.value).toBe(selectedEquipment.externalKey);
+    expect(form.showAddUnitModal.value).toBe(true);
   });
 
   it('submits the trimmed payload and clears the form only after success', async () => {

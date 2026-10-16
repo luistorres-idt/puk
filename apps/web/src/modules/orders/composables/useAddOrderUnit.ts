@@ -1,6 +1,10 @@
 import { computed, ref, watch, type Ref } from 'vue';
 import {
   ORDER_SERVICE_LABELS,
+  isValidUnitYear,
+  MAX_ORDER_UNIT_LABEL_LENGTH,
+  MAX_ORDER_UNIT_MAKE_MODEL_LENGTH,
+  MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH,
   OrderServiceTypeSchema,
   isServiceConfigurationSupported,
   type CreateUnit,
@@ -138,6 +142,32 @@ export function useAddOrderUnit({
           ? 'Por favor selecciona un equipo instalado del cliente para autocompletar la unidad.'
           : 'Por favor completa los campos obligatorios de la unidad.',
       );
+      return;
+    }
+
+    if (newUnit.value.label.trim().length > MAX_ORDER_UNIT_LABEL_LENGTH) {
+      notifyWarning(
+        `La etiqueta de la unidad no puede superar ${MAX_ORDER_UNIT_LABEL_LENGTH} caracteres.`,
+      );
+      return;
+    }
+
+    if (newUnit.value.makeModel.trim().length > MAX_ORDER_UNIT_MAKE_MODEL_LENGTH) {
+      notifyWarning(
+        `La marca/modelo de la unidad no puede superar ${MAX_ORDER_UNIT_MAKE_MODEL_LENGTH} caracteres.`,
+      );
+      return;
+    }
+
+    if (newUnit.value.serialNumber.trim().length > MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH) {
+      notifyWarning(
+        `El número de serie no puede superar ${MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH} caracteres.`,
+      );
+      return;
+    }
+
+    if (!isValidUnitYear(newUnit.value.year)) {
+      notifyWarning('El año debe ser un entero entre 1900 y el límite vigente.');
       return;
     }
 

@@ -1,6 +1,10 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
-import type { ExternalEquipment } from '@puk/contracts';
+import {
+  MAX_ORDER_UNIT_LABEL_LENGTH,
+  MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH,
+  type ExternalEquipment,
+} from '@puk/contracts';
 import type { ConfiguredUnitItem } from './configured-order-unit.js';
 import { useEquipmentReplacementConfiguration } from './useEquipmentReplacementConfiguration.js';
 
@@ -148,5 +152,45 @@ describe('useEquipmentReplacementConfiguration', () => {
     expect(configuration.replacementOldEquipment.value).toBeNull();
     expect(configuration.replacementNewEquipmentKey.value).toBeNull();
     expect(configuration.replacementNewEquipment.value).toBeNull();
+  });
+
+  it('rejects an equipment-derived overlong label and preserves both selections', () => {
+    const units = ref<ConfiguredUnitItem[]>([]);
+    const error = ref<string | null>(null);
+    const configuration = useEquipmentReplacementConfiguration(units, error);
+    const oldEquipment = equipment('OLD', { unit: 'x'.repeat(MAX_ORDER_UNIT_LABEL_LENGTH + 1) });
+    const newEquipment = equipment('NEW');
+    configuration.replacementOldEquipmentKey.value = oldEquipment.externalKey;
+    configuration.replacementNewEquipmentKey.value = newEquipment.externalKey;
+    configuration.handleReplacementOldSelect(oldEquipment);
+    configuration.handleReplacementNewSelect(newEquipment);
+
+    configuration.handleAddEquipmentReplacement();
+
+    expect(error.value).toContain(`${MAX_ORDER_UNIT_LABEL_LENGTH}`);
+    expect(units.value).toEqual([]);
+    expect(configuration.replacementOldEquipment.value).toEqual(oldEquipment);
+    expect(configuration.replacementNewEquipment.value).toEqual(newEquipment);
+  });
+
+  it('rejects an equipment-derived overlong serial and preserves both selections', () => {
+    const units = ref<ConfiguredUnitItem[]>([]);
+    const error = ref<string | null>(null);
+    const configuration = useEquipmentReplacementConfiguration(units, error);
+    const oldEquipment = equipment('OLD', {
+      unitSerialNumber: 's'.repeat(MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH + 1),
+    });
+    const newEquipment = equipment('NEW');
+    configuration.replacementOldEquipmentKey.value = oldEquipment.externalKey;
+    configuration.replacementNewEquipmentKey.value = newEquipment.externalKey;
+    configuration.handleReplacementOldSelect(oldEquipment);
+    configuration.handleReplacementNewSelect(newEquipment);
+
+    configuration.handleAddEquipmentReplacement();
+
+    expect(error.value).toContain(`${MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH}`);
+    expect(units.value).toEqual([]);
+    expect(configuration.replacementOldEquipment.value).toEqual(oldEquipment);
+    expect(configuration.replacementNewEquipment.value).toEqual(newEquipment);
   });
 });

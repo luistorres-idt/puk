@@ -1,6 +1,8 @@
 import {
   OrderAdministrationDetailSchema,
   OrderExecutionDetailSchema,
+  MAX_ORDER_QUERY_OFFSET,
+  parseOrderQueryDate,
   type OrderAdministrationDetail,
   type OrderExecutionDetail,
   type OrderListQuery,
@@ -34,9 +36,30 @@ export class OrdersQueryService {
     actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
     query: OrderListQuery,
   ) {
-    const page = Math.max(1, query.page ?? 1);
-    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 25));
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
     const skip = (page - 1) * pageSize;
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      !Number.isSafeInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100 ||
+      !Number.isSafeInteger(skip) ||
+      skip < 0 ||
+      skip > MAX_ORDER_QUERY_OFFSET
+    ) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid pagination parameters.');
+    }
+    const from = query.from === undefined ? undefined : parseOrderQueryDate(query.from);
+    const to = query.to === undefined ? undefined : parseOrderQueryDate(query.to);
+    if (
+      (query.from !== undefined && from === undefined) ||
+      (query.to !== undefined && to === undefined) ||
+      (from !== undefined && to !== undefined && from.getTime() > to.getTime())
+    ) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid scheduled date range.');
+    }
 
     const where: Prisma.OrderWhereInput = {};
     const filters: Prisma.OrderWhereInput[] = [];
@@ -89,10 +112,10 @@ export class OrdersQueryService {
       });
     }
 
-    if (query.from || query.to) {
+    if (from !== undefined || to !== undefined) {
       where.scheduledAt = {};
-      if (query.from) where.scheduledAt.gte = new Date(query.from);
-      if (query.to) where.scheduledAt.lte = new Date(query.to);
+      if (from !== undefined) where.scheduledAt.gte = from;
+      if (to !== undefined) where.scheduledAt.lte = to;
     }
 
     if (filters.length > 0) {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toRefs } from 'vue';
-import { NButton, NInput, NInputNumber, NModal, useMessage } from 'naive-ui';
+import { NButton, NInput, NModal, useMessage } from 'naive-ui';
 import type { OrderPricingOverrides } from '@puk/contracts';
 import { ORDER_SERVICE_LABELS } from '@puk/contracts';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
@@ -110,10 +110,10 @@ defineExpose({
                 }}
               </td>
               <td class="py-1.5 px-3 text-right">
-                <n-input-number
+                <n-input
                   v-model:value="rates[svc]"
-                  :min="0"
-                  :precision="2"
+                  type="text"
+                  :input-props="{ inputmode: 'decimal' }"
                   :placeholder="
                     getTechnicianBaseRate(svc, order)
                       ? Number(getTechnicianBaseRate(svc, order)).toFixed(2)
@@ -123,7 +123,7 @@ defineExpose({
                   class="w-full text-right"
                 >
                   <template #prefix>$</template>
-                </n-input-number>
+                </n-input>
               </td>
             </tr>
           </tbody>
@@ -132,12 +132,7 @@ defineExpose({
 
       <!-- Toggle to show more services -->
       <div class="flex justify-end">
-        <n-button
-          text
-          size="tiny"
-          type="primary"
-          @click="showAllServices = !showAllServices"
-        >
+        <n-button text size="tiny" type="primary" @click="showAllServices = !showAllServices">
           {{
             showAllServices
               ? 'Mostrar solo servicios de esta orden'
@@ -153,15 +148,15 @@ defineExpose({
           <span class="text-slate-400 text-[11px]">Traslado acordado para esta orden</span>
         </div>
         <div class="w-44">
-          <n-input-number
+          <n-input
             v-model:value="travelExpenses"
-            :min="0"
-            :precision="2"
+            type="text"
+            :input-props="{ inputmode: 'decimal' }"
             placeholder="0.00"
             size="small"
           >
             <template #prefix>$</template>
-          </n-input-number>
+          </n-input>
         </div>
       </div>
 

@@ -15,7 +15,13 @@ import {
   NTag,
   NEmpty,
 } from 'naive-ui';
-import { ORDER_SERVICE_LABELS, type ExternalClient, type TechnicianOption } from '@puk/contracts';
+import {
+  getMaxUnitYear,
+  MIN_UNIT_YEAR,
+  ORDER_SERVICE_LABELS,
+  type ExternalClient,
+  type TechnicianOption,
+} from '@puk/contracts';
 import { ClientSelect, EquipmentSelect } from '../../external-catalogs/index.js';
 import { TechnicianSelect } from '../../technicians/index.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
@@ -420,8 +426,9 @@ function canProceed(): boolean {
                   <NInputNumber
                     v-model:value="unitForm.year"
                     size="small"
-                    :min="1900"
-                    :max="2100"
+                    :min="MIN_UNIT_YEAR"
+                    :max="getMaxUnitYear()"
+                    :precision="0"
                     class="w-full"
                   />
                 </div>

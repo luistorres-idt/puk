@@ -108,9 +108,7 @@ describe('OrderPricingService', () => {
       status: OrderStatus.CANCELLED,
     });
 
-    await expect(
-      service.updateOrderPricing('admin-1', baseOrder.id, {}),
-    ).rejects.toMatchObject({
+    await expect(service.updateOrderPricing('admin-1', baseOrder.id, {})).rejects.toMatchObject({
       code: 'INVALID_ORDER_STATE',
       status: 400,
     });
@@ -119,9 +117,7 @@ describe('OrderPricingService', () => {
   it('throws 404 when order is not found', async () => {
     mockPrisma.order.findUnique.mockResolvedValue(null);
 
-    await expect(
-      service.updateOrderPricing('admin-1', 'non-existent', {}),
-    ).rejects.toMatchObject({
+    await expect(service.updateOrderPricing('admin-1', 'non-existent', {})).rejects.toMatchObject({
       code: 'ORDER_NOT_FOUND',
       status: 404,
     });
@@ -177,11 +173,38 @@ describe('OrderPricingService', () => {
       technician: null,
     });
 
-    await expect(
-      service.updateOrderPricing('admin-1', baseOrder.id, {}),
-    ).rejects.toMatchObject({
+    await expect(service.updateOrderPricing('admin-1', baseOrder.id, {})).rejects.toMatchObject({
       code: 'MISSING_TECHNICIAN',
       status: 400,
     });
+  });
+
+  it('rejects calculated overflow before transaction, report scheduling, audit, or outbox effects', async () => {
+    const completedOrder = {
+      ...baseOrder,
+      status: OrderStatus.COMPLETED,
+      units: [
+        {
+          ...baseOrder.units[0],
+          equipment: [{ externalKey: 'EQ-1' }, { externalKey: 'EQ-2' }],
+        },
+      ],
+    };
+    mockPrisma.order.findUnique.mockResolvedValue(completedOrder);
+    const getNextScheduledAt = vi.fn(async () => new Date());
+    service = new OrderPricingService(mockPrisma as unknown as PrismaClient, {
+      technicalReportScheduling: { getNextScheduledAt },
+    });
+
+    await expect(
+      service.updateOrderPricing('admin-1', completedOrder.id, {
+        rates: { INSTALLATION: '99999999.99' },
+      }),
+    ).rejects.toMatchObject({ code: 'PRICING_AMOUNT_OUT_OF_RANGE', status: 400 });
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(getNextScheduledAt).not.toHaveBeenCalled();
+    expect(enqueuedAudits).toHaveLength(0);
+    expect(enqueuedOutbox).toHaveLength(0);
   });
 });

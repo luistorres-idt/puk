@@ -135,9 +135,9 @@ describe('useOrderPricingModal', () => {
 
     modal.openPricingModal();
 
-    expect(modal.rates.value.INSTALLATION).toBe(650);
-    expect(modal.rates.value.REVIEW).toBe(350.5);
-    expect(modal.travelExpenses.value).toBe(150);
+    expect(modal.rates.value.INSTALLATION).toBe('650.00');
+    expect(modal.rates.value.REVIEW).toBe('350.50');
+    expect(modal.travelExpenses.value).toBe('150.00');
     expect(modal.reason.value).toBe('Tarifa negociada para domingo');
   });
 
@@ -176,8 +176,8 @@ describe('useOrderPricingModal', () => {
     });
 
     modal.openPricingModal();
-    modal.rates.value.INSTALLATION = 750;
-    modal.travelExpenses.value = 200;
+    modal.rates.value.INSTALLATION = '750';
+    modal.travelExpenses.value = '200';
     modal.reason.value = 'Condiciones de lluvia y lejanía';
 
     await modal.handleSave();
@@ -186,9 +186,9 @@ describe('useOrderPricingModal', () => {
       id: 'ord-123',
       overrides: {
         rates: {
-          INSTALLATION: '750.00',
+          INSTALLATION: '750',
         },
-        travelExpenses: '200.00',
+        travelExpenses: '200',
         reason: 'Condiciones de lluvia y lejanía',
       },
     });
@@ -211,7 +211,7 @@ describe('useOrderPricingModal', () => {
     });
 
     modal.openPricingModal();
-    modal.rates.value.INSTALLATION = 600;
+    modal.rates.value.INSTALLATION = '600';
 
     await modal.handleSave();
 
@@ -234,7 +234,7 @@ describe('useOrderPricingModal', () => {
     });
 
     modal.openPricingModal();
-    modal.rates.value.INSTALLATION = -100;
+    modal.rates.value.INSTALLATION = '-100';
 
     await modal.handleSave();
 
@@ -259,7 +259,7 @@ describe('useOrderPricingModal', () => {
     });
 
     modal.openPricingModal();
-    modal.travelExpenses.value = -50;
+    modal.travelExpenses.value = '-50';
 
     await modal.handleSave();
 
@@ -280,13 +280,120 @@ describe('useOrderPricingModal', () => {
       notifyError: vi.fn(),
     });
 
-    modal.rates.value.INSTALLATION = 600;
-    modal.travelExpenses.value = 100;
+    modal.rates.value.INSTALLATION = '600';
+    modal.travelExpenses.value = '100';
 
     modal.resetRateToBase('INSTALLATION');
     modal.resetTravelExpenses();
 
     expect(modal.rates.value.INSTALLATION).toBeNull();
     expect(modal.travelExpenses.value).toBeNull();
+  });
+
+  it.each([
+    ['above maximum', '100000000.00'],
+    ['three decimals', '1.234'],
+    ['infinity', 'Infinity'],
+    ['negative', '-1.00'],
+    ['comma decimal', '1,25'],
+  ])('rejects an invalid rate (%s) without changing the draft', async (_case, value) => {
+    const updatePricing = vi.fn();
+    const notifyError = vi.fn();
+    const modal = useOrderPricingModal({
+      orderId: 'ord-123',
+      order: ref(createMockOrder()),
+      updatePricing,
+      notifySuccess: vi.fn(),
+      notifyError,
+    });
+
+    modal.openPricingModal();
+    modal.rates.value.INSTALLATION = value;
+    await modal.handleSave();
+
+    expect(updatePricing).not.toHaveBeenCalled();
+    expect(notifyError).toHaveBeenCalledWith(expect.any(Error), 'Error de validación');
+    expect(modal.showPricingModal.value).toBe(true);
+    expect(modal.rates.value.INSTALLATION).toBe(value);
+  });
+
+  it('preserves valid decimal input exactly, including zero and the maximum', async () => {
+    const updatePricing = vi.fn().mockResolvedValue({});
+    const modal = useOrderPricingModal({
+      orderId: 'ord-123',
+      order: ref(createMockOrder()),
+      updatePricing,
+      notifySuccess: vi.fn(),
+      notifyError: vi.fn(),
+    });
+
+    modal.openPricingModal();
+    modal.rates.value.INSTALLATION = '99999999.99';
+    modal.travelExpenses.value = '0';
+    await modal.handleSave();
+
+    expect(updatePricing).toHaveBeenCalledWith({
+      id: 'ord-123',
+      overrides: {
+        rates: { INSTALLATION: '99999999.99' },
+        travelExpenses: '0',
+        reason: null,
+      },
+    });
+  });
+
+  it('treats empty inputs as absent and retains an invalid third decimal for correction', async () => {
+    const updatePricing = vi.fn().mockResolvedValue({});
+    const modal = useOrderPricingModal({
+      orderId: 'ord-123',
+      order: ref(
+        createMockOrder({
+          pricingOverrides: { rates: { INSTALLATION: '500.00' }, travelExpenses: '20.00' },
+        }),
+      ),
+      updatePricing,
+      notifySuccess: vi.fn(),
+      notifyError: vi.fn(),
+    });
+
+    modal.openPricingModal();
+    expect(modal.rates.value.INSTALLATION).toBe('500.00');
+    modal.rates.value.INSTALLATION = '1.234';
+    modal.travelExpenses.value = '';
+    await modal.handleSave();
+
+    expect(updatePricing).not.toHaveBeenCalled();
+    expect(modal.rates.value.INSTALLATION).toBe('1.234');
+    expect(modal.travelExpenses.value).toBe('');
+    modal.resetRateToBase('INSTALLATION');
+    expect(modal.rates.value.INSTALLATION).toBeNull();
+  });
+
+  it('does not allow duplicate submissions and preserves the draft after an API error', async () => {
+    let rejectRequest: (error: Error) => void = () => {};
+    const updatePricing = vi.fn(() => new Promise((_resolve, reject) => (rejectRequest = reject)));
+    const notifyError = vi.fn();
+    const modal = useOrderPricingModal({
+      orderId: 'ord-123',
+      order: ref(createMockOrder()),
+      updatePricing,
+      notifySuccess: vi.fn(),
+      notifyError,
+    });
+
+    modal.openPricingModal();
+    modal.rates.value.INSTALLATION = '12.30';
+    const first = modal.handleSave();
+    await modal.handleSave();
+    expect(updatePricing).toHaveBeenCalledTimes(1);
+    rejectRequest(new Error('server failed'));
+    await first;
+
+    expect(notifyError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Error al actualizar tarifas de la orden',
+    );
+    expect(modal.showPricingModal.value).toBe(true);
+    expect(modal.rates.value.INSTALLATION).toBe('12.30');
   });
 });

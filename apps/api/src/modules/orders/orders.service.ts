@@ -37,7 +37,18 @@ import {
 import { createOrderFolio } from './order-folio.js';
 import { rescheduleFailedAppointment } from './reschedule-failed-appointment.js';
 import { assertSelectableTechnician } from './selectable-technician.js';
+import {
+  findIdempotentOrder,
+  getOrderCreationRequestHash,
+  isPrismaUniqueConstraintError,
+  toPublicOrder,
+} from './order-create-idempotency.js';
 import { OrdersQueryService } from './orders-query.service.js';
+import {
+  assertCreateOrderItemLimits,
+  assertOrderItemCountsWithinLimit,
+  lockAndCheckOrderItemCapacity,
+} from './order-item-limits.js';
 
 type OrderWithEquipment = Prisma.OrderGetPayload<{
   include: { units: { include: { equipment: true } } };
@@ -79,7 +90,18 @@ export class OrdersService {
     return this.queries.getOrderExecutionById(orderId, actor);
   }
 
-  public async createOrder(actorUserId: string, input: CreateOrder) {
+  public async createOrder(actorUserId: string, input: CreateOrder, idempotencyKey?: string) {
+    const requestHash = idempotencyKey ? getOrderCreationRequestHash(input) : undefined;
+    if (idempotencyKey && requestHash) {
+      const existing = await findIdempotentOrder(
+        this.prisma,
+        actorUserId,
+        idempotencyKey,
+        requestHash,
+      );
+      if (existing) return existing;
+    }
+    assertCreateOrderItemLimits(input);
     const primaryServiceType = input.serviceType ?? input.units?.[0]?.serviceType ?? 'INSTALLATION';
     assertServiceConfigurationSupported(primaryServiceType);
     const tech = await assertSelectableTechnician(this.prisma, input.technicianId);
@@ -120,76 +142,91 @@ export class OrdersService {
 
     const folio = createOrderFolio();
 
-    return domainTransaction(this.prisma, async (tx, effects) => {
-      const order = await tx.order.create({
-        data: {
-          folio,
-          serviceType: primaryServiceType,
-          status: OrderStatus.DRAFT,
-          clientSheetId: input.clientSheetId,
-          clientNameSnapshot: input.clientNameSnapshot,
-          technicianId: input.technicianId,
-          technicianNameSnapshot: tech.name,
-          technicianExternalKeySnapshot: tech.externalKey ?? null,
-          scheduledAt: new Date(input.scheduledAt),
-          isHomeService: input.isHomeService ?? false,
-          serviceAddress: input.serviceAddress ?? null,
-          generalNotes: input.generalNotes ?? null,
-          createdById: actorUserId,
-          version: 1,
-        },
-      });
+    try {
+      return await domainTransaction(this.prisma, async (tx, effects) => {
+        const order = await tx.order.create({
+          data: {
+            folio,
+            serviceType: primaryServiceType,
+            status: OrderStatus.DRAFT,
+            clientSheetId: input.clientSheetId,
+            clientNameSnapshot: input.clientNameSnapshot,
+            technicianId: input.technicianId,
+            technicianNameSnapshot: tech.name,
+            technicianExternalKeySnapshot: tech.externalKey ?? null,
+            scheduledAt: new Date(input.scheduledAt),
+            isHomeService: input.isHomeService ?? false,
+            serviceAddress: input.serviceAddress ?? null,
+            generalNotes: input.generalNotes ?? null,
+            createdById: actorUserId,
+            ...(idempotencyKey && requestHash
+              ? { creationIdempotencyKey: idempotencyKey, creationRequestHash: requestHash }
+              : {}),
+            version: 1,
+          },
+        });
 
-      effects.audit({
-        action: 'ORDER_CREATED',
-        actorUserId,
-        entityType: 'Order',
-        entityId: order.id,
-        after: order as unknown as Prisma.InputJsonValue,
-      });
+        effects.audit({
+          action: 'ORDER_CREATED',
+          actorUserId,
+          entityType: 'Order',
+          entityId: order.id,
+          after: toPublicOrder(order) as unknown as Prisma.InputJsonValue,
+        });
 
-      if (input.units && input.units.length > 0) {
-        for (const unitInput of input.units) {
-          const unitServiceType = unitInput.serviceType ?? primaryServiceType;
-          assertServiceConfigurationSupported(unitServiceType);
-          const unit = await tx.orderUnit.create({
-            data: {
-              orderId: order.id,
-              label: unitInput.label,
-              makeModel: unitInput.makeModel,
-              serialNumber: unitInput.serialNumber,
-              year: unitInput.year ?? null,
-              serviceType: unitServiceType,
-              status: 'PENDING',
-              equipment: {
-                create: (unitInput.equipment ?? []).map(toOrderEquipmentCreateData),
+        if (input.units && input.units.length > 0) {
+          for (const unitInput of input.units) {
+            const unitServiceType = unitInput.serviceType ?? primaryServiceType;
+            assertServiceConfigurationSupported(unitServiceType);
+            const unit = await tx.orderUnit.create({
+              data: {
+                orderId: order.id,
+                label: unitInput.label,
+                makeModel: unitInput.makeModel,
+                serialNumber: unitInput.serialNumber,
+                year: unitInput.year ?? null,
+                serviceType: unitServiceType,
+                status: 'PENDING',
+                equipment: {
+                  create: (unitInput.equipment ?? []).map(toOrderEquipmentCreateData),
+                },
               },
-            },
-            include: { equipment: true },
-          });
-
-          effects.audit({
-            action: 'UNIT_CREATED',
-            actorUserId,
-            entityType: 'OrderUnit',
-            entityId: unit.id,
-            after: unit as unknown as Prisma.InputJsonValue,
-          });
-
-          for (const equipment of unit.equipment ?? []) {
-            effects.audit({
-              action: 'EQUIPMENT_ASSIGNED',
-              actorUserId,
-              entityType: 'OrderEquipment',
-              entityId: equipment.id,
-              after: equipment as unknown as Prisma.InputJsonValue,
+              include: { equipment: true },
             });
+
+            effects.audit({
+              action: 'UNIT_CREATED',
+              actorUserId,
+              entityType: 'OrderUnit',
+              entityId: unit.id,
+              after: unit as unknown as Prisma.InputJsonValue,
+            });
+
+            for (const equipment of unit.equipment ?? []) {
+              effects.audit({
+                action: 'EQUIPMENT_ASSIGNED',
+                actorUserId,
+                entityType: 'OrderEquipment',
+                entityId: equipment.id,
+                after: equipment as unknown as Prisma.InputJsonValue,
+              });
+            }
           }
         }
-      }
 
-      return order;
-    });
+        return toPublicOrder(order);
+      });
+    } catch (error) {
+      if (!idempotencyKey || !requestHash || !isPrismaUniqueConstraintError(error)) throw error;
+      const existing = await findIdempotentOrder(
+        this.prisma,
+        actorUserId,
+        idempotencyKey,
+        requestHash,
+      );
+      if (existing) return existing;
+      throw error;
+    }
   }
 
   public async updateOrder(actorUserId: string, orderId: string, input: UpdateOrder) {
@@ -245,6 +282,7 @@ export class OrdersService {
   }
 
   public async addUnit(actorUserId: string, orderId: string, input: CreateUnit) {
+    assertOrderItemCountsWithinLimit(0, input.equipment?.length ?? 0);
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
@@ -276,6 +314,12 @@ export class OrdersService {
     await this.inventoryAssignmentPreparer.assertEquipmentAvailable(orderId, input.equipment ?? []);
 
     return domainTransaction(this.prisma, async (tx, effects) => {
+      const lockedOrder = await tx.order.findUnique({ where: { id: orderId } });
+      if (!lockedOrder) {
+        throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
+      }
+      assertCanAddOrderItems(lockedOrder);
+      await lockAndCheckOrderItemCapacity(tx, orderId, 1, input.equipment?.length ?? 0);
       const unit = await tx.orderUnit.create({
         data: {
           orderId,
@@ -435,6 +479,16 @@ export class OrdersService {
     await this.inventoryAssignmentPreparer.assertNoActiveAssignmentConflict(input);
 
     return domainTransaction(this.prisma, async (tx, effects) => {
+      const lockedOrder = await tx.order.findUnique({ where: { id: orderId } });
+      if (!lockedOrder) {
+        throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
+      }
+      assertCanAddOrderItems(lockedOrder);
+      const lockedUnit = await tx.orderUnit.findUnique({ where: { id: unitId } });
+      if (!lockedUnit || lockedUnit.orderId !== orderId) {
+        throw new AppError(404, 'UNIT_NOT_FOUND', 'Unidad no encontrada');
+      }
+      await lockAndCheckOrderItemCapacity(tx, orderId, 0, 1);
       const equipment = await tx.orderEquipment.create({
         data: {
           orderUnitId: unitId,
@@ -465,6 +519,11 @@ export class OrdersService {
       throw new AppError(404, 'ORDER_NOT_FOUND', 'Orden no encontrada');
     }
     assertCanModifyUnits(order.status, 'desasignar equipos');
+
+    const unit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
+    if (!unit || unit.orderId !== orderId) {
+      throw new AppError(404, 'UNIT_NOT_FOUND', 'Unidad no encontrada');
+    }
 
     const eq = await this.prisma.orderEquipment.findUnique({ where: { id: equipmentId } });
     if (!eq || eq.orderUnitId !== unitId) {
