@@ -7,7 +7,6 @@ defineProps<{
   orderId: string;
   report: ServiceOrderReport | null | undefined;
   reportVersions: ServiceOrderReport[];
-  driveMode: boolean;
   isAdmin: boolean;
   requestPending: boolean;
 }>();
@@ -98,7 +97,7 @@ function reportStatusLabel(status?: string): string {
         </n-button>
       </div>
     </div>
-    <div v-if="driveMode && reportVersions.length > 1" class="mt-3 border-t border-slate-100 pt-3">
+    <div v-if="reportVersions.length > 1" class="mt-3 border-t border-slate-100 pt-3">
       <p class="text-xs font-semibold text-slate-600 mb-2">Versiones anteriores</p>
       <div class="flex flex-wrap gap-2">
         <n-button

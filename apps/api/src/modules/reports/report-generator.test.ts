@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import sharp from 'sharp';
 
-import { DevMockStorageClient } from '../../integrations/object-storage/dev-mock-storage.client.js';
 import { ServiceOrderReportGenerator } from './report-generator.js';
 
 describe('ServiceOrderReportGenerator', () => {
   it('generates a PDF with cover, units and full-page evidence', async () => {
-    const storage = new DevMockStorageClient();
-    await storage.createUploadUrl('signature.png', 'image/png', 300);
-    await storage.createUploadUrl('evidence-1.jpg', 'image/jpeg', 300);
+    const image = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#fff' } })
+      .png()
+      .toBuffer();
+    const files = new Map<string, Uint8Array>([
+      ['signature.png', image],
+      ['evidence-1.jpg', image],
+    ]);
 
-    const result = await new ServiceOrderReportGenerator(storage).generate(
+    const result = await new ServiceOrderReportGenerator({
+      getFile: async (id) => files.get(id) ?? null,
+    }).generate(
       {
         folio: 'OS-TEST-001',
         serviceType: 'INSTALLATION',
@@ -75,11 +81,13 @@ describe('ServiceOrderReportGenerator', () => {
   });
 
   it('fails rather than silently omitting a missing image', async () => {
-    const storage = new DevMockStorageClient();
-    await storage.createUploadUrl('signature.png', 'image/png', 300);
+    const image = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#fff' } })
+      .png()
+      .toBuffer();
+    const files = new Map<string, Uint8Array>([['signature.png', image]]);
 
     await expect(
-      new ServiceOrderReportGenerator(storage).generate(
+      new ServiceOrderReportGenerator({ getFile: async (id) => files.get(id) ?? null }).generate(
         {
           folio: 'OS-TEST-002',
           serviceType: 'REVIEW',

@@ -1,10 +1,6 @@
 import type {
-  CompleteEvidence,
-  CompleteSignature,
   FailAppointment,
   MeOrderAccessResponse,
-  PresignEvidence,
-  PresignSignature,
   ReportDiscrepancy,
   RequireCorrection,
   SaveChecklistItem,
@@ -20,19 +16,7 @@ export interface CompleteOrderResult extends Record<string, unknown> {
   warnings?: string[];
 }
 
-let storageModePromise: Promise<'s3' | 'drive'> | undefined;
 const pendingSignatureKeys = new Map<string, string>();
-
-export function getStorageMode(): Promise<'s3' | 'drive'> {
-  storageModePromise ??= api
-    .get<ApiResponse<{ provider: 's3' | 'drive' }>>('/storage/mode')
-    .then((response) => response.data.data.provider)
-    .catch((error: unknown) => {
-      storageModePromise = undefined;
-      throw error;
-    });
-  return storageModePromise;
-}
 
 export function releasePrivateFileUrl(url: string | null | undefined): void {
   if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
@@ -71,38 +55,6 @@ export async function saveChecklist(orderId: string, unitId: string, items: Save
   return response.data.data;
 }
 
-export async function presignEvidence(
-  orderId: string,
-  unitId: string,
-  data: PresignEvidence,
-) {
-  const response = await api.post<
-    ApiResponse<{ evidenceId: string; uploadUrl: string; objectKey: string }>
-  >(`/orders/${orderId}/units/${unitId}/evidence/presign`, data);
-  return response.data.data;
-}
-
-export async function uploadToStorage(uploadUrl: string, blob: Blob, mimeType: string) {
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': mimeType,
-    },
-    body: blob,
-  });
-  if (!response.ok) {
-    throw new Error(`La carga del archivo falló (${response.status})`);
-  }
-}
-
-export async function completeEvidence(evidenceId: string, data: CompleteEvidence) {
-  const response = await api.post<ApiResponse<Record<string, unknown>>>(
-    `/evidence/${evidenceId}/complete`,
-    data,
-  );
-  return response.data.data;
-}
-
 export async function uploadEvidenceFile(
   orderId: string,
   unitId: string,
@@ -134,16 +86,10 @@ export async function deleteEvidence(evidenceId: string) {
 }
 
 export async function getEvidenceUrl(evidenceId: string) {
-  if ((await getStorageMode()) === 'drive') {
-    const response = await api.get<Blob>(`/evidence/${evidenceId}/file`, {
-      responseType: 'blob',
-    });
-    return { downloadUrl: URL.createObjectURL(response.data) };
-  }
-  const response = await api.get<ApiResponse<{ downloadUrl: string }>>(
-    `/evidence/${evidenceId}/url`,
-  );
-  return response.data.data;
+  const response = await api.get<Blob>(`/evidence/${evidenceId}/file`, {
+    responseType: 'blob',
+  });
+  return { downloadUrl: URL.createObjectURL(response.data) };
 }
 
 export async function uploadSignatureFile(orderId: string, signerName: string, blob: Blob) {
@@ -182,50 +128,23 @@ export async function uploadSignatureFile(orderId: string, signerName: string, b
   return response.data.data;
 }
 
-export async function presignSignature(orderId: string, data: PresignSignature) {
-  const response = await api.post<ApiResponse<{ uploadUrl: string; objectKey: string }>>(
-    `/orders/${orderId}/signature/presign`,
-    data,
-  );
-  return response.data.data;
-}
-
-export async function completeSignature(
-  orderId: string,
-  data: CompleteSignature,
-  objectKey: string,
-) {
-  const response = await api.post<ApiResponse<Record<string, unknown>>>(
-    `/orders/${orderId}/signature/complete`,
-    data,
-    { params: { objectKey } },
-  );
-  return response.data.data;
-}
-
 export async function getSignatureUrl(orderId: string) {
-  if ((await getStorageMode()) === 'drive') {
-    const response = await api.get<Blob>(`/orders/${orderId}/signature/file`, {
-      responseType: 'blob',
-    });
-    const encodedSignerName = response.headers['x-signer-name'];
-    let signerName = '';
-    if (typeof encodedSignerName === 'string') {
-      try {
-        signerName = decodeURIComponent(encodedSignerName);
-      } catch {
-        signerName = '';
-      }
+  const response = await api.get<Blob>(`/orders/${orderId}/signature/file`, {
+    responseType: 'blob',
+  });
+  const encodedSignerName = response.headers['x-signer-name'];
+  let signerName = '';
+  if (typeof encodedSignerName === 'string') {
+    try {
+      signerName = decodeURIComponent(encodedSignerName);
+    } catch {
+      signerName = '';
     }
-    return {
-      downloadUrl: URL.createObjectURL(response.data),
-      signerName,
-    };
   }
-  const response = await api.get<ApiResponse<{ downloadUrl: string; signerName: string }>>(
-    `/orders/${orderId}/signature/url`,
-  );
-  return response.data.data;
+  return {
+    downloadUrl: URL.createObjectURL(response.data),
+    signerName,
+  };
 }
 
 export async function checkCompleteness(orderId: string) {

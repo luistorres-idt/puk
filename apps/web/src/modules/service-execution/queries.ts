@@ -1,21 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { unref, type MaybeRef } from 'vue';
 import type {
-  CompleteEvidence,
   FailAppointment,
-  PresignEvidence,
   ReportDiscrepancy,
   RequireCorrection,
   SaveChecklistItem,
 } from '@puk/contracts';
 import {
   checkCompleteness,
-  completeEvidence,
   completeOrder,
   deleteEvidence,
   failAppointment,
   getSignatureUrl,
-  presignEvidence,
   reportDiscrepancy,
   requireCorrection,
   saveChecklist,
@@ -99,24 +95,6 @@ export function useExecutionMutations(orderId?: MaybeRef<string>) {
     onSuccess: (_, vars) => invalidate(vars.id),
   });
 
-  const uploadEvidence = useMutation({
-    mutationFn: ({
-      id,
-      unitId,
-      data,
-    }: {
-      id: string;
-      unitId: string;
-      data: PresignEvidence;
-    }) => presignEvidence(id, unitId, data),
-  });
-
-  const confirmEvidence = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: CompleteEvidence }) =>
-      completeEvidence(id, data),
-    onSuccess: () => invalidate(),
-  });
-
   const removeEvidence = useMutation({
     mutationFn: (evidenceId: string) => deleteEvidence(evidenceId),
     onSuccess: () => invalidate(),
@@ -141,13 +119,11 @@ export function useExecutionMutations(orderId?: MaybeRef<string>) {
   return {
     checklist,
     complete,
-    confirmEvidence,
     correction,
     discrepancy,
     fail,
     removeEvidence,
     start,
-    uploadEvidence,
     verify,
   };
 }

@@ -114,15 +114,10 @@ proyección de respuesta explícita.
 | POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/discrepancy`   | reportar diferencia       |
 | PUT    | `/api/v1/orders/:id/units/:unitId/checklist`                            | guardar checklist         |
 | POST   | `/api/v1/orders/:id/units/:unitId/evidence/file`                         | subir evidencia (Drive)   |
-| POST   | `/api/v1/orders/:id/units/:unitId/evidence/presign`                      | preparar carga (objetos)  |
-| POST   | `/api/v1/evidence/:id/complete`                                         | confirmar foto            |
+| GET    | `/api/v1/evidence/:id/file`                                              | descargar evidencia privada |
 | DELETE | `/api/v1/evidence/:id`                                                  | eliminar lógicamente foto |
-| GET    | `/api/v1/evidence/:id/url`                                              | URL temporal de foto      |
 | PUT    | `/api/v1/orders/:id/signature/file`                                     | subir firma PNG (Drive)   |
-| POST   | `/api/v1/orders/:id/signature/presign`                                  | preparar carga (objetos)  |
-| POST   | `/api/v1/orders/:id/signature/complete?objectKey=...`                   | confirmar carga (objetos) |
 | GET    | `/api/v1/orders/:id/signature/file`                                     | descargar firma privada (Drive) |
-| GET    | `/api/v1/orders/:id/signature/url`                                      | URL temporal de firma     |
 | GET    | `/api/v1/orders/:id/completeness`                                       | requisitos pendientes     |
 | PATCH  | `/api/v1/orders/:id/execution-notes`                                   | guardar nota general de ejecución |
 | POST   | `/api/v1/orders/:id/complete`                                           | completar orden           |

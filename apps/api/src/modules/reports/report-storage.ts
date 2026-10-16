@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { DriveFolderResolver } from '../../integrations/google-drive/drive-folder-resolver.js';
 import type { GoogleDriveClient } from '../../integrations/google-drive/google-drive.client.js';
-import type { ObjectStoragePort } from '../../integrations/ports.js';
 import type { ReportGeneratorPort, ReportOrder } from './report-generator.js';
 
 export interface ReportDrivePort {
@@ -24,9 +23,8 @@ interface ReportStorageOrder extends ReportOrder {
 
 interface StoreReportPdfOptions {
   prisma: Pick<PrismaClient, 'serviceOrderReport'>;
-  storage: Pick<ObjectStoragePort, 'putObject'>;
   generator: ReportGeneratorPort;
-  drive: ReportDrivePort | undefined;
+  drive: ReportDrivePort;
   order: ReportStorageOrder;
   report: ReportIdentity;
 }
@@ -39,23 +37,11 @@ interface StoredReportPdf {
 
 export async function storeReportPdf({
   prisma,
-  storage,
   generator,
   drive,
   order,
   report,
 }: StoreReportPdfOptions): Promise<StoredReportPdf> {
-  if (!drive) {
-    const generated = await generator.generate(order, report.version);
-    const objectKey = `orders/${order.id}/reports/${report.id}.pdf`;
-    await storage.putObject(objectKey, generated.bytes, 'application/pdf');
-    return {
-      objectKey,
-      sizeBytes: generated.bytes.byteLength,
-      checksum: generated.checksum,
-    };
-  }
-
   const parentId = await drive.folders.ensureSharedOrderFolder({
     clientSheetId: order.clientSheetId,
     clientNameSnapshot: order.clientNameSnapshot,

@@ -14,9 +14,6 @@ import {
   TechnicalReportSyncScheduleService,
 } from './modules/orders/index.js';
 import { ExecutionService } from './modules/execution/index.js';
-import { S3StorageClient } from './integrations/object-storage/s3.client.js';
-import { DevMockStorageClient } from './integrations/object-storage/dev-mock-storage.client.js';
-import { DisabledStorageClient } from './integrations/object-storage/disabled.client.js';
 import { GoogleDriveClient } from './integrations/google-drive/google-drive.client.js';
 import { DriveFolderResolver } from './integrations/google-drive/drive-folder-resolver.js';
 import { GmailClient } from './integrations/gmail/gmail.client.js';
@@ -26,7 +23,6 @@ import { TechniciansService } from './modules/technicians/index.js';
 import {
   CircuitBreaker,
   CircuitBreakerSheetsPort,
-  CircuitBreakerStoragePort,
 } from './resilience/index.js';
 import { logger } from './observability/logger.js';
 
@@ -118,50 +114,20 @@ const syncInterval = setInterval(() => {
 }, environment.OUTBOX_POLL_INTERVAL_MS);
 syncInterval.unref();
 
-const driveClient =
-  environment.STORAGE_PROVIDER === 'drive'
-    ? new GoogleDriveClient({
-        clientEmail: environment.GOOGLE_DRIVE_CLIENT_EMAIL!,
-        privateKey: normalizePem(environment.GOOGLE_DRIVE_PRIVATE_KEY!),
-        sharedDriveId: environment.GOOGLE_DRIVE_SHARED_DRIVE_ID!,
-      })
-    : undefined;
+const driveClient = environment.GOOGLE_DRIVE_CLIENT_EMAIL
+  ? new GoogleDriveClient({
+      clientEmail: environment.GOOGLE_DRIVE_CLIENT_EMAIL,
+      privateKey: normalizePem(environment.GOOGLE_DRIVE_PRIVATE_KEY!),
+      sharedDriveId: environment.GOOGLE_DRIVE_SHARED_DRIVE_ID!,
+    })
+  : undefined;
 const driveFolders = driveClient
   ? new DriveFolderResolver(prisma, driveClient, environment.GOOGLE_DRIVE_SHARED_DRIVE_ID!)
   : undefined;
 const driveStorage =
   driveClient && driveFolders ? { client: driveClient, folders: driveFolders } : undefined;
 
-const usesPlaceholderStorage =
-  environment.NODE_ENV !== 'production' &&
-  environment.S3_ACCESS_KEY_ID?.startsWith('development-only') === true;
-
-const rawStoragePort = driveStorage
-  ? new DisabledStorageClient()
-  : usesPlaceholderStorage
-    ? new DevMockStorageClient()
-    : new S3StorageClient({
-        endpoint: environment.S3_ENDPOINT!,
-        region: environment.S3_REGION!,
-        bucket: environment.S3_BUCKET!,
-        ...(environment.S3_ACCESS_KEY_ID === undefined
-          ? {}
-          : { accessKeyId: environment.S3_ACCESS_KEY_ID }),
-        ...(environment.S3_SECRET_ACCESS_KEY === undefined
-          ? {}
-          : { secretAccessKey: environment.S3_SECRET_ACCESS_KEY }),
-        forcePathStyle: environment.S3_FORCE_PATH_STYLE!,
-      });
-
-const storageBreaker = new CircuitBreaker({
-  name: environment.STORAGE_PROVIDER === 'drive' ? 'disabled-s3-storage' : 's3-storage',
-  failureThreshold: environment.CIRCUIT_BREAKER_ERROR_THRESHOLD,
-  resetTimeoutMs: environment.CIRCUIT_BREAKER_RESET_TIMEOUT_MS,
-});
-const storagePort = new CircuitBreakerStoragePort(rawStoragePort, storageBreaker);
-
-const reportsService = new ReportsService(prisma, storagePort, {
-  downloadUrlTtlSeconds: environment.PRESIGNED_URL_TTL_SECONDS,
+const reportsService = new ReportsService(prisma, {
   ...(driveStorage ? { drive: driveStorage } : {}),
 });
 const gmailSender =
@@ -184,11 +150,10 @@ const reportsInterval = setInterval(() => {
 }, environment.OUTBOX_POLL_INTERVAL_MS);
 reportsInterval.unref();
 
-const executionService = new ExecutionService(prisma, storagePort, {
+const executionService = new ExecutionService(prisma, {
   ...(driveStorage ? { drive: driveStorage } : {}),
   maxEvidenceBytes: environment.MAX_EVIDENCE_BYTES,
   maxSignatureBytes: environment.MAX_SIGNATURE_BYTES,
-  presignedUrlTtlSeconds: environment.PRESIGNED_URL_TTL_SECONDS,
   reportGeneration: reportsService,
   technicalReportScheduling: technicalReportSyncSchedule,
 });

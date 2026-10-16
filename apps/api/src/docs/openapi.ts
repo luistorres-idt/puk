@@ -559,17 +559,40 @@ export const openApiDocument = {
         },
       },
     },
-    '/api/v1/orders/{id}/report/download': {
+    '/api/v1/orders/{id}/report/file': {
       get: {
-        operationId: 'downloadServiceOrderReport',
-        summary: 'Get a temporary private PDF download URL',
+        operationId: 'downloadCurrentServiceOrderReport',
+        summary: 'Download the current private service order PDF',
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
         ],
         responses: {
-          '200': { description: 'Temporary download URL and file name' },
+          '200': {
+            description: 'PDF file',
+            content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+          },
           '401': { description: 'Unauthorized' },
           '403': { description: 'Order does not belong to the technician' },
+          '409': { description: 'Report is not ready' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}/reports/{version}/file': {
+      get: {
+        operationId: 'downloadServiceOrderReportVersion',
+        summary: 'Download a private service order PDF version',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'version', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        responses: {
+          '200': {
+            description: 'PDF file',
+            content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Order does not belong to the technician' },
+          '404': { description: 'Report version not found' },
           '409': { description: 'Report is not ready' },
         },
       },

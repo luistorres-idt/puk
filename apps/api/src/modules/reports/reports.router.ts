@@ -131,18 +131,7 @@ export function createReportsRouter(options: {
     },
   );
 
-  router.get(
-    '/:id/report/download',
-    validate({ params: IdParamsSchema }),
-    async (request, response) => {
-      const download = await options.reportsService.getDownloadUrl(
-        String(request.params.id),
-        request.auth!.userId,
-        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-      );
-      sendSuccess(response, download);
-    },
-  );
+
 
   return router;
 }

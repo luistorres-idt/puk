@@ -6,12 +6,8 @@ import { createEvidenceUploadRetryKeys } from '../evidence-upload-retry.js';
 import { preprocessEvidenceImage } from '../image-preprocessing.js';
 import { useEvidenceGallery } from '../composables/useEvidenceGallery.js';
 import {
-  completeEvidence,
   deleteEvidence,
-  getStorageMode,
-  presignEvidence,
   uploadEvidenceFile,
-  uploadToStorage,
 } from '../api.js';
 
 const props = withDefaults(
@@ -67,24 +63,15 @@ async function handleFilesSelected(files: File[]) {
         uploadingStatusText.value = 'Convirtiendo foto HEIC a JPEG...';
       });
 
-      if ((await getStorageMode()) === 'drive') {
-        await uploadEvidenceFile(
-          props.orderId,
-          props.unitId,
-          blob,
-          width,
-          height,
-          uploadRetryKeys.keyFor(props.orderId, props.unitId, file),
-        );
-        uploadRetryKeys.clear(props.orderId, props.unitId, file);
-      } else {
-        const presign = await presignEvidence(props.orderId, props.unitId, {
-          mimeType: 'image/jpeg',
-          sizeBytes: blob.size,
-        });
-        await uploadToStorage(presign.uploadUrl, blob, 'image/jpeg');
-        await completeEvidence(presign.evidenceId, { width, height });
-      }
+      await uploadEvidenceFile(
+        props.orderId,
+        props.unitId,
+        blob,
+        width,
+        height,
+        uploadRetryKeys.keyFor(props.orderId, props.unitId, file),
+      );
+      uploadRetryKeys.clear(props.orderId, props.unitId, file);
 
       successCount++;
     } catch (error) {

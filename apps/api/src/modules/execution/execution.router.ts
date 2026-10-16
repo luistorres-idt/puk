@@ -1,14 +1,10 @@
 import { Router, raw, type RequestHandler } from 'express';
 import * as v from 'valibot';
 import {
-  CompleteEvidenceSchema,
   MAX_IMAGE_PIXELS,
-  CompleteSignatureSchema,
   EquipmentParamsSchema,
   FailAppointmentSchema,
   IdParamsSchema,
-  PresignEvidenceSchema,
-  PresignSignatureSchema,
   ReportDiscrepancySchema,
   RequireCorrectionSchema,
   SaveChecklistSchema,
@@ -68,10 +64,6 @@ export function createExecutionRouter(options: {
 }): Router {
   const router = Router();
   router.use(options.requireAccess);
-
-  router.get('/storage/mode', (_request, response) => {
-    sendSuccess(response, { provider: options.executionService.getStorageMode() });
-  });
 
   // --- Start order ---
   router.post(
@@ -136,7 +128,7 @@ export function createExecutionRouter(options: {
     },
   );
 
-  // --- Evidence presign and complete ---
+  // --- Evidence upload and retrieval ---
   router.post(
     '/orders/:id/units/:unitId/evidence/file',
     validate({ params: UnitParamsSchema }),
@@ -172,35 +164,6 @@ export function createExecutionRouter(options: {
     },
   );
 
-  router.post(
-    '/orders/:id/units/:unitId/evidence/presign',
-    validate({ body: PresignEvidenceSchema }),
-    async (request, response) => {
-      const result = await options.executionService.presignEvidenceUpload(
-        request.auth!.userId,
-        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-        String(request.params.id),
-        String(request.params.unitId),
-        request.body,
-      );
-      sendSuccess(response, result, 201);
-    },
-  );
-
-  router.post(
-    '/evidence/:id/complete',
-    validate({ body: CompleteEvidenceSchema, params: IdParamsSchema }),
-    async (request, response) => {
-      const result = await options.executionService.completeEvidence(
-        request.auth!.userId,
-        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-        String(request.params.id),
-        request.body,
-      );
-      sendSuccess(response, result);
-    },
-  );
-
   router.delete(
     '/evidence/:id',
     validate({ params: IdParamsSchema }),
@@ -226,19 +189,6 @@ export function createExecutionRouter(options: {
       response.setHeader('Content-Type', file.mimeType);
       response.setHeader('Cache-Control', 'private, no-store');
       response.send(Buffer.from(file.body));
-    },
-  );
-
-  router.get(
-    '/evidence/:id/url',
-    validate({ params: IdParamsSchema }),
-    async (request, response) => {
-      const result = await options.executionService.getEvidenceUrl(
-        request.auth!.userId,
-        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-        String(request.params.id),
-      );
-      sendSuccess(response, result);
     },
   );
 
@@ -278,49 +228,6 @@ export function createExecutionRouter(options: {
       response.setHeader('Cache-Control', 'private, no-store');
       response.setHeader('X-Signer-Name', encodeURIComponent(file.signerName));
       response.send(Buffer.from(file.body));
-    },
-  );
-
-  router.post(
-    '/orders/:id/signature/presign',
-    validate({ body: PresignSignatureSchema, params: IdParamsSchema }),
-    async (request, response) => {
-      const result = await options.executionService.presignSignatureUpload(
-        request.auth!.userId,
-        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-        String(request.params.id),
-        request.body,
-      );
-      sendSuccess(response, result, 201);
-    },
-  );
-
-  router.post(
-    '/orders/:id/signature/complete',
-    validate({ body: CompleteSignatureSchema, params: IdParamsSchema }),
-    async (request, response) => {
-      const objectKey = String(request.query.objectKey || '');
-      const result = await options.executionService.completeSignature(
-        request.auth!.userId,
-        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-        String(request.params.id),
-        request.body,
-        objectKey,
-      );
-      sendSuccess(response, result);
-    },
-  );
-
-  router.get(
-    '/orders/:id/signature/url',
-    validate({ params: IdParamsSchema }),
-    async (request, response) => {
-      const result = await options.executionService.getSignatureUrl(
-        request.auth!.userId,
-        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
-        String(request.params.id),
-      );
-      sendSuccess(response, result);
     },
   );
 

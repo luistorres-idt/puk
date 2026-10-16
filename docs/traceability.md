@@ -22,7 +22,7 @@ La columna de pruebas identifica el nivel mínimo que debe existir antes de cerr
 | Trabajo del técnico                 | `/me/orders`, `/orders/:id/start`                             | Autorización entre dos técnicos y transiciones inválidas                          |
 | Verificación y discrepancias        | `/order-equipment/:id/verify`, `/orders/:id/discrepancies`    | Discrepancia no bloquea cierre; usuario ajeno recibe denegación                   |
 | Checklist por unidad                | `/units/:id/checklist`                                        | Cinco categorías; observación obligatoria en `BAD`                                |
-| Evidencias privadas                 | `/units/:id/evidence`, `/evidence/:id/complete`               | MIME, tamaño, objeto inexistente, propiedad y URL temporal                        |
+| Evidencias privadas                 | `POST /orders/:id/units/:unitId/evidence/file`, `GET /evidence/:id/file` | MIME, tamaño, objeto inexistente, propiedad y descarga autenticada                |
 | Notas de ejecución                  | `PATCH /orders/:id/execution-notes`                           | Nota general por orden, máximo 5000 caracteres y auditoría                        |
 | Firma de orden                      | `/orders/:id/signature`                                       | Nombre obligatorio, PNG privado y autorización                                    |
 | Cierre normal                       | `POST /orders/:id/complete`                                   | Integración: todos los requisitos e idempotencia                                  |

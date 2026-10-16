@@ -216,7 +216,8 @@ La restricción de unicidad debe evitar dos reportes vigentes para la misma comb
 | `GET`  | `/orders/:id/report`          | Obtener estado y metadatos del reporte vigente |
 | `GET`  | `/orders/:id/reports`         | Consultar versiones anteriores permitidas      |
 | `POST` | `/orders/:id/report/generate` | Solicitar generación o reintento idempotente   |
-| `GET`  | `/orders/:id/report/download` | Obtener descarga autenticada o URL temporal    |
+| `GET`  | `/orders/:id/report/file` | Descargar PDF actual mediante la API autenticada |
+| `GET`  | `/orders/:id/reports/:version/file` | Descargar una versión histórica mediante la API autenticada |
 
 La generación automática reutiliza el mismo caso de uso que el endpoint manual. La respuesta de generación debe ser asíncrona (`202 Accepted`) cuando el archivo todavía no esté listo.
 

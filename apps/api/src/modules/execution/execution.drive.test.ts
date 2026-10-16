@@ -5,7 +5,6 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, UploadStatus } from '../../generated/prisma/client.js';
 import type { GoogleDriveClient } from '../../integrations/google-drive/google-drive.client.js';
 import type { DriveFolderResolver } from '../../integrations/google-drive/drive-folder-resolver.js';
-import { DevMockStorageClient } from '../../integrations/object-storage/dev-mock-storage.client.js';
 import { ExecutionService } from './execution.service.js';
 
 describe('ExecutionService Drive mode', () => {
@@ -141,7 +140,7 @@ describe('ExecutionService Drive mode', () => {
         return currentSignature;
       },
     );
-    service = new ExecutionService(prisma as unknown as PrismaClient, new DevMockStorageClient(), {
+    service = new ExecutionService(prisma as unknown as PrismaClient, {
       drive: {
         client: drive as unknown as GoogleDriveClient,
         folders: folders as unknown as DriveFolderResolver,
@@ -217,7 +216,6 @@ describe('ExecutionService Drive mode', () => {
     ).rejects.toMatchObject({ code: 'IMAGE_DIMENSIONS_MISMATCH' });
     const smallLimit = new ExecutionService(
       prisma as unknown as PrismaClient,
-      new DevMockStorageClient(),
       {
         maxEvidenceBytes: 1,
         drive: {
@@ -508,16 +506,4 @@ describe('ExecutionService Drive mode', () => {
     expect(drive.getFile).toHaveBeenCalledTimes(2);
   });
 
-  it('disables legacy presigned URLs and confirmation while Drive mode is active', async () => {
-    expect(service.getStorageMode()).toBe('drive');
-    await expect(
-      service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', {
-        mimeType: 'image/jpeg',
-        sizeBytes: 1,
-      }),
-    ).rejects.toMatchObject({ code: 'LEGACY_STORAGE_DISABLED' });
-    await expect(service.getSignatureUrl('admin-1', 'ADMIN', 'order-1')).rejects.toMatchObject({
-      code: 'LEGACY_STORAGE_DISABLED',
-    });
-  });
 });

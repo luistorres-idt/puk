@@ -33,16 +33,12 @@ import {
 import {
   checkCompleteness,
   completeOrder,
-  completeSignature,
   failAppointment,
-  getStorageMode,
-  presignSignature,
   reportDiscrepancy,
   requireCorrection,
   saveChecklist,
   startOrder,
   uploadSignatureFile,
-  uploadToStorage,
   verifyEquipment,
 } from '../api.js';
 import EvidenceCapture from '../components/EvidenceCapture.vue';
@@ -197,15 +193,7 @@ const savingSignature = ref(false);
 async function handleSaveSignature(payload: { signerName: string; blob: Blob }) {
   savingSignature.value = true;
   try {
-    if ((await getStorageMode()) === 'drive') {
-      await uploadSignatureFile(orderId, payload.signerName, payload.blob);
-    } else {
-      const presign = await presignSignature(orderId, {
-        sizeBytes: payload.blob.size,
-      });
-      await uploadToStorage(presign.uploadUrl, payload.blob, 'image/png');
-      await completeSignature(orderId, { signerName: payload.signerName }, presign.objectKey);
-    }
+    await uploadSignatureFile(orderId, payload.signerName, payload.blob);
 
     message.success('Firma guardada exitosamente');
     await loadData();

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import * as v from 'valibot';
 import {
   RequireCorrectionSchema,
-  CompleteEvidenceSchema,
   ReportDiscrepancySchema,
   SaveChecklistItemSchema,
   SaveChecklistSchema,
@@ -123,12 +122,5 @@ describe('execution checklist and evidence dimension contracts', () => {
     ).toBe(false);
   });
 
-  it('accepts omitted dimensions and valid bounded dimensions only', () => {
-    expect(v.safeParse(CompleteEvidenceSchema, {}).success).toBe(true);
-    expect(v.safeParse(CompleteEvidenceSchema, { width: 8000, height: 5000 }).success).toBe(true);
-    expect(v.safeParse(CompleteEvidenceSchema, { width: 8001, height: 5000 }).success).toBe(false);
-    for (const value of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(v.safeParse(CompleteEvidenceSchema, { width: value }).success).toBe(false);
-    }
-  });
+
 });

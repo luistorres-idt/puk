@@ -2,7 +2,6 @@ import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '../../generated/prisma/client.js';
-import { DevMockStorageClient } from '../../integrations/object-storage/dev-mock-storage.client.js';
 import { errorHandler } from '../../middleware/error-handler.js';
 import { AppError } from '../../shared/errors.js';
 import { createExecutionRouter } from './execution.router.js';
@@ -45,7 +44,6 @@ describe('execution HTTP equipment ownership', () => {
       createExecutionRouter({
         executionService: new ExecutionService(
           database as unknown as PrismaClient,
-          new DevMockStorageClient(),
         ),
         // Inject an authenticated principal; routing, validation and order-access policy remain real.
         requireAccess: (req, _res, next) => {
@@ -159,7 +157,6 @@ describe('completeness HTTP actor authorization', () => {
       createExecutionRouter({
         executionService: new ExecutionService(
           database as unknown as PrismaClient,
-          new DevMockStorageClient(),
         ),
         requireAccess: (req, _res, next) => {
           req.auth = { userId: 'actor-1', role };
@@ -252,7 +249,6 @@ describe('binary upload HTTP validation order', () => {
       getSignatureUploadLimit: () => 16,
       uploadEvidenceFile: vi.fn().mockResolvedValue({ id: 'evidence-1' }),
       uploadSignatureFile: vi.fn().mockResolvedValue({ id: 'signature-1' }),
-      completeEvidence: vi.fn().mockResolvedValue({ id: 'evidence-1' }),
     };
     const app = express();
     app.use(
@@ -402,13 +398,4 @@ describe('binary upload HTTP validation order', () => {
     expect(h.service.uploadEvidenceFile).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid declared completion dimensions before the service accepts evidence', async () => {
-    const h = harness();
-    const response = await request(h.app)
-      .post('/evidence/00000000-0000-4000-8000-000000000005/complete')
-      .send({ width: 8001, height: 5000 });
-    expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe('VALIDATION_ERROR');
-    expect(h.service.completeEvidence).not.toHaveBeenCalled();
-  });
 });

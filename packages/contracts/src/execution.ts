@@ -1,7 +1,6 @@
 import * as v from 'valibot';
 import {
   MAX_DISCREPANCY_DESCRIPTION_LENGTH,
-  MAX_IMAGE_PIXELS,
   MAX_ORDER_NOTES_LENGTH,
   MAX_OBSERVED_SNAPSHOT_VALUE_LENGTH,
 } from './validation-limits.js';
@@ -62,38 +61,6 @@ export const ReportDiscrepancySchema = v.object({
   type: v.picklist(['IMEI', 'ID', 'SERIAL', 'UNIT', 'OTHER']),
 });
 export type ReportDiscrepancy = v.InferOutput<typeof ReportDiscrepancySchema>;
-
-export const PresignEvidenceSchema = v.object({
-  mimeType: v.picklist(['image/jpeg', 'image/png', 'image/webp']),
-  sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(1)),
-});
-export type PresignEvidence = v.InferOutput<typeof PresignEvidenceSchema>;
-
-const ImageDimensionSchema = v.pipe(v.number(), v.finite(), v.integer(), v.minValue(1));
-
-export const CompleteEvidenceSchema = v.pipe(
-  v.object({
-    checksum: v.optional(v.string()),
-    height: v.optional(ImageDimensionSchema),
-    width: v.optional(ImageDimensionSchema),
-  }),
-  v.check(
-    ({ width, height }) =>
-      width === undefined || height === undefined || width * height <= MAX_IMAGE_PIXELS,
-    `Las dimensiones no pueden superar ${MAX_IMAGE_PIXELS} píxeles`,
-  ),
-);
-export type CompleteEvidence = v.InferOutput<typeof CompleteEvidenceSchema>;
-
-export const PresignSignatureSchema = v.object({
-  sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(1)),
-});
-export type PresignSignature = v.InferOutput<typeof PresignSignatureSchema>;
-
-export const CompleteSignatureSchema = v.object({
-  signerName: v.pipe(v.string(), v.nonEmpty()),
-});
-export type CompleteSignature = v.InferOutput<typeof CompleteSignatureSchema>;
 
 export const UpdateExecutionNotesSchema = v.object({
   notes: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(MAX_ORDER_NOTES_LENGTH))),
