@@ -35,7 +35,7 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Crear la aplicación Express 5 con `app.ts` y `server.ts` separados.
 - [x] Crear la aplicación Vue 3 con Vite, Vue Router, Pinia y TanStack Query.
 - [x] Integrar Naive UI y Tailwind CSS mediante el plugin de Vite.
-- [x] Configurar Docker Compose con PostgreSQL, MinIO, API y web.
+- [x] Configurar Docker Compose con PostgreSQL, API y web. MinIO fue un componente histórico y se retiró.
 - [x] Implementar validación de variables de entorno con Valibot y fallo temprano al iniciar.
 - [x] Añadir scripts raíz para desarrollo, build, lint, typecheck, pruebas, documentación y Prisma.
 - [x] Crear archivos de ejemplo de configuración sin incluir secretos reales.
@@ -43,7 +43,7 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 ### Criterio de salida
 
 - [x] `pnpm dev`, `pnpm build`, `pnpm lint` y `pnpm typecheck` funcionan desde la raíz.
-- [x] API, web, PostgreSQL y MinIO pueden levantarse en desarrollo local.
+- [x] API, web y PostgreSQL pueden levantarse en desarrollo local; los archivos requieren Google Drive.
 
 ## 2. Fundamentos transversales de la API
 
@@ -57,7 +57,7 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Crear el modelo de capacidades de código y políticas contextuales por recurso.
 - [x] Preparar OpenAPI 3.1, Swagger UI y generación de esquemas compatibles desde Valibot.
 - [x] Añadir `/health/live` y `/health/ready`.
-- [x] Definir puertos para Google Sheets y S3, sin acoplar casos de uso a sus SDK.
+- [x] Definir integraciones de Google Sheets y Drive sin acoplar casos de uso a sus SDK.
 - [x] Configurar timeouts, clasificación de errores, reintentos y circuit breakers por integración.
 
 ### Criterio de salida
@@ -186,23 +186,23 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 
 ## 9. Evidencias y firma
 
-- [x] Implementar el adaptador S3 y configuración local con MinIO.
-- [x] Crear el flujo de evidencia `PENDING -> COMPLETED` con URL prefirmada.
-- [x] Generar las claves de objeto en el servidor según la estructura definida.
-- [x] Validar existencia, tipo MIME, tamaño y metadatos antes de confirmar una subida.
+- [x] Implementar inicialmente el adaptador S3 y MinIO local. **Hito histórico:** ambos se retiraron al adoptar Drive como proveedor único.
+- [x] Crear el flujo de evidencia `PENDING -> COMPLETED` mediante carga autenticada en la API y Drive.
+- [x] Reservar identificadores de archivo de Drive en el servidor y persistirlos con la evidencia.
+- [x] Validar tipo MIME, tamaño, contenido y metadatos antes de marcar la evidencia como completada.
 - [x] Permitir JPEG, PNG y WebP dentro de los límites configurados.
-- [x] Implementar eliminación lógica autorizada y limpieza de subidas huérfanas.
+- [x] Implementar eliminación lógica autorizada. La limpieza física de archivos huérfanos requiere una política operativa independiente.
 - [x] Crear captura móvil desde cámara/galería y compresión previa en Vue.
-- [x] Exigir al menos una foto completada por categoría, incluso para `No aplica`.
+- [x] Exigir el mínimo configurado de fotografías completadas por unidad, independientemente de la categoría del checklist.
 - [x] Implementar captura del nombre y una firma PNG por orden.
-- [x] Servir evidencias y firma mediante URLs temporales autorizadas o proxy seguro.
+- [x] Servir evidencias y firma mediante endpoints autenticados de la API.
 - [x] Auditar reemplazos o eliminaciones sin guardar binarios ni URLs firmadas en logs.
 
 ### Criterio de salida
 
 - [x] Los bytes de fotografías y firma existen solo en almacenamiento privado, no en PostgreSQL.
-- [x] No se puede confirmar una subida inexistente, demasiado grande o con tipo no permitido.
-- [x] Un usuario sin acceso a la orden no puede obtener URLs de sus objetos.
+- [x] No se marca una evidencia como completada si la carga falla o el archivo excede los límites o tipos permitidos.
+- [x] Un usuario sin acceso a la orden no puede descargar sus archivos.
 
 ## 10. Cierre, cita fallida y correcciones
 
@@ -245,7 +245,7 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 ## 12. Calidad, seguridad y observabilidad
 
 - [x] Completar pruebas unitarias de reglas de negocio, estados, autorización, filtros, tokens y resiliencia.
-- [x] Completar pruebas de integración de API, PostgreSQL, S3 simulado, Sheets simulado, outbox e idempotencia.
+- [x] Completar pruebas de integración de API, PostgreSQL, archivos en Drive, Sheets simulado, outbox e idempotencia. Las pruebas S3 simuladas pertenecían a la implementación anterior y se retiraron.
 - [x] Añadir pruebas de contrato entre OpenAPI y respuestas reales de Supertest.
 - [x] Automatizar escenarios E2E de administrador, técnico, varias unidades, discrepancia, firma, cierre y cita fallida.
 - [x] Probar restricciones de acceso entre dos técnicos diferentes.
@@ -265,7 +265,7 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 - [x] Crear pipeline reproducible: instalación, lint, typecheck, pruebas, OpenAPI, build y escaneos.
 - [x] Ejecutar migraciones una sola vez por despliegue antes de activar la nueva versión.
 - [x] Preparar rollback y respaldo para migraciones destructivas.
-- [x] Seleccionar PostgreSQL, Google Drive compartido para archivos de staging y hosting AWS de staging; S3 se conserva en código como adaptador alternativo.
+- [x] Seleccionar PostgreSQL, Google Drive compartido para archivos y hosting AWS de staging. Drive es el único proveedor de archivos en el código.
 - [x] Definir configuración separada por entorno; los secretos de staging deben recrearse tras la eliminación del ambiente.
 - [x] Usar un documento de Google Sheets exclusivo para staging.
 - [x] Definir IaC de staging para frontend/API, PostgreSQL, Drive y reverse proxy. **No está desplegada actualmente**; el stack no crea bucket S3 ni configura TLS público.
