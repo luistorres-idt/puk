@@ -65,4 +65,16 @@ describe('useUnitChecklists', () => {
         'Debe indicar la observación para la categoría "Carrocería y Exteriores" marcada como Mal.',
     });
   });
+
+  it('rejects oversized checklist notes before saving and keeps the local content', () => {
+    const { createSaveChecklistItems, getUnitItem } = useUnitChecklists();
+    getUnitItem('unit-1', 'DASHBOARD').condition = 'BAD';
+    getUnitItem('unit-1', 'DASHBOARD').notes = 'x'.repeat(5001);
+
+    expect(createSaveChecklistItems('unit-1')).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('5,000'),
+    });
+    expect(getUnitItem('unit-1', 'DASHBOARD').notes).toHaveLength(5001);
+  });
 });

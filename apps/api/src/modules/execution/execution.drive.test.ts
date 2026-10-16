@@ -210,6 +210,11 @@ describe('ExecutionService Drive mode', () => {
         width: 9,
       }),
     ).rejects.toMatchObject({ code: 'IMAGE_DIMENSIONS_MISMATCH' });
+    await expect(
+      service.uploadEvidenceFile('admin-1', 'ADMIN', 'order-1', 'unit-1', jpeg, 'image/jpeg', {
+        height: 9,
+      }),
+    ).rejects.toMatchObject({ code: 'IMAGE_DIMENSIONS_MISMATCH' });
     const smallLimit = new ExecutionService(
       prisma as unknown as PrismaClient,
       new DevMockStorageClient(),

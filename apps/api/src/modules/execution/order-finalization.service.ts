@@ -1,10 +1,7 @@
-import {
-  completeInventoryAssignments,
-  releaseOrderInventory,
-} from '../inventory/index.js';
+import { completeInventoryAssignments, releaseOrderInventory } from '../inventory/index.js';
 import * as v from 'valibot';
 import {
-  OrderPricingOverridesSchema,
+  OrderPricingOverridesReadSchema,
   type FailAppointment,
   type RequireCorrection,
 } from '@puk/contracts';
@@ -15,7 +12,7 @@ import { logger } from '../../observability/logger.js';
 import { AppError } from '../../shared/errors.js';
 import {
   assertValidOrderTransition,
-  calculateOrderPricing,
+  calculatePersistableOrderPricing,
   createPricingBreakdownSnapshot,
 } from '../orders/index.js';
 import { formatTechnicalReportRow } from '../reports/index.js';
@@ -37,7 +34,9 @@ export class OrderFinalizationService {
     private readonly options: OrderFinalizationOptions = {},
   ) {}
 
-  public async validateCompleteness(orderId: string) {
+  public async validateCompleteness(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
+    await loadAccessibleExecutionOrder(this.prisma, userId, role, orderId);
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -72,7 +71,7 @@ export class OrderFinalizationService {
       'Solo se pueden completar órdenes en progreso',
     );
 
-    const completeness = await this.validateCompleteness(orderId);
+    const completeness = await this.validateCompleteness(userId, role, orderId);
     if (!completeness.isComplete) {
       throw new AppError(
         400,
@@ -110,7 +109,7 @@ export class OrderFinalizationService {
       equipmentCount: u.equipment.length,
     }));
 
-    const pricing = calculateOrderPricing({
+    const pricing = calculatePersistableOrderPricing({
       technician: fullOrder.technician,
       serviceType: fullOrder.serviceType,
       items,
@@ -119,7 +118,7 @@ export class OrderFinalizationService {
       pricingVersion: (fullOrder.pricingVersion ?? 0) + 1,
       snapshotAt: new Date(),
       overrides: fullOrder.pricingOverrides
-        ? v.parse(OrderPricingOverridesSchema, fullOrder.pricingOverrides)
+        ? v.parse(OrderPricingOverridesReadSchema, fullOrder.pricingOverrides)
         : null,
     });
 
@@ -271,7 +270,7 @@ export class OrderFinalizationService {
     );
 
     const pricing = fullOrder.technician
-      ? calculateOrderPricing({
+      ? calculatePersistableOrderPricing({
           technician: fullOrder.technician,
           serviceType: 'FAILED_APPOINTMENT',
           equipmentCount,
@@ -279,7 +278,7 @@ export class OrderFinalizationService {
           pricingVersion: (fullOrder.pricingVersion ?? 0) + 1,
           snapshotAt: new Date(),
           overrides: fullOrder.pricingOverrides
-            ? v.parse(OrderPricingOverridesSchema, fullOrder.pricingOverrides)
+            ? v.parse(OrderPricingOverridesReadSchema, fullOrder.pricingOverrides)
             : null,
         })
       : null;
@@ -407,13 +406,13 @@ export class OrderFinalizationService {
       0,
     );
     const nextVersion = (order.pricingVersion ?? 1) + 1;
-    let pricing: ReturnType<typeof calculateOrderPricing> | null = null;
+    let pricing: ReturnType<typeof calculatePersistableOrderPricing> | null = null;
     if (order.technician) {
       const items = (order.units ?? []).map((u) => ({
         serviceType: u.serviceType ?? order.serviceType,
         equipmentCount: u.equipment.length,
       }));
-      pricing = calculateOrderPricing({
+      pricing = calculatePersistableOrderPricing({
         technician: order.technician,
         serviceType: order.serviceType,
         items,
@@ -422,7 +421,7 @@ export class OrderFinalizationService {
         pricingVersion: nextVersion,
         snapshotAt: new Date(),
         overrides: order.pricingOverrides
-          ? v.parse(OrderPricingOverridesSchema, order.pricingOverrides)
+          ? v.parse(OrderPricingOverridesReadSchema, order.pricingOverrides)
           : null,
       });
     }

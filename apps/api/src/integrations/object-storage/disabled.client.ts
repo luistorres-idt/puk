@@ -14,6 +14,9 @@ export class DisabledStorageClient implements ObjectStoragePort {
   public getObject(): Promise<Uint8Array | null> {
     return disabled();
   }
+  public getObjectLimited(): Promise<Uint8Array | null> {
+    return disabled();
+  }
   public headObject(): Promise<{ bytes: number; mimeType: string } | null> {
     return disabled();
   }

@@ -1,4 +1,5 @@
 import type { ObjectStoragePort } from '../ports.js';
+import { ObjectTooLargeError } from './object-too-large.error.js';
 
 export class DevMockStorageClient implements ObjectStoragePort {
   private readonly objects = new Map<
@@ -40,6 +41,15 @@ export class DevMockStorageClient implements ObjectStoragePort {
 
   public async getObject(key: string): Promise<Uint8Array | null> {
     return this.objects.get(key)?.body ?? null;
+  }
+
+  public async getObjectLimited(key: string, maxBytes: number): Promise<Uint8Array | null> {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+      throw new RangeError('maxBytes must be a positive safe integer.');
+    }
+    const object = this.objects.get(key);
+    if (object && object.body.byteLength > maxBytes) throw new ObjectTooLargeError(maxBytes);
+    return object?.body ?? null;
   }
 
   public async putObject(key: string, body: Uint8Array, mimeType: string): Promise<void> {

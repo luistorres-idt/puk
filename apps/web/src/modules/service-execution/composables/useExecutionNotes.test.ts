@@ -48,4 +48,18 @@ describe('useExecutionNotes', () => {
     expect(notes.savingExecutionNotes.value).toBe(false);
     expect(onSaved).not.toHaveBeenCalled();
   });
+
+  it('rejects oversized notes locally and preserves the dirty draft', async () => {
+    vi.clearAllMocks();
+    const notes = useExecutionNotes('order-4');
+    notes.executionNotes.value = 'x'.repeat(5001);
+    notes.executionNotesDirty.value = true;
+
+    await expect(notes.saveExecutionNotes()).rejects.toThrow('5,000');
+
+    expect(updateExecutionNotes).not.toHaveBeenCalled();
+    expect(notes.executionNotes.value).toHaveLength(5001);
+    expect(notes.executionNotesDirty.value).toBe(true);
+    expect(notes.savingExecutionNotes.value).toBe(false);
+  });
 });

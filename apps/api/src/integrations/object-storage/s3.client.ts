@@ -7,6 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { ObjectStoragePort } from '../ports.js';
+import { ObjectTooLargeError } from './object-too-large.error.js';
 
 export interface S3ClientConfig {
   endpoint: string;
@@ -100,6 +101,45 @@ export class S3StorageClient implements ObjectStoragePort {
     }
   }
 
+  public async getObjectLimited(key: string, maxBytes: number): Promise<Uint8Array | null> {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+      throw new RangeError('maxBytes must be a positive safe integer.');
+    }
+    let body: unknown;
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      body = response.Body;
+      if (!body) return null;
+
+      const chunks: Uint8Array[] = [];
+      let totalBytes = 0;
+      for await (const chunk of body as AsyncIterable<Uint8Array>) {
+        const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+        totalBytes += bytes.byteLength;
+        if (totalBytes > maxBytes) {
+          await cancelBody(body);
+          throw new ObjectTooLargeError(maxBytes);
+        }
+        chunks.push(bytes);
+      }
+      const result = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        result.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return result;
+    } catch (err: unknown) {
+      await cancelBody(body);
+      if (err instanceof ObjectTooLargeError) throw err;
+      const error = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) return null;
+      throw err;
+    }
+  }
+
   public async putObject(key: string, body: Uint8Array, mimeType: string): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
@@ -118,5 +158,15 @@ export class S3StorageClient implements ObjectStoragePort {
         Key: key,
       }),
     );
+  }
+}
+
+async function cancelBody(body: unknown): Promise<void> {
+  if (!body || typeof body !== 'object') return;
+  const stream = body as { destroy?: () => void; cancel?: () => Promise<void> | void };
+  if (typeof stream.destroy === 'function') {
+    stream.destroy();
+  } else if (typeof stream.cancel === 'function') {
+    await stream.cancel();
   }
 }

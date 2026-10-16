@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { MAX_IMAGE_PIXELS } from '@puk/contracts';
 import type {
   CompleteEvidence,
   CompleteSignature,
@@ -9,6 +10,7 @@ import type {
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { UploadStatus } from '../../generated/prisma/client.js';
 import type { ObjectStoragePort } from '../../integrations/ports.js';
+import { ObjectTooLargeError } from '../../integrations/object-storage/object-too-large.error.js';
 import type { GoogleDriveClient } from '../../integrations/google-drive/google-drive.client.js';
 import type { DriveFolderResolver } from '../../integrations/google-drive/drive-folder-resolver.js';
 import { AppError } from '../../shared/errors.js';
@@ -76,7 +78,7 @@ export class ExecutionMediaService {
     mimeType: string,
     allowedMimeTypes: readonly string[],
     maxBytes: number,
-  ): Promise<{ width: number; height: number }> {
+  ): Promise<{ width: number; height: number; format: string | undefined }> {
     if (!allowedMimeTypes.includes(mimeType)) {
       throw new AppError(415, 'UNSUPPORTED_IMAGE_TYPE', 'Tipo de imagen no permitido');
     }
@@ -87,14 +89,14 @@ export class ExecutionMediaService {
       throw new AppError(413, 'FILE_TOO_LARGE', 'El archivo excede el tamaño máximo permitido');
     }
     try {
-      const image = sharp(body, { failOn: 'error', limitInputPixels: 40_000_000 });
+      const image = sharp(body, { failOn: 'error', limitInputPixels: MAX_IMAGE_PIXELS });
       const metadata = await image.metadata();
       await image.stats(); // Decode the image, not just its header.
       const expectedFormat = mimeType.slice('image/'.length);
       if (metadata.format !== expectedFormat || !metadata.width || !metadata.height) {
         throw new Error('Unexpected image format or dimensions');
       }
-      return { width: metadata.width, height: metadata.height };
+      return { width: metadata.width, height: metadata.height, format: metadata.format };
     } catch {
       throw new AppError(400, 'INVALID_IMAGE', 'El contenido no coincide con una imagen válida');
     }
@@ -445,7 +447,6 @@ export class ExecutionMediaService {
 
     await this.assertOrderAccess(userId, role, evidence.orderUnit.order.id);
 
-    // Validate object exists in storage
     const head = await this.storagePort.headObject(evidence.objectKey);
     if (!head) {
       throw new AppError(
@@ -454,25 +455,67 @@ export class ExecutionMediaService {
         'El archivo no fue encontrado en el almacenamiento',
       );
     }
-
     if (head.bytes > this.maxEvidenceBytes) {
       throw new AppError(400, 'FILE_TOO_LARGE', 'El archivo subido excede el límite permitido');
     }
 
-    const updated = await this.prisma.evidence.update({
+    let body: Uint8Array | null;
+    try {
+      body = await this.storagePort.getObjectLimited(evidence.objectKey, this.maxEvidenceBytes);
+    } catch (error) {
+      if (error instanceof ObjectTooLargeError) {
+        throw new AppError(400, 'FILE_TOO_LARGE', 'El archivo subido excede el límite permitido');
+      }
+      throw error;
+    }
+    if (!body) {
+      throw new AppError(
+        400,
+        'UPLOAD_NOT_FOUND',
+        'El archivo no fue encontrado en el almacenamiento',
+      );
+    }
+
+    const mimeType = head.mimeType || evidence.mimeType;
+    const image = await this.validateImage(
+      body,
+      mimeType,
+      ['image/jpeg', 'image/png', 'image/webp'],
+      this.maxEvidenceBytes,
+    );
+    const expectedFormat = { 'image/jpeg': 'jpeg', 'image/png': 'png', 'image/webp': 'webp' }[
+      mimeType
+    ];
+    if (!expectedFormat || image.format !== expectedFormat) {
+      throw new AppError(400, 'INVALID_IMAGE', 'El contenido no coincide con el tipo de imagen');
+    }
+    if (
+      (input.width !== undefined && input.width !== image.width) ||
+      (input.height !== undefined && input.height !== image.height)
+    ) {
+      throw new AppError(
+        400,
+        'IMAGE_DIMENSIONS_MISMATCH',
+        'Las dimensiones no coinciden con la imagen',
+      );
+    }
+
+    const checksum = createHash('sha256').update(body).digest('hex');
+    if (input.checksum !== undefined && input.checksum !== checksum) {
+      throw new AppError(400, 'CHECKSUM_MISMATCH', 'El checksum no coincide con el archivo');
+    }
+    return this.prisma.evidence.update({
       where: { id: evidenceId },
       data: {
         status: UploadStatus.COMPLETED,
         completedAt: new Date(),
-        sizeBytes: head.bytes,
-        mimeType: head.mimeType || evidence.mimeType,
-        checksum: input.checksum ?? null,
-        width: input.width ?? null,
-        height: input.height ?? null,
+        sizeBytes: body.byteLength,
+        mimeType,
+        checksum,
+        width: image.width,
+        height: image.height,
       },
     });
-
-    return updated;
   }
 
   public async deleteEvidence(userId: string, role: 'ADMIN' | 'TECHNICIAN', evidenceId: string) {

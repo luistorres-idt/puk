@@ -12,10 +12,26 @@ export const notFound: RequestHandler = (request, _response, next) => {
 
 export const errorHandler: ErrorRequestHandler = (error: unknown, request, response, next) => {
   void next;
-  const knownError = error instanceof AppError;
-  const status = knownError ? error.status : 500;
-  const code = knownError ? error.code : 'INTERNAL_ERROR';
-  const message = knownError ? error.message : 'An unexpected error occurred.';
+  if (
+    !(error instanceof AppError) &&
+    error instanceof Error &&
+    'type' in error &&
+    'status' in error
+  ) {
+    if (error.type === 'entity.parse.failed' && error.status === 400) {
+      error = new AppError(400, 'INVALID_JSON', 'The request body must contain valid JSON.');
+    } else if (error.type === 'entity.too.large' && error.status === 413) {
+      error = new AppError(
+        413,
+        'PAYLOAD_TOO_LARGE',
+        'The request body exceeds the maximum allowed size.',
+      );
+    }
+  }
+  const knownError = error instanceof AppError ? error : undefined;
+  const status = knownError?.status ?? 500;
+  const code = knownError?.code ?? 'INTERNAL_ERROR';
+  const message = knownError?.message ?? 'An unexpected error occurred.';
 
   logger.log(status >= 500 ? 'error' : 'warn', message, {
     code,
@@ -29,7 +45,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
   response.status(status).json({
     error: {
       code,
-      ...(knownError && error.details !== undefined ? { details: error.details } : {}),
+      ...(knownError?.details !== undefined ? { details: knownError.details } : {}),
       message,
     },
     meta: responseMeta(response),

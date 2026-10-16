@@ -7,6 +7,7 @@ import type {
 } from '../integrations/ports.js';
 import { MetricsService } from '../observability/metrics.js';
 import { AppError } from '../shared/errors.js';
+import { ObjectTooLargeError } from '../integrations/object-storage/object-too-large.error.js';
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -72,7 +73,7 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (error) {
-      this.onFailure();
+      if (!(error instanceof ObjectTooLargeError)) this.onFailure();
       throw error;
     }
   }
@@ -183,6 +184,10 @@ export class CircuitBreakerStoragePort implements ObjectStoragePort {
 
   public getObject(key: string): Promise<Uint8Array | null> {
     return this.breaker.execute(() => this.inner.getObject(key));
+  }
+
+  public getObjectLimited(key: string, maxBytes: number): Promise<Uint8Array | null> {
+    return this.breaker.execute(() => this.inner.getObjectLimited(key, maxBytes));
   }
 
   public putObject(key: string, body: Uint8Array, mimeType: string): Promise<void> {

@@ -15,7 +15,12 @@ import {
   NTabPane,
   useMessage,
 } from 'naive-ui';
-import { MIN_REQUIRED_EVIDENCE_PHOTOS, type OrderExecutionDetail } from '@puk/contracts';
+import {
+  MAX_DISCREPANCY_DESCRIPTION_LENGTH,
+  MAX_ORDER_NOTES_LENGTH,
+  MIN_REQUIRED_EVIDENCE_PHOTOS,
+  type OrderExecutionDetail,
+} from '@puk/contracts';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import { useSessionStore } from '../../../stores/session.js';
@@ -146,6 +151,12 @@ function openDiscrepancyModal(unitId: string, equipmentId: string) {
 
 async function handleSaveDiscrepancy() {
   if (!discrepancyTarget.value || !discrepancyDesc.value.trim()) return;
+  if (discrepancyDesc.value.trim().length > MAX_DISCREPANCY_DESCRIPTION_LENGTH) {
+    message.error(
+      `La descripción no puede superar ${MAX_DISCREPANCY_DESCRIPTION_LENGTH.toLocaleString('es-MX')} caracteres.`,
+    );
+    return;
+  }
   try {
     await reportDiscrepancy(
       orderId,
@@ -255,6 +266,12 @@ async function handleFailAppointment() {
 
 async function handleRequireCorrection() {
   if (!correctionNotes.value.trim()) return;
+  if (correctionNotes.value.length > MAX_ORDER_NOTES_LENGTH) {
+    message.error(
+      `Las notas no pueden superar ${MAX_ORDER_NOTES_LENGTH.toLocaleString('es-MX')} caracteres.`,
+    );
+    return;
+  }
   try {
     await requireCorrection(orderId, { notes: correctionNotes.value.trim() });
     showCorrectionModal.value = false;

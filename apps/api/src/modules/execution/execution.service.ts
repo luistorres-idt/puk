@@ -107,6 +107,11 @@ export class ExecutionService {
     const order = await this.assertOrderAccess(userId, role, orderId);
     assertCanExecuteWork(order.status, 'verificar equipos');
 
+    const unit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
+    if (!unit || unit.orderId !== orderId) {
+      throw new AppError(404, 'UNIT_NOT_FOUND', 'Unidad no encontrada');
+    }
+
     const eq = await this.prisma.orderEquipment.findUnique({ where: { id: equipmentId } });
     if (!eq || eq.orderUnitId !== unitId) {
       throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'Equipo no encontrado');
@@ -144,6 +149,11 @@ export class ExecutionService {
   ) {
     const order = await this.assertOrderAccess(userId, role, orderId);
     assertCanExecuteWork(order.status, 'reportar discrepancias');
+
+    const unit = await this.prisma.orderUnit.findUnique({ where: { id: unitId } });
+    if (!unit || unit.orderId !== orderId) {
+      throw new AppError(404, 'UNIT_NOT_FOUND', 'Unidad no encontrada');
+    }
 
     const eq = await this.prisma.orderEquipment.findUnique({ where: { id: equipmentId } });
     if (!eq || eq.orderUnitId !== unitId) {
@@ -373,8 +383,8 @@ export class ExecutionService {
     return this.media.getSignatureUrl(userId, role, orderId);
   }
 
-  public validateCompleteness(orderId: string) {
-    return this.finalization.validateCompleteness(orderId);
+  public validateCompleteness(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
+    return this.finalization.validateCompleteness(userId, role, orderId);
   }
 
   public completeOrder(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
