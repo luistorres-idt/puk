@@ -53,17 +53,19 @@ describe('Drive upload idempotency headers', () => {
 
   it('decodes the signer name returned with a private Drive signature preview', async () => {
     const blob = new Blob(['signature'], { type: 'image/png' });
-    vi.mocked(api.get)
-      .mockResolvedValueOnce({ data: { data: { provider: 'drive' } } } as never)
-      .mockResolvedValueOnce({
-        data: blob,
-        headers: { 'x-signer-name': 'Mar%C3%ADa%20O%E2%80%99Neil' },
-      } as never);
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: blob,
+      headers: { 'x-signer-name': 'Mar%C3%ADa%20O%E2%80%99Neil' },
+    } as never);
 
     const preview = await getSignatureUrl('order-1');
 
     expect(preview.signerName).toBe('María O’Neil');
     expect(preview.downloadUrl).toMatch(/^blob:/);
+    expect(api.get).toHaveBeenCalledOnce();
+    expect(api.get).toHaveBeenCalledWith('/orders/order-1/signature/file', {
+      responseType: 'blob',
+    });
   });
 
   it('uploads signature successfully in insecure contexts where crypto.subtle is undefined', async () => {
