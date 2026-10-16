@@ -6,7 +6,7 @@ import type { PrismaClient } from '../generated/prisma/client.js';
 import { errorHandler } from '../middleware/error-handler.js';
 import { authenticate } from './authenticate.js';
 import { PrismaPrincipalResolver, type PrincipalResolver } from './principal-resolver.js';
-import type { TokenService } from './tokens.js';
+import { TokenService } from './tokens.js';
 
 describe('authenticate', () => {
   const verifyAccessToken = vi.fn(async () => ({
@@ -97,5 +97,31 @@ describe('PrismaPrincipalResolver', () => {
       where: { id: 'user-1' },
       select: { id: true, role: true, active: true },
     });
+  });
+});
+
+describe('expired access token', () => {
+  it('returns 401 and does not resolve or invoke the protected principal', async () => {
+    const tokens = await TokenService.forDevelopment({
+      accessTtl: '-1m',
+      audience: 'test-web',
+      issuer: 'test-api',
+      refreshTtl: '1h',
+    });
+    const expiredToken = await tokens.createAccessToken({ id: 'user-1', role: 'ADMIN' });
+    const resolve = vi.fn<PrincipalResolver['resolve']>();
+    const handler = vi.fn((_request, response) => response.json({ ok: true }));
+    const app = express();
+    app.get('/protected', authenticate(tokens, { resolve }), handler);
+    app.use(errorHandler);
+
+    const response = await request(app)
+      .get('/protected')
+      .set('Authorization', `Bearer ${expiredToken}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    expect(resolve).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
   });
 });

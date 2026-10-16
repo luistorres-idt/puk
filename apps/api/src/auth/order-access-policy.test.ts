@@ -34,6 +34,29 @@ describe('shared technician order access policy', () => {
     ).resolves.toMatchObject({ mode: 'SHARED' });
   });
 
+  it.each([
+    { status: 'DRAFT', allowed: false },
+    { status: 'ASSIGNED', allowed: true },
+    { status: 'IN_PROGRESS', allowed: true },
+    { status: 'REQUIRES_CORRECTION', allowed: true },
+    { status: 'COMPLETED', allowed: false },
+    { status: 'FAILED_APPOINTMENT', allowed: false },
+    { status: 'CANCELLED', allowed: false },
+  ])('applies shared access policy to $status', async ({ status, allowed }) => {
+    const prisma = mockPrisma({
+      order: { ...assignedOrder, status },
+      shared: { userId: 'shared-user', orderId: null },
+      user: { active: true, technicianId: null },
+    });
+    const access = assertOrderAccess(prisma, { id: 'shared-user', role: 'TECHNICIAN' }, 'order-1');
+
+    if (allowed) {
+      await expect(access).resolves.toMatchObject({ mode: 'SHARED' });
+    } else {
+      await expect(access).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    }
+  });
+
   it('denies a designated shared technician if order has no technician assigned', async () => {
     const prisma = mockPrisma({
       order: { ...assignedOrder, technicianId: null },
