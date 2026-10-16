@@ -1,6 +1,7 @@
 import { computed, ref, type Ref } from 'vue';
+import { safeParse } from 'valibot';
 import type { OrderPricingOverrides, OrderServiceType } from '@puk/contracts';
-import { ORDER_SERVICE_LABELS } from '@puk/contracts';
+import { ORDER_SERVICE_LABELS, PricingRateOverrideSchema } from '@puk/contracts';
 import type { OrderDetail } from '../api.js';
 
 export interface UseOrderPricingModalOptions {
@@ -45,7 +46,7 @@ export function getTechnicianBaseRate(
   }
 }
 
-function createInitialRates(): Record<OrderServiceType, number | null> {
+function createInitialRates(): Record<OrderServiceType, string | null> {
   return {
     INSTALLATION: null,
     REVIEW: null,
@@ -63,8 +64,8 @@ export function useOrderPricingModal(options: UseOrderPricingModalOptions) {
   const isSubmitting = ref(false);
   const showAllServices = ref(false);
 
-  const rates = ref<Record<OrderServiceType, number | null>>(createInitialRates());
-  const travelExpenses = ref<number | null>(null);
+  const rates = ref<Record<OrderServiceType, string | null>>(createInitialRates());
+  const travelExpenses = ref<string | null>(null);
   const reason = ref<string>('');
 
   const isFinalized = computed(() => {
@@ -121,14 +122,17 @@ export function useOrderPricingModal(options: UseOrderPricingModalOptions) {
     for (const svc of ALL_ORDER_SERVICES) {
       if (existingOverrides?.rates && svc in existingOverrides.rates) {
         const val = existingOverrides.rates[svc];
-        initialRates[svc] = val !== undefined && val !== null ? parseFloat(val) : null;
+        initialRates[svc] = val ?? null;
       }
     }
 
     rates.value = initialRates;
 
-    if (existingOverrides?.travelExpenses !== undefined && existingOverrides.travelExpenses !== null) {
-      travelExpenses.value = parseFloat(existingOverrides.travelExpenses);
+    if (
+      existingOverrides?.travelExpenses !== undefined &&
+      existingOverrides.travelExpenses !== null
+    ) {
+      travelExpenses.value = existingOverrides.travelExpenses;
     } else {
       travelExpenses.value = null;
     }
@@ -164,8 +168,8 @@ export function useOrderPricingModal(options: UseOrderPricingModalOptions) {
 
     const ratesPayload: Partial<Record<OrderServiceType, string>> = {};
     for (const [svc, val] of Object.entries(rates.value)) {
-      if (val !== null && val !== undefined && !Number.isNaN(val)) {
-        if (val < 0) {
+      if (val !== null && val !== undefined && val !== '') {
+        if (val.startsWith('-')) {
           notifyError(
             new Error(
               `La tarifa para ${ORDER_SERVICE_LABELS[svc as OrderServiceType] ?? svc} no puede ser negativa.`,
@@ -174,19 +178,38 @@ export function useOrderPricingModal(options: UseOrderPricingModalOptions) {
           );
           return;
         }
-        ratesPayload[svc as OrderServiceType] = val.toFixed(2);
+        const parsed = safeParse(PricingRateOverrideSchema, val);
+        if (!parsed.success) {
+          const label = ORDER_SERVICE_LABELS[svc as OrderServiceType] ?? svc;
+          notifyError(
+            new Error(`La tarifa para ${label} no es válida: ${parsed.issues[0]?.message ?? ''}`),
+            'Error de validación',
+          );
+          return;
+        }
+        ratesPayload[svc as OrderServiceType] = parsed.output;
       }
     }
 
+    let validatedTravelExpenses: string | null = null;
     if (
       travelExpenses.value !== null &&
       travelExpenses.value !== undefined &&
-      !Number.isNaN(travelExpenses.value)
+      travelExpenses.value !== ''
     ) {
-      if (travelExpenses.value < 0) {
+      if (travelExpenses.value.startsWith('-')) {
         notifyError(new Error('Los viáticos no pueden ser negativos.'), 'Error de validación');
         return;
       }
+      const parsed = safeParse(PricingRateOverrideSchema, travelExpenses.value);
+      if (!parsed.success) {
+        notifyError(
+          new Error(`Los viáticos no son válidos: ${parsed.issues[0]?.message ?? ''}`),
+          'Error de validación',
+        );
+        return;
+      }
+      validatedTravelExpenses = parsed.output;
     }
 
     const payload: OrderPricingOverrides = {
@@ -194,12 +217,7 @@ export function useOrderPricingModal(options: UseOrderPricingModalOptions) {
         Object.keys(ratesPayload).length > 0
           ? (ratesPayload as Record<OrderServiceType, string>)
           : undefined,
-      travelExpenses:
-        travelExpenses.value !== null &&
-        travelExpenses.value !== undefined &&
-        !Number.isNaN(travelExpenses.value)
-          ? travelExpenses.value.toFixed(2)
-          : null,
+      travelExpenses: validatedTravelExpenses,
       reason: reason.value.trim().length > 0 ? reason.value.trim() : null,
     };
 

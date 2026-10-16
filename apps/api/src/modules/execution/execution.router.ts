@@ -2,6 +2,7 @@ import { Router, raw, type RequestHandler } from 'express';
 import * as v from 'valibot';
 import {
   CompleteEvidenceSchema,
+  MAX_IMAGE_PIXELS,
   CompleteSignatureSchema,
   EquipmentParamsSchema,
   FailAppointmentSchema,
@@ -19,6 +20,19 @@ import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import { AppError } from '../../shared/errors.js';
 import type { ExecutionService } from './execution.service.js';
+
+function idempotencyKeyHeader(value: string | undefined): string {
+  const result = v.safeParse(v.pipe(v.string(), v.uuid()), value);
+  if (!result.success) {
+    throw new AppError(400, 'INVALID_IDEMPOTENCY_KEY', 'A valid UUID Idempotency-Key is required.');
+  }
+  return result.output;
+}
+
+const validateIdempotencyKey: RequestHandler = (request, _response, next) => {
+  idempotencyKeyHeader(request.header('Idempotency-Key'));
+  next();
+};
 
 function binaryParser(limit: number): RequestHandler {
   const parse = raw({ type: () => true, limit });
@@ -125,8 +139,25 @@ export function createExecutionRouter(options: {
   // --- Evidence presign and complete ---
   router.post(
     '/orders/:id/units/:unitId/evidence/file',
+    validate({ params: UnitParamsSchema }),
+    validateIdempotencyKey,
     binaryParser(options.executionService.getEvidenceUploadLimit()),
     async (request, response) => {
+      const dimensions = {
+        width: dimensionHeader(request.header('X-Image-Width'), 'X-Image-Width'),
+        height: dimensionHeader(request.header('X-Image-Height'), 'X-Image-Height'),
+      };
+      if (
+        dimensions.width !== undefined &&
+        dimensions.height !== undefined &&
+        dimensions.width * dimensions.height > MAX_IMAGE_PIXELS
+      ) {
+        throw new AppError(
+          400,
+          'INVALID_IMAGE_DIMENSION',
+          `Image dimensions cannot exceed ${MAX_IMAGE_PIXELS} pixels`,
+        );
+      }
       const result = await options.executionService.uploadEvidenceFile(
         request.auth!.userId,
         request.auth!.role as 'ADMIN' | 'TECHNICIAN',
@@ -134,11 +165,8 @@ export function createExecutionRouter(options: {
         String(request.params.unitId),
         binaryBody(request.body),
         request.header('Content-Type')?.split(';')[0]?.trim().toLowerCase() ?? '',
-        {
-          width: dimensionHeader(request.header('X-Image-Width'), 'X-Image-Width'),
-          height: dimensionHeader(request.header('X-Image-Height'), 'X-Image-Height'),
-        },
-        v.parse(v.pipe(v.string(), v.uuid()), request.header('Idempotency-Key') ?? ''),
+        dimensions,
+        idempotencyKeyHeader(request.header('Idempotency-Key')),
       );
       sendSuccess(response, result, 201);
     },
@@ -217,6 +245,8 @@ export function createExecutionRouter(options: {
   // --- Signatures ---
   router.put(
     '/orders/:id/signature/file',
+    validate({ params: IdParamsSchema }),
+    validateIdempotencyKey,
     binaryParser(options.executionService.getSignatureUploadLimit()),
     async (request, response) => {
       const mimeType = request.header('Content-Type')?.split(';')[0]?.trim().toLowerCase();
@@ -229,7 +259,7 @@ export function createExecutionRouter(options: {
         String(request.params.id),
         binaryBody(request.body),
         request.header('X-Signer-Name') ?? '',
-        v.parse(v.pipe(v.string(), v.uuid()), request.header('Idempotency-Key') ?? ''),
+        idempotencyKeyHeader(request.header('Idempotency-Key')),
       );
       sendSuccess(response, result);
     },
@@ -299,7 +329,11 @@ export function createExecutionRouter(options: {
     '/orders/:id/completeness',
     validate({ params: IdParamsSchema }),
     async (request, response) => {
-      const result = await options.executionService.validateCompleteness(String(request.params.id));
+      const result = await options.executionService.validateCompleteness(
+        request.auth!.userId,
+        request.auth!.role as 'ADMIN' | 'TECHNICIAN',
+        String(request.params.id),
+      );
       sendSuccess(response, result);
     },
   );

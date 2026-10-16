@@ -3,7 +3,7 @@ import { domainTransaction } from '../../database/transaction.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, Prisma } from '../../generated/prisma/client.js';
 import { AppError } from '../../shared/errors.js';
-import { calculateOrderPricing, createPricingBreakdownSnapshot } from './pricing.js';
+import { calculatePersistableOrderPricing, createPricingBreakdownSnapshot } from './pricing.js';
 import { formatTechnicalReportRow } from '../reports/index.js';
 
 export interface OrderPricingServiceOptions {
@@ -46,8 +46,7 @@ export class OrderPricingService {
     }
 
     const isFinalized =
-      order.status === OrderStatus.COMPLETED ||
-      order.status === OrderStatus.FAILED_APPOINTMENT;
+      order.status === OrderStatus.COMPLETED || order.status === OrderStatus.FAILED_APPOINTMENT;
 
     if (!isFinalized) {
       return domainTransaction(this.prisma, async (tx, effects) => {
@@ -87,7 +86,7 @@ export class OrderPricingService {
     const nextPricingVersion = (order.pricingVersion ?? 1) + 1;
     const now = new Date();
 
-    const pricing = calculateOrderPricing({
+    const pricing = calculatePersistableOrderPricing({
       technician: order.technician,
       serviceType: order.serviceType,
       items,

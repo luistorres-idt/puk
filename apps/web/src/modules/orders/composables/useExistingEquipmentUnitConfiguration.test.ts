@@ -1,6 +1,10 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
-import type { ExternalEquipment } from '@puk/contracts';
+import {
+  MAX_ORDER_UNIT_LABEL_LENGTH,
+  MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH,
+  type ExternalEquipment,
+} from '@puk/contracts';
 import type { ConfiguredUnitItem } from './configured-order-unit.js';
 import { useExistingEquipmentUnitConfiguration } from './useExistingEquipmentUnitConfiguration.js';
 
@@ -54,6 +58,41 @@ describe('useExistingEquipmentUnitConfiguration', () => {
 
     expect(error.value).toBe('Previous error');
     expect(units.value).toEqual([]);
+  });
+
+  it('rejects an equipment-derived overlong unit label and retains the selected equipment', () => {
+    const selectedEquipment = equipment('EQ-LONG', {
+      unit: 'x'.repeat(MAX_ORDER_UNIT_LABEL_LENGTH + 1),
+    });
+    const units = ref<ConfiguredUnitItem[]>([]);
+    const error = ref<string | null>(null);
+    const configuration = useExistingEquipmentUnitConfiguration(units, error);
+    configuration.reviewSelectedEquipmentKey.value = selectedEquipment.externalKey;
+    configuration.handleReviewEquipmentSelect(selectedEquipment);
+
+    configuration.handleAddReviewEquipment('REVIEW');
+
+    expect(error.value).toContain(`${MAX_ORDER_UNIT_LABEL_LENGTH}`);
+    expect(units.value).toEqual([]);
+    expect(configuration.reviewSelectedEquipmentKey.value).toBe(selectedEquipment.externalKey);
+    expect(configuration.reviewSelectedEquipment.value).toEqual(selectedEquipment);
+  });
+
+  it('rejects an equipment-derived overlong serial number and retains the selection', () => {
+    const selectedEquipment = equipment('EQ-LONG-SERIAL', {
+      unitSerialNumber: 's'.repeat(MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH + 1),
+    });
+    const units = ref<ConfiguredUnitItem[]>([]);
+    const error = ref<string | null>(null);
+    const configuration = useExistingEquipmentUnitConfiguration(units, error);
+    configuration.reviewSelectedEquipmentKey.value = selectedEquipment.externalKey;
+    configuration.handleReviewEquipmentSelect(selectedEquipment);
+
+    configuration.handleAddReviewEquipment('REVIEW');
+
+    expect(error.value).toContain(`${MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH}`);
+    expect(units.value).toEqual([]);
+    expect(configuration.reviewSelectedEquipment.value).toEqual(selectedEquipment);
   });
 
   it('updates the selected equipment through the select handler', () => {

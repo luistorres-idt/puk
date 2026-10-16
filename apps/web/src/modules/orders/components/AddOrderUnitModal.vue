@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toRefs } from 'vue';
 import { NButton, NInput, NInputNumber, NModal, NSelect, useMessage } from 'naive-ui';
-import type { CreateUnit } from '@puk/contracts';
+import { getMaxUnitYear, MIN_UNIT_YEAR, type CreateUnit } from '@puk/contracts';
 import { EquipmentSelect } from '@/modules/external-catalogs';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import type { OrderDetail } from '../api.js';
@@ -201,7 +201,13 @@ defineExpose({ openAddUnitModal });
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Año</label>
-              <n-input-number v-model:value="newUnit.year" :min="1980" :max="2030" class="w-full" />
+              <n-input-number
+                v-model:value="newUnit.year"
+                :min="MIN_UNIT_YEAR"
+                :max="getMaxUnitYear()"
+                :precision="0"
+                class="w-full"
+              />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1"

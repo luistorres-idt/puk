@@ -77,8 +77,13 @@ export async function fetchOrderExecutionById(id: string): Promise<OrderExecutio
   return response.data.data;
 }
 
-export async function createOrder(data: CreateOrder): Promise<OrderDetail> {
-  const response = await api.post<ApiResponse<OrderDetail>>('/orders', data);
+export async function createOrder(
+  data: CreateOrder,
+  idempotencyKey: string = crypto.randomUUID(),
+): Promise<OrderDetail> {
+  const response = await api.post<ApiResponse<OrderDetail>>('/orders', data, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
   return response.data.data;
 }
 

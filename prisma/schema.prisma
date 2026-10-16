@@ -187,6 +187,8 @@ model Order {
   correctionReason                  String?
   version                           Int                          @default(1)
   createdById                       String                       @db.Uuid
+  creationIdempotencyKey            String?                      @db.Uuid
+  creationRequestHash               String?                      @db.Char(64)
   startedAt                         DateTime?                    @db.Timestamptz(3)
   completedAt                       DateTime?                    @db.Timestamptz(3)
   cancelledAt                       DateTime?                    @db.Timestamptz(3)
@@ -211,6 +213,7 @@ model Order {
   @@index([status, scheduledAt])
   @@index([status, failedAppointmentResolution])
   @@index([failedAppointmentResolvedById])
+  @@unique([createdById, creationIdempotencyKey])
 }
 
 model ServiceOrderReport {

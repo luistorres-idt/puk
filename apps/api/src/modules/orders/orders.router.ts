@@ -1,4 +1,5 @@
 import { Router, type RequestHandler } from 'express';
+import * as v from 'valibot';
 import {
   AssignEquipmentSchema,
   CancelOrderSchema,
@@ -30,6 +31,17 @@ export function createOrdersRouter(options: {
 }): Router {
   const router = Router();
   router.use(options.requireAccess);
+  const readIdempotencyKey = (value: string | undefined): string => {
+    const result = v.safeParse(v.pipe(v.string(), v.uuid()), value);
+    if (!result.success) {
+      throw new AppError(
+        400,
+        'INVALID_IDEMPOTENCY_KEY',
+        'A valid UUID Idempotency-Key is required.',
+      );
+    }
+    return result.output;
+  };
 
   // --- Orders CRUD ---
 
@@ -48,9 +60,21 @@ export function createOrdersRouter(options: {
   router.post(
     '/',
     authorize('orders:manage'),
+    (request, _response, next) => {
+      try {
+        readIdempotencyKey(request.header('Idempotency-Key'));
+        next();
+      } catch (error) {
+        next(error);
+      }
+    },
     validate({ body: CreateOrderSchema }),
     async (request, response) => {
-      const order = await options.ordersService.createOrder(request.auth!.userId, request.body);
+      const order = await options.ordersService.createOrder(
+        request.auth!.userId,
+        request.body,
+        readIdempotencyKey(request.header('Idempotency-Key')),
+      );
       sendSuccess(response, order, 201);
     },
   );

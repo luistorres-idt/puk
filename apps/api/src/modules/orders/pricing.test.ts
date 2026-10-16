@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateOrderPricing,
+  calculatePersistableOrderPricing,
   resolveServiceRate,
   type TechnicianPricingSource,
 } from './pricing.js';
@@ -81,6 +82,25 @@ describe('Pricing Calculation Module', () => {
   });
 
   describe('calculateOrderPricing', () => {
+    it('accepts the Decimal(10,2) maximum and rejects calculated totals beyond it', () => {
+      const atLimit = calculatePersistableOrderPricing({
+        technician: { ...mockTech, installationRate: '99999999.99' },
+        serviceType: 'INSTALLATION',
+        equipmentCount: 1,
+        isHomeService: false,
+      });
+      expect(atLimit.total.toFixed(2)).toBe('99999999.99');
+
+      expect(() =>
+        calculatePersistableOrderPricing({
+          technician: { ...mockTech, installationRate: '99999999.99' },
+          serviceType: 'INSTALLATION',
+          equipmentCount: 2,
+          isHomeService: false,
+        }),
+      ).toThrowError(expect.objectContaining({ code: 'PRICING_AMOUNT_OUT_OF_RANGE', status: 400 }));
+    });
+
     it('calculates baseCost by equipment count (not vehicles)', () => {
       // 3 equipments, workshop service (isHomeService: false)
       const pricing = calculateOrderPricing({

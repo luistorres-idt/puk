@@ -1,6 +1,12 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
-import type { ExternalEquipment } from '@puk/contracts';
+import {
+  getMaxUnitYear,
+  MAX_ORDER_UNIT_LABEL_LENGTH,
+  MAX_ORDER_UNIT_MAKE_MODEL_LENGTH,
+  MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH,
+  type ExternalEquipment,
+} from '@puk/contracts';
 import type { ConfiguredUnitItem } from './configured-order-unit.js';
 import { useManualUnitConfiguration } from './useManualUnitConfiguration.js';
 
@@ -62,6 +68,54 @@ describe('useManualUnitConfiguration', () => {
     expect(units.value).toEqual([]);
   });
 
+  it('rejects an overlong trimmed label without clearing the form or selected equipment', () => {
+    const units = ref<ConfiguredUnitItem[]>([]);
+    const error = ref<string | null>(null);
+    const configuration = useManualUnitConfiguration(units, error);
+    const selectedEquipment = equipment('EQ-1');
+    configuration.unitForm.value = {
+      label: ` ${'x'.repeat(MAX_ORDER_UNIT_LABEL_LENGTH + 1)} `,
+      makeModel: 'Freightliner',
+      serialNumber: 'VIN-12',
+      year: 2024,
+    };
+    configuration.installationEquipmentKey.value = selectedEquipment.externalKey;
+    configuration.handleInstallationEquipmentSelect(selectedEquipment);
+
+    configuration.handleAddManualUnit('INSTALLATION');
+
+    expect(error.value).toContain(`${MAX_ORDER_UNIT_LABEL_LENGTH}`);
+    expect(configuration.unitForm.value.label).toBe(
+      ` ${'x'.repeat(MAX_ORDER_UNIT_LABEL_LENGTH + 1)} `,
+    );
+    expect(configuration.installationEquipment.value).toEqual(selectedEquipment);
+    expect(configuration.installationEquipmentKey.value).toBe('EQ-1');
+    expect(units.value).toEqual([]);
+  });
+
+  it('rejects an overlong trimmed make/model without clearing the form or selected equipment', () => {
+    const units = ref<ConfiguredUnitItem[]>([]);
+    const error = ref<string | null>(null);
+    const configuration = useManualUnitConfiguration(units, error);
+    const selectedEquipment = equipment('EQ-MODEL');
+    configuration.unitForm.value = {
+      label: 'Truck 12',
+      makeModel: `  ${'x'.repeat(MAX_ORDER_UNIT_MAKE_MODEL_LENGTH + 1)}  `,
+      serialNumber: 'VIN-12',
+      year: 2024,
+    };
+    configuration.handleInstallationEquipmentSelect(selectedEquipment);
+
+    configuration.handleAddManualUnit('INSTALLATION');
+
+    expect(error.value).toContain(`${MAX_ORDER_UNIT_MAKE_MODEL_LENGTH}`);
+    expect(configuration.unitForm.value.makeModel).toBe(
+      `  ${'x'.repeat(MAX_ORDER_UNIT_MAKE_MODEL_LENGTH + 1)}  `,
+    );
+    expect(configuration.installationEquipment.value).toEqual(selectedEquipment);
+    expect(units.value).toEqual([]);
+  });
+
   it('rejects duplicate serial numbers after trimming and ignoring case', () => {
     const units = ref([configuredUnit()]);
     const error = ref<string | null>(null);
@@ -78,6 +132,29 @@ describe('useManualUnitConfiguration', () => {
     expect(error.value).toBe('Ya existe una unidad con ese número de serie en la orden.');
     expect(configuration.unitForm.value.serialNumber).toBe('  serial-1  ');
     expect(units.value).toHaveLength(1);
+  });
+
+  it('rejects an overlong serial number without clearing the form or selected equipment', () => {
+    const units = ref<ConfiguredUnitItem[]>([]);
+    const error = ref<string | null>(null);
+    const configuration = useManualUnitConfiguration(units, error);
+    const selectedEquipment = equipment('EQ-1');
+    configuration.unitForm.value = {
+      label: 'Truck 12',
+      makeModel: 'Model',
+      serialNumber: ` ${'s'.repeat(MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH + 1)} `,
+      year: 2024,
+    };
+    configuration.handleInstallationEquipmentSelect(selectedEquipment);
+
+    configuration.handleAddManualUnit('INSTALLATION');
+
+    expect(units.value).toEqual([]);
+    expect(error.value).toContain(`${MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH}`);
+    expect(configuration.unitForm.value.serialNumber).toHaveLength(
+      MAX_ORDER_UNIT_SERIAL_NUMBER_LENGTH + 3,
+    );
+    expect(configuration.installationEquipment.value).toEqual(selectedEquipment);
   });
 
   it('rejects equipment already assigned to another unit without clearing the selection', () => {
@@ -102,27 +179,26 @@ describe('useManualUnitConfiguration', () => {
     expect(units.value).toHaveLength(1);
   });
 
-  it.each([1899, 2101, null])('normalizes an invalid year of %s to null', (year) => {
-    const units = ref<ConfiguredUnitItem[]>([]);
-    const configuration = useManualUnitConfiguration(units, ref(null), () => 'generated-id');
-    configuration.unitForm.value = {
-      label: ' Truck 12 ',
-      makeModel: ' Freightliner ',
-      serialNumber: ' VIN-12 ',
-      year,
-    };
+  it.each([1899, 2024.5, getMaxUnitYear() + 1])(
+    'rejects an invalid year of %s without clearing the form',
+    (year) => {
+      const units = ref<ConfiguredUnitItem[]>([]);
+      const error = ref<string | null>(null);
+      const configuration = useManualUnitConfiguration(units, error, () => 'generated-id');
+      configuration.unitForm.value = {
+        label: ' Truck 12 ',
+        makeModel: ' Freightliner ',
+        serialNumber: ' VIN-12 ',
+        year,
+      };
 
-    configuration.handleAddManualUnit('FUEL_SENSOR');
+      configuration.handleAddManualUnit('FUEL_SENSOR');
 
-    expect(units.value[0]).toMatchObject({
-      id: 'generated-id',
-      serviceType: 'FUEL_SENSOR',
-      label: 'Truck 12',
-      makeModel: 'Freightliner',
-      serialNumber: 'VIN-12',
-      year: null,
-    });
-  });
+      expect(error.value).toBe('El año debe ser un entero entre 1900 y el límite vigente.');
+      expect(units.value).toEqual([]);
+      expect(configuration.unitForm.value.year).toBe(year);
+    },
+  );
 
   it('adds a valid unit with selected equipment and resets state only after success', () => {
     const units = ref<ConfiguredUnitItem[]>([]);
@@ -133,7 +209,7 @@ describe('useManualUnitConfiguration', () => {
       label: ' Truck 12 ',
       makeModel: ' Freightliner ',
       serialNumber: ' VIN-12 ',
-      year: 2100,
+      year: getMaxUnitYear(),
     };
     configuration.installationEquipmentKey.value = selectedEquipment.externalKey;
     configuration.handleInstallationEquipmentSelect(selectedEquipment);
@@ -147,7 +223,7 @@ describe('useManualUnitConfiguration', () => {
         label: 'Truck 12',
         makeModel: 'Freightliner',
         serialNumber: 'VIN-12',
-        year: 2100,
+        year: getMaxUnitYear(),
         equipment: selectedEquipment,
       },
     ]);

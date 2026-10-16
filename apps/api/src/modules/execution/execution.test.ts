@@ -255,6 +255,7 @@ describe('ExecutionService', () => {
       status: OrderStatus.IN_PROGRESS,
       technicianId: 'tech-1',
     });
+    mockPrisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'order-1' });
     mockPrisma.orderEquipment.findUnique.mockResolvedValue({
       id: 'eq-1',
       orderUnitId: 'unit-1',
@@ -271,6 +272,7 @@ describe('ExecutionService', () => {
       status: OrderStatus.IN_PROGRESS,
       technicianId: 'tech-1',
     });
+    mockPrisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'order-1' });
     mockPrisma.orderEquipment.findUnique.mockResolvedValue({
       id: 'eq-1',
       orderUnitId: 'unit-1',
@@ -304,12 +306,12 @@ describe('ExecutionService', () => {
     mockPrisma.evidence.create.mockResolvedValue({
       id: 'ev-1',
       objectKey: 'evidence/order-1/unit-1/dashboard/sample.jpg',
-      mimeType: 'image/jpeg',
+      mimeType: 'image/png',
       status: UploadStatus.PENDING,
     });
 
     const presigned = await service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', {
-      mimeType: 'image/jpeg',
+      mimeType: 'image/png',
       sizeBytes: 50000,
     });
     expect(presigned.uploadUrl).toBeDefined();
@@ -326,7 +328,7 @@ describe('ExecutionService', () => {
     mockPrisma.evidence.findUnique.mockResolvedValue({
       id: 'ev-1',
       objectKey: presigned.objectKey,
-      mimeType: 'image/jpeg',
+      mimeType: 'image/png',
       orderUnit: { order: { id: 'order-1', technicianId: 'tech-1' } },
     });
 
@@ -335,11 +337,68 @@ describe('ExecutionService', () => {
       status: UploadStatus.COMPLETED,
     });
 
+    await expect(
+      service.completeEvidence('admin-1', 'ADMIN', 'ev-1', { width: 1920, height: 1080 }),
+    ).rejects.toMatchObject({ code: 'IMAGE_DIMENSIONS_MISMATCH' });
+    expect(mockPrisma.evidence.update).not.toHaveBeenCalled();
+
     const completed = await service.completeEvidence('admin-1', 'ADMIN', 'ev-1', {
-      width: 1920,
-      height: 1080,
+      width: 1,
+      height: 1,
     });
     expect(completed.status).toBe(UploadStatus.COMPLETED);
+    expect(mockPrisma.evidence.update).toHaveBeenCalledWith({
+      where: { id: 'ev-1' },
+      data: expect.objectContaining({ width: 1, height: 1, sizeBytes: expect.any(Number) }),
+    });
+  });
+
+  it('rejects oversized legacy evidence before completion writes', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({ id: 'order-1', technicianId: 'tech-1' });
+    mockPrisma.evidence.findUnique.mockResolvedValue({
+      id: 'ev-large',
+      objectKey: 'large-object',
+      mimeType: 'image/png',
+      orderUnit: { order: { id: 'order-1', technicianId: 'tech-1' } },
+    });
+    await storagePort.putObject('large-object', new Uint8Array([1, 2, 3, 4, 5]), 'image/png');
+    service = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort, {
+      maxEvidenceBytes: 4,
+    });
+
+    await expect(
+      service.completeEvidence('admin-1', 'ADMIN', 'ev-large', {}),
+    ).rejects.toMatchObject({
+      code: 'FILE_TOO_LARGE',
+    });
+    expect(mockPrisma.evidence.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects evidence whose stored MIME type conflicts with its image content', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({ id: 'order-1', technicianId: 'tech-1' });
+    mockPrisma.evidence.findUnique.mockResolvedValue({
+      id: 'ev-mime',
+      objectKey: 'wrong-mime',
+      mimeType: 'image/jpeg',
+      orderUnit: { order: { id: 'order-1', technicianId: 'tech-1' } },
+    });
+    await storagePort.putObject(
+      'wrong-mime',
+      Uint8Array.from(
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          'base64',
+        ),
+      ),
+      'image/jpeg',
+    );
+
+    await expect(service.completeEvidence('admin-1', 'ADMIN', 'ev-mime', {})).rejects.toMatchObject(
+      {
+        code: 'INVALID_IMAGE',
+      },
+    );
+    expect(mockPrisma.evidence.update).not.toHaveBeenCalled();
   });
 
   it('rejects presigning evidence for a unit belonging to another order', async () => {
@@ -639,6 +698,84 @@ describe('ExecutionService', () => {
     expect(result.warnings ?? []).toHaveLength(0);
   });
 
+  it('rejects completion pricing overflow before any transaction or queued effects', async () => {
+    const fixture = completeOrderFixture();
+    const overflowOrder = {
+      ...fixture,
+      technician: { ...fixture.technician, installationRate: '99999999.99' },
+      units: [
+        {
+          ...fixture.units[0]!,
+          equipment: [
+            ...fixture.units[0]!.equipment,
+            {
+              id: 'eq-2',
+              externalKey: 'EQ-002',
+              sheetRowHint: 8,
+              serviceStatusSnapshot: 'STOCK TECNICO',
+              verificationStatus: 'MATCHED' as const,
+            },
+          ],
+        },
+      ],
+    };
+    mockPrisma.order.findUnique.mockResolvedValue(overflowOrder);
+
+    await expect(service.completeOrder('admin-1', 'ADMIN', 'order-1')).rejects.toMatchObject({
+      code: 'PRICING_AMOUNT_OUT_OF_RANGE',
+      status: 400,
+    });
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(enqueuedOperations).toHaveLength(0);
+  });
+
+  it.each(['failAppointment', 'requireCorrection'] as const)(
+    'rejects calculated overflow before %s mutates the order',
+    async (operation) => {
+      const fixture = completeOrderFixture();
+      const pricingOverflowOrder = {
+        ...fixture,
+        status: operation === 'failAppointment' ? OrderStatus.ASSIGNED : OrderStatus.IN_PROGRESS,
+        serviceType: operation === 'failAppointment' ? 'FAILED_APPOINTMENT' : 'INSTALLATION',
+        technician: {
+          ...fixture.technician,
+          ...(operation === 'failAppointment'
+            ? { failedAppointmentRate: '99999999.99' }
+            : { installationRate: '99999999.99' }),
+        },
+        units: [
+          {
+            ...fixture.units[0]!,
+            equipment: [
+              ...fixture.units[0]!.equipment,
+              {
+                id: 'eq-2',
+                externalKey: 'EQ-002',
+                sheetRowHint: 8,
+                serviceStatusSnapshot: 'STOCK TECNICO',
+                verificationStatus: 'MATCHED' as const,
+              },
+            ],
+          },
+        ],
+      };
+      mockPrisma.order.findUnique.mockResolvedValue(pricingOverflowOrder);
+
+      const result =
+        operation === 'failAppointment'
+          ? service.failAppointment('admin-1', 'ADMIN', 'order-1', { failedReason: 'No contact' })
+          : service.requireCorrection('admin-1', 'order-1', { notes: 'Please correct' });
+
+      await expect(result).rejects.toMatchObject({
+        code: 'PRICING_AMOUNT_OUT_OF_RANGE',
+        status: 400,
+      });
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(enqueuedOperations).toHaveLength(0);
+    },
+  );
+
   it('allows failing appointment with 0.00 pricing when technician rate is unconfigured', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
@@ -734,4 +871,250 @@ describe('ExecutionService', () => {
       });
     });
   });
+});
+
+describe('execution equipment ownership chain', () => {
+  const methods = ['verify', 'discrepancy'] as const;
+  function harness(role: 'ADMIN' | 'TECHNICIAN' = 'TECHNICIAN', shared = false) {
+    const tx = {
+      orderEquipment: { update: vi.fn(async () => ({ id: 'eq-1' })) },
+      discrepancy: { create: vi.fn(async () => ({ id: 'disc-1' })) },
+      auditLog: { createMany: vi.fn() },
+      sheetSyncOperation: { createMany: vi.fn() },
+    };
+    const database = {
+      order: {
+        findUnique: vi.fn(async () => ({
+          id: 'order-1',
+          technicianId: 'tech-1',
+          status: OrderStatus.IN_PROGRESS as OrderStatus,
+        })),
+      },
+      user: {
+        findUnique: vi.fn(async () => ({ active: true, technicianId: shared ? null : 'tech-1' })),
+      },
+      sharedTechnicianAccess: {
+        findUnique: vi.fn(async () => (shared ? { userId: 'actor-1', orderId: null } : null)),
+      },
+      orderUnit: {
+        findUnique: vi.fn(
+          async () =>
+            ({ id: 'unit-1', orderId: 'order-1' }) as { id: string; orderId: string } | null,
+        ),
+      },
+      orderEquipment: {
+        findUnique: vi.fn(
+          async () =>
+            ({ id: 'eq-1', orderUnitId: 'unit-1', externalKey: 'EQ-1' }) as {
+              id: string;
+              orderUnitId: string;
+              externalKey: string;
+            } | null,
+        ),
+      },
+      $transaction: vi.fn(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx)),
+    };
+    const service = new ExecutionService(
+      database as unknown as PrismaClient,
+      new DevMockStorageClient(),
+    );
+    const invoke = (method: (typeof methods)[number]) =>
+      method === 'verify'
+        ? service.verifyEquipment('actor-1', role, 'order-1', 'unit-1', 'eq-1')
+        : service.reportDiscrepancy('actor-1', role, 'order-1', 'unit-1', 'eq-1', {
+            type: 'IMEI',
+            description: 'IMEI differs from label',
+          });
+    return { database, tx, invoke };
+  }
+
+  describe.each(methods)('%s', (method) => {
+    it.each(['missing', 'foreign'])(
+      'rejects a %s unit before looking up equipment or opening a transaction',
+      async (kind) => {
+        const h = harness();
+        h.database.orderUnit.findUnique.mockResolvedValue(
+          kind === 'missing' ? null : { id: 'unit-1', orderId: 'order-2' },
+        );
+        await expect(h.invoke(method)).rejects.toMatchObject({
+          status: 404,
+          code: 'UNIT_NOT_FOUND',
+        });
+        expect(h.database.orderEquipment.findUnique).not.toHaveBeenCalled();
+        expect(h.database.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['missing', 'foreign'])(
+      'rejects %s equipment before opening a transaction',
+      async (kind) => {
+        const h = harness();
+        h.database.orderEquipment.findUnique.mockResolvedValue(
+          kind === 'missing' ? null : { id: 'eq-1', orderUnitId: 'unit-2', externalKey: 'EQ-1' },
+        );
+        await expect(h.invoke(method)).rejects.toMatchObject({
+          status: 404,
+          code: 'EQUIPMENT_NOT_FOUND',
+        });
+        expect(h.database.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('preserves access denial before child lookups for an active unrelated technician', async () => {
+      const h = harness();
+      h.database.user.findUnique.mockResolvedValue({ active: true, technicianId: 'tech-2' });
+      await expect(h.invoke(method)).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+      expect(h.database.orderUnit.findUnique).not.toHaveBeenCalled();
+      expect(h.database.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('preserves the order state check before child lookups', async () => {
+      const h = harness('ADMIN');
+      h.database.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        technicianId: 'tech-1',
+        status: OrderStatus.DRAFT,
+      });
+      await expect(h.invoke(method)).rejects.toMatchObject({
+        status: 400,
+        code: 'INVALID_ORDER_STATE',
+      });
+      expect(h.database.orderUnit.findUnique).not.toHaveBeenCalled();
+      expect(h.database.$transaction).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { name: 'administrator', role: 'ADMIN' as const, shared: false },
+      { name: 'active assigned technician', role: 'TECHNICIAN' as const, shared: false },
+      { name: 'active shared technician', role: 'TECHNICIAN' as const, shared: true },
+    ])('preserves mutations and audit for a valid chain with $name', async ({ role, shared }) => {
+      const h = harness(role, shared);
+      await h.invoke(method);
+      expect(h.database.$transaction).toHaveBeenCalledTimes(1);
+      expect(h.tx.orderEquipment.update).toHaveBeenCalledTimes(1);
+      expect(h.tx.orderEquipment.update).toHaveBeenCalledWith({
+        where: { id: 'eq-1' },
+        data: {
+          verificationStatus: method === 'verify' ? 'MATCHED' : 'DISCREPANCY_REPORTED',
+          verifiedAt: expect.any(Date),
+          verifiedById: 'actor-1',
+        },
+      });
+      expect(h.tx.discrepancy.create).toHaveBeenCalledTimes(method === 'discrepancy' ? 1 : 0);
+      if (method === 'discrepancy')
+        expect(h.tx.discrepancy.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            orderId: 'order-1',
+            orderUnitId: 'unit-1',
+            orderEquipmentId: 'eq-1',
+            reportedById: 'actor-1',
+          }),
+        });
+      expect(h.tx.auditLog.createMany).toHaveBeenCalledExactlyOnceWith({
+        data: [
+          expect.objectContaining({
+            action: method === 'verify' ? 'EQUIPMENT_VERIFIED' : 'DISCREPANCY_REPORTED',
+            actorUserId: 'actor-1',
+            entityType: method === 'verify' ? 'OrderEquipment' : 'Discrepancy',
+            entityId: method === 'verify' ? 'eq-1' : 'disc-1',
+            after: { id: method === 'verify' ? 'eq-1' : 'disc-1' },
+          }),
+        ],
+      });
+      expect(h.tx.sheetSyncOperation.createMany).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('completeness actor authorization', () => {
+  function harness() {
+    const fullOrder = { ...completeOrderFixture(), status: OrderStatus.IN_PROGRESS as OrderStatus };
+    const requirementsRead = vi.fn(async () => fullOrder);
+    const database = {
+      order: {
+        findUnique: vi
+          .fn()
+          .mockImplementation(async (args: { include?: { units?: unknown } }) =>
+            args.include?.units ? requirementsRead() : fullOrder,
+          ),
+      },
+      user: { findUnique: vi.fn().mockResolvedValue({ active: true, technicianId: 'tech-1' }) },
+      sharedTechnicianAccess: { findUnique: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn(),
+    };
+    const service = new ExecutionService(
+      database as unknown as PrismaClient,
+      new DevMockStorageClient(),
+    );
+    return { database, requirementsRead, service, fullOrder };
+  }
+
+  it('rejects an active unrelated technician before reading requirements', async () => {
+    const h = harness();
+    h.database.user.findUnique.mockResolvedValue({ active: true, technicianId: 'tech-other' });
+    await expect(
+      h.service.validateCompleteness('actor-1', 'TECHNICIAN', 'order-1'),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    expect(h.requirementsRead).not.toHaveBeenCalled();
+    expect(h.database.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing order before reading requirements', async () => {
+    const h = harness();
+    h.database.order.findUnique.mockImplementation(
+      async (args: { include?: { units?: unknown } }) =>
+        args.include?.units ? h.requirementsRead() : null,
+    );
+    await expect(
+      h.service.validateCompleteness('actor-1', 'ADMIN', 'order-1'),
+    ).rejects.toMatchObject({ status: 404, code: 'ORDER_NOT_FOUND' });
+    expect(h.requirementsRead).not.toHaveBeenCalled();
+  });
+
+  it.each(['ADMIN', 'TECHNICIAN'] as const)(
+    'returns the unchanged completeness result for %s',
+    async (role) => {
+      const h = harness();
+      await expect(h.service.validateCompleteness('actor-1', role, 'order-1')).resolves.toEqual({
+        isComplete: true,
+        missingRequirements: [],
+      });
+      expect(h.requirementsRead).toHaveBeenCalledTimes(1);
+      expect(h.database.order.findUnique).toHaveBeenLastCalledWith({
+        where: { id: 'order-1' },
+        include: {
+          units: {
+            include: {
+              equipment: true,
+              evidence: { where: { status: UploadStatus.COMPLETED, deletedAt: null } },
+              checklist: { include: { items: true } },
+            },
+          },
+          signature: true,
+        },
+      });
+      expect(h.database.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(Object.values(OrderStatus))(
+    'preserves shared-account access policy in state %s',
+    async (status) => {
+      const h = harness();
+      h.fullOrder.status = status;
+      h.database.sharedTechnicianAccess.findUnique.mockResolvedValue({
+        userId: 'actor-shared',
+        orderId: null,
+      });
+      h.database.user.findUnique.mockResolvedValue({ active: true, technicianId: null });
+      const result = h.service.validateCompleteness('actor-shared', 'TECHNICIAN', 'order-1');
+      if (['ASSIGNED', 'IN_PROGRESS', 'REQUIRES_CORRECTION'].includes(status)) {
+        await expect(result).resolves.toEqual({ isComplete: true, missingRequirements: [] });
+        expect(h.requirementsRead).toHaveBeenCalledTimes(1);
+      } else {
+        await expect(result).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+        expect(h.requirementsRead).not.toHaveBeenCalled();
+      }
+    },
+  );
 });

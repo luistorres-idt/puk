@@ -14,7 +14,7 @@ import {
   NTag,
   useMessage,
 } from 'naive-ui';
-import { canAddOrderItems, type OrderServiceType } from '@puk/contracts';
+import { MAX_ORDER_NOTES_LENGTH, canAddOrderItems, type OrderServiceType } from '@puk/contracts';
 import { fetchReportDownload } from '../api.js';
 import AddOrderUnitModal from '../components/AddOrderUnitModal.vue';
 import AttachOrderEquipmentModal from '../components/AttachOrderEquipmentModal.vue';
@@ -322,6 +322,12 @@ async function handleDownloadReport(version?: number) {
 async function handleRequestCorrection() {
   if (!correctionNotes.value.trim()) {
     message.warning('Por favor ingresa los motivos de la corrección.');
+    return;
+  }
+  if (correctionNotes.value.length > MAX_ORDER_NOTES_LENGTH) {
+    message.error(
+      `Las notas no pueden superar ${MAX_ORDER_NOTES_LENGTH.toLocaleString('es-MX')} caracteres.`,
+    );
     return;
   }
   try {

@@ -1,5 +1,10 @@
 import { ref } from 'vue';
-import type { ChecklistCategory, ChecklistCondition, SaveChecklistItem } from '@puk/contracts';
+import {
+  MAX_ORDER_NOTES_LENGTH,
+  type ChecklistCategory,
+  type ChecklistCondition,
+  type SaveChecklistItem,
+} from '@puk/contracts';
 import { CATEGORY_NAMES } from '../../orders/index.js';
 
 export interface LocalChecklistItem {
@@ -72,6 +77,16 @@ export function useUnitChecklists() {
       return {
         ok: false,
         message: `Debe indicar la observación para la categoría "${CATEGORY_NAMES[invalidItem.category]}" marcada como Mal.`,
+      };
+    }
+
+    const oversizedItem = items.find(
+      (item) => typeof item.notes === 'string' && item.notes.length > MAX_ORDER_NOTES_LENGTH,
+    );
+    if (oversizedItem) {
+      return {
+        ok: false,
+        message: `Las observaciones no pueden superar ${MAX_ORDER_NOTES_LENGTH.toLocaleString('es-MX')} caracteres.`,
       };
     }
 

@@ -1,6 +1,7 @@
 import type { OrderPricingOverrides, PricingBreakdown } from '@puk/contracts';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { OrderServiceType } from '../../generated/prisma/client.js';
+import { AppError } from '../../shared/errors.js';
 
 export interface TechnicianPricingSource {
   readonly id: string;
@@ -328,4 +329,38 @@ export function calculateOrderPricing(input: CalculateOrderPricingInput): Calcul
     ],
     warnings,
   };
+}
+
+const MAX_PERSISTABLE_ORDER_AMOUNT = new Prisma.Decimal('99999999.99');
+
+/** Calculate and validate all Prisma Decimal columns before their caller performs effects. */
+export function calculatePersistableOrderPricing(
+  input: CalculateOrderPricingInput,
+): CalculatedOrderPricing {
+  const pricing = calculateOrderPricing(input);
+  const amounts = [
+    pricing.unitRate,
+    pricing.baseCost,
+    pricing.departureCost,
+    pricing.travelExpenses,
+    pricing.total,
+  ];
+
+  if (
+    amounts.some(
+      (amount) =>
+        amount !== null &&
+        (!amount.isFinite() ||
+          amount.isNegative() ||
+          amount.greaterThan(MAX_PERSISTABLE_ORDER_AMOUNT)),
+    )
+  ) {
+    throw new AppError(
+      400,
+      'PRICING_AMOUNT_OUT_OF_RANGE',
+      'El importe calculado excede el rango monetario permitido',
+    );
+  }
+
+  return pricing;
 }
