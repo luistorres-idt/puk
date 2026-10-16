@@ -167,7 +167,7 @@ El reporte usa los snapshots guardados en la orden y no vuelve a consultar Googl
 - Todas las fechas se presentan en la zona horaria configurada para la operación y con formato legible en español.
 - Los textos largos deben continuar en la página siguiente, sin superponerse ni quedar cortados.
 - El PDF debe representar caracteres en español correctamente.
-- Los datos sensibles incluidos se limitan a los requeridos por el acta; no se muestran IDs UUID, claves S3, filas de Sheets ni información de auditoría interna.
+- Los datos sensibles incluidos se limitan a los requeridos por el acta; no se muestran IDs UUID, identificadores de archivos, filas de Sheets ni información de auditoría interna.
 
 ## 7. Acceso y experiencia de usuario
 
@@ -211,12 +211,13 @@ La restricción de unicidad debe evitar dos reportes vigentes para la misma comb
 
 ## 9. API propuesta
 
-| Método | Ruta                          | Propósito                                      |
-| ------ | ----------------------------- | ---------------------------------------------- |
-| `GET`  | `/orders/:id/report`          | Obtener estado y metadatos del reporte vigente |
-| `GET`  | `/orders/:id/reports`         | Consultar versiones anteriores permitidas      |
-| `POST` | `/orders/:id/report/generate` | Solicitar generación o reintento idempotente   |
-| `GET`  | `/orders/:id/report/download` | Obtener descarga autenticada o URL temporal    |
+| Método | Ruta                                | Propósito                                                   |
+| ------ | ----------------------------------- | ----------------------------------------------------------- |
+| `GET`  | `/orders/:id/report`                | Obtener estado y metadatos del reporte vigente              |
+| `GET`  | `/orders/:id/reports`               | Consultar versiones anteriores permitidas                   |
+| `POST` | `/orders/:id/report/generate`       | Solicitar generación o reintento idempotente                |
+| `GET`  | `/orders/:id/report/file`           | Descargar PDF actual mediante la API autenticada            |
+| `GET`  | `/orders/:id/reports/:version/file` | Descargar una versión histórica mediante la API autenticada |
 
 La generación automática reutiliza el mismo caso de uso que el endpoint manual. La respuesta de generación debe ser asíncrona (`202 Accepted`) cuando el archivo todavía no esté listo.
 

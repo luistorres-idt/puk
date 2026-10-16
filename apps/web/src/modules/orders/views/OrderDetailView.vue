@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NAlert,
@@ -39,7 +39,6 @@ import {
   useSyncStatusQuery,
 } from '../queries';
 import {
-  getStorageMode,
   releasePrivateFileUrl,
   requireCorrection,
 } from '@/modules/service-execution';
@@ -106,22 +105,12 @@ const syncInfo = computed(() => syncQuery.data.value);
 const auditLogs = computed(() => auditQuery.data.value ?? []);
 const report = computed(() => reportQuery.data.value);
 const reportVersions = computed(() => reportVersionsQuery.data.value ?? []);
-const driveMode = ref(false);
-
 watch(
   () => [report.value?.version, report.value?.status],
   () => {
     if (report.value?.status === 'READY') void reportVersionsQuery.refetch();
   },
 );
-
-onMounted(async () => {
-  try {
-    driveMode.value = (await getStorageMode()) === 'drive';
-  } catch {
-    driveMode.value = false;
-  }
-});
 
 const activeTab = ref('units');
 
@@ -475,7 +464,6 @@ const statusColor = orderStatusTagType;
           :order-id="orderId"
           :report="report"
           :report-versions="reportVersions"
-          :drive-mode="driveMode"
           :is-admin="isAdmin"
           :request-pending="mutations.requestReport.isPending.value"
           @generate="handleGenerateReport"

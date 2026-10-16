@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MIN_REQUIRED_EVIDENCE_PHOTOS } from '@puk/contracts';
 import { ExecutionService, ALL_CHECKLIST_CATEGORIES } from './execution.service.js';
-import { DevMockStorageClient } from '../../integrations/object-storage/dev-mock-storage.client.js';
 import {
   EquipmentVerificationStatus,
   OrderStatus,
@@ -94,12 +93,10 @@ function completeOrderFixture() {
 
 describe('ExecutionService', () => {
   let mockPrisma: MockPrismaExecution;
-  let storagePort: DevMockStorageClient;
   let service: ExecutionService;
   let enqueuedOperations: Array<Record<string, unknown>>;
 
   beforeEach(() => {
-    storagePort = new DevMockStorageClient();
     enqueuedOperations = [];
 
     mockPrisma = {
@@ -220,7 +217,7 @@ describe('ExecutionService', () => {
       },
     };
 
-    service = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort);
+    service = new ExecutionService(mockPrisma as unknown as PrismaClient);
   });
 
   it('starts an assigned order and updates status to IN_PROGRESS', async () => {
@@ -294,181 +291,6 @@ describe('ExecutionService', () => {
     expect(result.type).toBe('IMEI');
   });
 
-  it('presigns and completes evidence upload with storage validation', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({
-      id: 'order-1',
-      status: OrderStatus.IN_PROGRESS,
-      technicianId: 'tech-1',
-    });
-    mockPrisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'order-1' });
-    mockPrisma.checklist.findUnique.mockResolvedValue({ id: 'cl-1' });
-    mockPrisma.checklistItem.findUnique.mockResolvedValue({ id: 'cli-1' });
-    mockPrisma.evidence.create.mockResolvedValue({
-      id: 'ev-1',
-      objectKey: 'evidence/order-1/unit-1/dashboard/sample.jpg',
-      mimeType: 'image/png',
-      status: UploadStatus.PENDING,
-    });
-
-    const presigned = await service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', {
-      mimeType: 'image/png',
-      sizeBytes: 50000,
-    });
-    expect(presigned.uploadUrl).toBeDefined();
-    expect(presigned.evidenceId).toBe('ev-1');
-    expect(mockPrisma.evidence.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ orderUnitId: 'unit-1' }),
-    });
-    expect(mockPrisma.evidence.create.mock.calls[0]?.[0].data).not.toHaveProperty(
-      'checklistItemId',
-    );
-    expect(mockPrisma.checklistItem.findUnique).not.toHaveBeenCalled();
-
-    // Complete evidence
-    mockPrisma.evidence.findUnique.mockResolvedValue({
-      id: 'ev-1',
-      objectKey: presigned.objectKey,
-      mimeType: 'image/png',
-      orderUnit: { order: { id: 'order-1', technicianId: 'tech-1' } },
-    });
-
-    mockPrisma.evidence.update.mockResolvedValue({
-      id: 'ev-1',
-      status: UploadStatus.COMPLETED,
-    });
-
-    await expect(
-      service.completeEvidence('admin-1', 'ADMIN', 'ev-1', { width: 1920, height: 1080 }),
-    ).rejects.toMatchObject({ code: 'IMAGE_DIMENSIONS_MISMATCH' });
-    expect(mockPrisma.evidence.update).not.toHaveBeenCalled();
-
-    const completed = await service.completeEvidence('admin-1', 'ADMIN', 'ev-1', {
-      width: 1,
-      height: 1,
-    });
-    expect(completed.status).toBe(UploadStatus.COMPLETED);
-    expect(mockPrisma.evidence.update).toHaveBeenCalledWith({
-      where: { id: 'ev-1' },
-      data: expect.objectContaining({ width: 1, height: 1, sizeBytes: expect.any(Number) }),
-    });
-  });
-
-  it('rejects oversized legacy evidence before completion writes', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({ id: 'order-1', technicianId: 'tech-1' });
-    mockPrisma.evidence.findUnique.mockResolvedValue({
-      id: 'ev-large',
-      objectKey: 'large-object',
-      mimeType: 'image/png',
-      orderUnit: { order: { id: 'order-1', technicianId: 'tech-1' } },
-    });
-    await storagePort.putObject('large-object', new Uint8Array([1, 2, 3, 4, 5]), 'image/png');
-    service = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort, {
-      maxEvidenceBytes: 4,
-    });
-
-    await expect(
-      service.completeEvidence('admin-1', 'ADMIN', 'ev-large', {}),
-    ).rejects.toMatchObject({
-      code: 'FILE_TOO_LARGE',
-    });
-    expect(mockPrisma.evidence.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects evidence whose stored MIME type conflicts with its image content', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({ id: 'order-1', technicianId: 'tech-1' });
-    mockPrisma.evidence.findUnique.mockResolvedValue({
-      id: 'ev-mime',
-      objectKey: 'wrong-mime',
-      mimeType: 'image/jpeg',
-      orderUnit: { order: { id: 'order-1', technicianId: 'tech-1' } },
-    });
-    await storagePort.putObject(
-      'wrong-mime',
-      Uint8Array.from(
-        Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-          'base64',
-        ),
-      ),
-      'image/jpeg',
-    );
-
-    await expect(service.completeEvidence('admin-1', 'ADMIN', 'ev-mime', {})).rejects.toMatchObject(
-      {
-        code: 'INVALID_IMAGE',
-      },
-    );
-    expect(mockPrisma.evidence.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects presigning evidence for a unit belonging to another order', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({
-      id: 'order-1',
-      status: OrderStatus.IN_PROGRESS,
-      technicianId: 'tech-1',
-    });
-    mockPrisma.orderUnit.findUnique.mockResolvedValue({ id: 'unit-1', orderId: 'order-2' });
-    await expect(
-      service.presignEvidenceUpload('admin-1', 'ADMIN', 'order-1', 'unit-1', {
-        mimeType: 'image/jpeg',
-        sizeBytes: 1024,
-      }),
-    ).rejects.toMatchObject({ code: 'UNIT_NOT_FOUND' });
-    expect(mockPrisma.evidence.create).not.toHaveBeenCalled();
-  });
-
-  it('presigns, confirms, and reads a signature through legacy storage', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({
-      id: 'order-1',
-      status: OrderStatus.IN_PROGRESS,
-      technicianId: 'tech-1',
-    });
-    const presigned = await service.presignSignatureUpload('admin-1', 'ADMIN', 'order-1', {
-      sizeBytes: 100,
-    });
-    expect(presigned.objectKey).toMatch(/^signatures\/order-1\/.*\.png$/);
-    expect(presigned.uploadUrl).toContain('mock-upload');
-
-    mockPrisma.signature.upsert.mockResolvedValue({
-      orderId: 'order-1',
-      objectKey: presigned.objectKey,
-      signerName: 'Client One',
-    });
-    const completed = await service.completeSignature(
-      'admin-1',
-      'ADMIN',
-      'order-1',
-      { signerName: 'Client One' },
-      presigned.objectKey,
-    );
-    expect(completed.objectKey).toBe(presigned.objectKey);
-    expect(mockPrisma.signature.upsert).toHaveBeenCalledWith({
-      where: { orderId: 'order-1' },
-      create: expect.objectContaining({ objectKey: presigned.objectKey, mimeType: 'image/png' }),
-      update: expect.objectContaining({ objectKey: presigned.objectKey, mimeType: 'image/png' }),
-    });
-
-    mockPrisma.signature.findUnique.mockResolvedValue(completed);
-    await expect(service.getSignatureUrl('admin-1', 'ADMIN', 'order-1')).resolves.toEqual({
-      downloadUrl: expect.stringContaining('mock-download'),
-      signerName: 'Client One',
-    });
-  });
-
-  it('does not save a legacy signature if its uploaded object is missing', async () => {
-    mockPrisma.order.findUnique.mockResolvedValue({ id: 'order-1', technicianId: 'tech-1' });
-    await expect(
-      service.completeSignature(
-        'admin-1',
-        'ADMIN',
-        'order-1',
-        { signerName: 'Client One' },
-        'missing',
-      ),
-    ).rejects.toMatchObject({ code: 'UPLOAD_NOT_FOUND' });
-    expect(mockPrisma.signature.upsert).not.toHaveBeenCalled();
-  });
-
   it('blocks completing an incomplete order with missing requirements error', async () => {
     mockPrisma.order.findUnique.mockResolvedValue({
       id: 'order-1',
@@ -493,7 +315,7 @@ describe('ExecutionService', () => {
   it('requests the PDF report after completing an order', async () => {
     const requestGeneration = vi.fn().mockResolvedValue({ id: 'report-1' });
     const scheduledFor = new Date('2026-09-10T00:00:00.000Z');
-    const reportService = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort, {
+    const reportService = new ExecutionService(mockPrisma as unknown as PrismaClient, {
       reportGeneration: { requestGeneration },
       technicalReportScheduling: {
         getNextScheduledAt: vi.fn().mockResolvedValue(scheduledFor),
@@ -542,7 +364,7 @@ describe('ExecutionService', () => {
       );
       throw new Error('Report queue unavailable');
     });
-    const reportService = new ExecutionService(mockPrisma as unknown as PrismaClient, storagePort, {
+    const reportService = new ExecutionService(mockPrisma as unknown as PrismaClient, {
       reportGeneration: { requestGeneration },
     });
     mockPrisma.order.findUnique.mockResolvedValue(completeOrderFixture());
@@ -914,10 +736,7 @@ describe('execution equipment ownership chain', () => {
       },
       $transaction: vi.fn(async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx)),
     };
-    const service = new ExecutionService(
-      database as unknown as PrismaClient,
-      new DevMockStorageClient(),
-    );
+    const service = new ExecutionService(database as unknown as PrismaClient);
     const invoke = (method: (typeof methods)[number]) =>
       method === 'verify'
         ? service.verifyEquipment('actor-1', role, 'order-1', 'unit-1', 'eq-1')
@@ -1042,10 +861,7 @@ describe('completeness actor authorization', () => {
       sharedTechnicianAccess: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(),
     };
-    const service = new ExecutionService(
-      database as unknown as PrismaClient,
-      new DevMockStorageClient(),
-    );
+    const service = new ExecutionService(database as unknown as PrismaClient);
     return { database, requirementsRead, service, fullOrder };
   }
 

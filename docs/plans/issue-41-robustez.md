@@ -8,6 +8,8 @@
 - Ambiente: cliente Prisma generado localmente el 2026-10-14 con configuración ficticia aislada, tras autorización del usuario. B03 usó `puk_test` en solo lectura; T09 usó esa misma DB únicamente con fixtures de prueba identificables y limpieza posterior. Sin migraciones ni seeds en estas tareas.
 - Hay tareas listas y tareas con bloqueos explícitos. Un bloqueo no autoriza al implementador a elegir otra regla ni impide ejecutar tareas independientes.
 
+> **Nota posterior sobre T11/B04:** la lectura limitada de objetos S3 y sus adaptadores se verificaron en su momento, pero ya no existen en el código: Google Drive es ahora el único proveedor de archivos. Las rutas, símbolos, pruebas y comandos S3 de esta sección son evidencia histórica, no instrucciones ejecutables ni trabajo pendiente de reimplementación. Las validaciones de tamaño, MIME y dimensiones permanecen en el flujo de carga autenticada a Drive.
+
 ## 1. Instrucciones para el implementador
 
 1. Leer este documento, `AGENTS.md` y solo las superficies de la tarea seleccionada. Confirmar que los símbolos siguen existiendo; los números de línea no son una API estable.

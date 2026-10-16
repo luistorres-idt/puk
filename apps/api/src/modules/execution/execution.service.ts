@@ -1,9 +1,5 @@
 import type {
-  CompleteEvidence,
-  CompleteSignature,
   FailAppointment,
-  PresignEvidence,
-  PresignSignature,
   ReportDiscrepancy,
   RequireCorrection,
   SaveChecklistItem,
@@ -17,7 +13,6 @@ import {
   Prisma,
   UnitStatus,
 } from '../../generated/prisma/client.js';
-import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
 import { assertCanExecuteWork, assertValidOrderTransition } from '../orders/index.js';
 import { ExecutionMediaService, type ExecutionMediaOptions } from './execution-media.service.js';
@@ -38,15 +33,10 @@ export class ExecutionService {
 
   public constructor(
     private readonly prisma: PrismaClient,
-    storagePort: ObjectStoragePort,
     options: ExecutionServiceOptions = {},
   ) {
-    this.media = new ExecutionMediaService(prisma, storagePort, options);
+    this.media = new ExecutionMediaService(prisma, options);
     this.finalization = new OrderFinalizationService(prisma, options);
-  }
-
-  public getStorageMode(): 'drive' | 's3' {
-    return this.media.getStorageMode();
   }
 
   public getEvidenceUploadLimit(): number {
@@ -333,54 +323,8 @@ export class ExecutionService {
     return this.media.getSignatureFile(userId, role, orderId);
   }
 
-  public presignEvidenceUpload(
-    userId: string,
-    role: 'ADMIN' | 'TECHNICIAN',
-    orderId: string,
-    unitId: string,
-    input: PresignEvidence,
-  ) {
-    return this.media.presignEvidenceUpload(userId, role, orderId, unitId, input);
-  }
-
-  public completeEvidence(
-    userId: string,
-    role: 'ADMIN' | 'TECHNICIAN',
-    evidenceId: string,
-    input: CompleteEvidence,
-  ) {
-    return this.media.completeEvidence(userId, role, evidenceId, input);
-  }
-
   public deleteEvidence(userId: string, role: 'ADMIN' | 'TECHNICIAN', evidenceId: string) {
     return this.media.deleteEvidence(userId, role, evidenceId);
-  }
-
-  public getEvidenceUrl(userId: string, role: 'ADMIN' | 'TECHNICIAN', evidenceId: string) {
-    return this.media.getEvidenceUrl(userId, role, evidenceId);
-  }
-
-  public presignSignatureUpload(
-    userId: string,
-    role: 'ADMIN' | 'TECHNICIAN',
-    orderId: string,
-    input: PresignSignature,
-  ) {
-    return this.media.presignSignatureUpload(userId, role, orderId, input);
-  }
-
-  public completeSignature(
-    userId: string,
-    role: 'ADMIN' | 'TECHNICIAN',
-    orderId: string,
-    input: CompleteSignature,
-    objectKey: string,
-  ) {
-    return this.media.completeSignature(userId, role, orderId, input, objectKey);
-  }
-
-  public getSignatureUrl(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {
-    return this.media.getSignatureUrl(userId, role, orderId);
   }
 
   public validateCompleteness(userId: string, role: 'ADMIN' | 'TECHNICIAN', orderId: string) {

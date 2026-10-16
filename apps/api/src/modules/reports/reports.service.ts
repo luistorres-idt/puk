@@ -1,39 +1,32 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { OrderStatus, ReportStatus } from '../../generated/prisma/enums.js';
 import { assertIndividualTechnician } from '../../auth/order-access-policy.js';
-import type { ObjectStoragePort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
-import { type ReportGeneratorPort, ServiceOrderReportGenerator } from './report-generator.js';
+import {
+  type ReportFileReader,
+  type ReportGeneratorPort,
+  ServiceOrderReportGenerator,
+} from './report-generator.js';
 import { storeReportPdf, type ReportDrivePort } from './report-storage.js';
 
 export interface ReportsServiceOptions {
-  downloadUrlTtlSeconds?: number;
   generator?: ReportGeneratorPort;
   drive?: ReportDrivePort;
 }
 
 export class ReportsService {
   private readonly generator: ReportGeneratorPort;
-  private readonly downloadUrlTtlSeconds: number;
-  private readonly drive: ReportsServiceOptions['drive'];
+  private readonly drive: ReportDrivePort | undefined;
 
   public constructor(
     private readonly prisma: PrismaClient,
-    private readonly storage: ObjectStoragePort,
-    options?: number | ReportsServiceOptions,
+    options: ReportsServiceOptions = {},
   ) {
-    if (typeof options === 'number') {
-      this.downloadUrlTtlSeconds = options;
-      this.generator = new ServiceOrderReportGenerator(storage);
-    } else {
-      this.downloadUrlTtlSeconds = options?.downloadUrlTtlSeconds ?? 300;
-      this.drive = options?.drive;
-      this.generator =
-        options?.generator ??
-        new ServiceOrderReportGenerator(
-          this.drive ? { getObject: (id) => this.drive!.client.getFile(id) } : storage,
-        );
-    }
+    this.drive = options.drive;
+    const fileReader: ReportFileReader = {
+      getFile: (id) => this.requireDrive().client.getFile(id),
+    };
+    this.generator = options.generator ?? new ServiceOrderReportGenerator(fileReader);
   }
 
   public async requestGeneration(orderId: string, actorUserId?: string) {
@@ -119,44 +112,13 @@ export class ReportsService {
     });
   }
 
-  public async getDownloadUrl(orderId: string, userId: string, role: 'ADMIN' | 'TECHNICIAN') {
-    if (this.drive) {
-      throw new AppError(409, 'DRIVE_DOWNLOAD_REQUIRED', 'Descarga el reporte desde la API');
-    }
-    await this.assertAccess(orderId, userId, role);
-    const report = await this.prisma.serviceOrderReport.findFirst({
-      where: { orderId },
-      orderBy: { version: 'desc' },
-    });
-    if (!report) throw new AppError(404, 'REPORT_NOT_FOUND', 'El reporte todavía no existe');
-    if (report.status !== ReportStatus.READY || !report.objectKey) {
-      throw new AppError(409, 'REPORT_NOT_READY', 'El reporte todavía no está listo para descarga');
-    }
-    const url = await this.storage.createDownloadUrl(report.objectKey, this.downloadUrlTtlSeconds);
-    await this.prisma.auditLog.create({
-      data: {
-        action: 'SERVICE_ORDER_REPORT_DOWNLOADED',
-        actorUserId: userId,
-        entityType: 'ServiceOrderReport',
-        entityId: report.id,
-      },
-    });
-    return {
-      url,
-      expiresInSeconds: this.downloadUrlTtlSeconds,
-      fileName: `orden-servicio-${this.safeFileName((await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { folio: true } })).folio)}-v${report.version}.pdf`,
-    };
-  }
-
   public async getDownloadFile(
     orderId: string,
     userId: string,
     role: 'ADMIN' | 'TECHNICIAN',
     version?: number,
   ) {
-    if (!this.drive) {
-      throw new AppError(409, 'S3_DOWNLOAD_REQUIRED', 'Descarga el reporte mediante URL firmada');
-    }
+    const drive = this.requireDrive();
     await this.assertAccess(orderId, userId, role);
     const report = await this.prisma.serviceOrderReport.findFirst({
       where: { orderId, ...(version === undefined ? {} : { version }) },
@@ -166,7 +128,7 @@ export class ReportsService {
     if (report.status !== ReportStatus.READY || !report.objectKey) {
       throw new AppError(409, 'REPORT_NOT_READY', 'El reporte todavía no está listo para descarga');
     }
-    const bytes = await this.drive.client.getFile(report.objectKey);
+    const bytes = await drive.client.getFile(report.objectKey);
     if (!bytes)
       throw new AppError(404, 'REPORT_FILE_NOT_FOUND', 'El archivo del reporte no existe');
     await this.prisma.auditLog.create({
@@ -204,9 +166,7 @@ export class ReportsService {
       throw new AppError(409, 'REPORT_NOT_READY', 'El reporte todavía no está listo.');
     let bytes: Uint8Array | null;
     try {
-      bytes = this.drive
-        ? await this.drive.client.getFile(report.objectKey)
-        : await this.storage.getObject(report.objectKey);
+      bytes = await this.requireDrive().client.getFile(report.objectKey);
     } catch {
       throw new AppError(503, 'REPORT_FILE_UNAVAILABLE', 'No se pudo leer el PDF para el envío.');
     }
@@ -299,9 +259,8 @@ export class ReportsService {
 
     const { objectKey, sizeBytes, checksum } = await storeReportPdf({
       prisma: this.prisma,
-      storage: this.storage,
       generator: this.generator,
-      drive: this.drive,
+      drive: this.requireDrive(),
       order,
       report,
     });
@@ -358,6 +317,13 @@ export class ReportsService {
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-zA-Z0-9_-]+/g, '-');
+  }
+
+  private requireDrive(): ReportDrivePort {
+    if (!this.drive) {
+      throw new AppError(503, 'DRIVE_STORAGE_DISABLED', 'El almacenamiento de Drive no está configurado.');
+    }
+    return this.drive;
   }
 
   private publicReportSelection() {

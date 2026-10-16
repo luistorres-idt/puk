@@ -172,7 +172,7 @@ const currentRow = await equipmentSheet.findCurrentRow(equipmentIdentity);
 - Set secure cookie attributes according to the deployment environment.
 - Validate JWT signature, issuer, audience, purpose, and expiration.
 - Hash passwords with Argon2id and store only refresh-token hashes.
-- Give Google Sheets and S3 credentials the minimum required permissions.
+- Give Google Sheets, Google Drive, and other integration credentials the minimum required permissions.
 - Keep object storage private and use short-lived signed URLs.
 - Validate uploaded object existence, type, and size before marking it complete.
 - Protect against user enumeration and excessive authentication attempts.
@@ -195,7 +195,7 @@ const currentRow = await equipmentSheet.findCurrentRow(equipmentIdentity);
 
 ## 13. External integrations
 
-- Access Google Sheets, S3, and other providers only through dedicated adapters.
+- Access Google Sheets, Google Drive, and other providers only through dedicated adapters.
 - Set explicit timeouts for every external request.
 - Retry only operations classified as safe to retry.
 - Use exponential backoff with jitter and a configurable attempt limit.

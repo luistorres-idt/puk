@@ -5,17 +5,19 @@ pero AWS staging está eliminado y no hay despliegue actual. La validación en A
 respaldo/retención de producción siguen pendientes. Esta especificación conserva los requisitos y
 límites originales; no autoriza migrar ni borrar archivos históricos de S3.
 
+> **Implementación actualizada:** Google Drive es el único proveedor de archivos en el código; se quitaron S3, MinIO, la selección de proveedor y la carga prefirmada. Esta especificación conserva decisiones históricas sobre datos remotos: el cambio local no borra objetos ni recursos externos.
+
 ## Objetivo
 
 Guardar las nuevas evidencias fotográficas, firmas y versiones PDF de órdenes de servicio en un Drive compartido de la organización. La aplicación conserva el control de acceso: los navegadores no reciben credenciales de Google ni enlaces públicos de Drive.
 
-Esta especificación define el comportamiento a implementar. El contexto y el flujo actual se describen en [el plan de integración](docs/google-drive-integration-plan.md).
+Esta especificación documenta el comportamiento implementado. El contexto y el flujo actual se describen en [el plan de integración](docs/google-drive-integration-plan.md).
 
 ## Alcance y exclusiones
 
-- Los objetos y registros actuales de S3 son datos de prueba descartables. **No se migran** ni se requiere lectura histórica dual S3/Drive.
-- Esta feature no autoriza borrar objetos de S3 ni ejecutar `cleanup-orphaned-objects.ts`. El descarte físico requiere una operación posterior, explícita y verificada.
-- La aplicación debe funcionar en desarrollo y pruebas sin acceso a un tenant real mediante un adaptador de almacenamiento de prueba.
+- Los objetos y registros S3 observados históricamente eran datos de prueba. **No se migran** ni se requiere lectura histórica dual S3/Drive; su existencia remota actual no se verificó en este cambio.
+- Esta feature no autoriza borrar objetos de S3. El antiguo script local de limpieza fue retirado; el descarte físico requiere una operación posterior, explícita y verificada.
+- La aplicación puede iniciar en desarrollo y ejecutar pruebas sin credenciales de Drive, pero las funciones de archivos requieren una cuenta y unidad compartida válidas; no hay un proveedor simulado de archivos.
 - No se publican archivos de Drive ni se solicita inicio de sesión de Google a técnicos o administradores.
 - La conservación o eliminación de firmas originales y versiones PDF no cambia en esta feature.
 

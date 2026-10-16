@@ -2,9 +2,11 @@
 
 Este documento resume la integración con Google Drive y mediciones de rendimiento realizadas durante su implementación. Las pruebas descritas son evidencia histórica acotada a sus entornos; no equivalen a una medición del tiempo total de uso en producción.
 
+> **Estado actual:** Drive es el proveedor exclusivo de archivos; los adaptadores S3/MinIO y sus flujos prefirmados fueron eliminados de la aplicación. Las comparaciones con S3 que aparecen más abajo son resultados históricos, no opciones activas ni instrucciones operativas. No se tocaron recursos u objetos remotos.
+
 ## Resumen
 
-- Google Drive compartido es el destino configurado por la IaC para evidencias, firmas y reportes en un futuro staging. El ambiente AWS fue eliminado y no está desplegado. El código conserva el adaptador S3 y su fallback/default según entorno; staging configura `STORAGE_PROVIDER=drive` y el script seguro exige credenciales dedicadas de Drive. Producción no tiene IaC propia ni está desplegada.
+- Google Drive compartido es el proveedor único configurado para evidencias, firmas y reportes. El ambiente AWS fue eliminado y no está desplegado. La aplicación requiere credenciales completas de Drive en producción. Producción no tiene IaC propia ni está desplegada.
 - En modo Drive, los archivos pasan por la API para mantener autenticación y permisos; el navegador no recibe credenciales de Google ni enlaces públicos.
 - Las evidencias pertenecen a la unidad del vehículo, no a una categoría del checklist.
 - No se migran los objetos de prueba que quedaron en S3.
@@ -77,7 +79,7 @@ El bucket tiene versionado habilitado. Por eso, el borrado normal deja marcadore
 - Separación de la evidencia del checklist a la unidad, incluyendo API, contratos, vistas, consultas, reportes y pruebas.
 - Rutas de evidencia con alcance por unidad y validación de que la unidad pertenezca a la orden.
 - Reintentos idempotentes para cargas de Drive y nombre de archivo neutral para las fotos.
-- Lectura privada de evidencia, firma y PDF desde Drive; conservación del adaptador S3 sólo por compatibilidad/legado.
+- Lectura privada de evidencia, firma y PDF desde Drive; S3/MinIO ya no forman parte del código.
 - Ajuste de la respuesta de firma para que la vista previa pueda mostrar el nombre de quien firmó.
 - Limpieza de operaciones del cliente de Drive que no tenían uso.
 - Actualizaciones de `docs/google-drive-integration-plan.md` y `spec.md`, además de pruebas asociadas.

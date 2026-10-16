@@ -14,7 +14,7 @@ Al 2026-10-09 staging está eliminado/no desplegado y producción no está despl
 inventario son referencias históricas, no evidencia de recursos activos. No se inspeccionaron
 datos de RDS.
 
-**Diferencia observada históricamente:** la revisión de tarea 14 usaba S3; la IaC local selecciona Drive.
+**Diferencia observada históricamente:** la revisión de tarea 14 usaba S3; el código actual usa Drive exclusivamente.
 El bucket `EvidenceBucket` estaba referenciado por esa revisión. La consulta de versiones del
 2026-10-05 devolvió cero versiones y marcadores de borrado, sin paginación pendiente; no habilita
 su eliminación mientras siga siendo un consumidor activo. La sincronización espera configuración
@@ -25,8 +25,8 @@ como parte de esta sincronización. Producción no tiene stacks CDK propios.
 
 | Ambiente                  | Implementación actual                                                                     | Persistencia           | Entrada                                           |
 | ------------------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------- |
-| Desarrollo con hot reload | Vite y API en el host; PostgreSQL y MinIO en Docker Compose                               | Volúmenes locales      | `http://localhost:5173` y `http://localhost:3000` |
-| Desarrollo compilado      | Contenedores `web`, `api`, `postgres`, `minio` y `minio-init`                             | Volúmenes locales      | `http://localhost:4173` y `http://localhost:3000` |
+| Desarrollo con hot reload | Vite y API en el host; PostgreSQL en Docker Compose                                         | Volumen local          | `http://localhost:5173` y `http://localhost:3000` |
+| Desarrollo compilado      | Contenedores `web`, `api` y `postgres`                                                     | Volumen local          | `http://localhost:4173` y `http://localhost:3000` |
 | Staging                   | No desplegado al 2026-10-09; la IaC describe ECS sobre EC2, RDS, almacenamiento y logs       | Por verificar          | Sin endpoint activo                               |
 | Producción                | No implementado como IaC en la rama actual                                                | Por definir            | Por definir                                       |
 
@@ -38,7 +38,7 @@ AWS antes de cualquier operación.
 
 ### Vista de despliegue
 
-> **Topología declarada por IaC:** los detalles corresponden al diseño en código. El inventario histórico observó S3; Drive es el proveedor seleccionado por la IaC local y requiere configuración y validación antes de un redeployment.
+> **Topología declarada por IaC:** los detalles corresponden al diseño en código. Google Drive es el único proveedor de archivos configurado y requiere credenciales válidas antes de habilitar archivos en un redeployment.
 
 ```mermaid
 flowchart TB
@@ -142,15 +142,13 @@ La migración dentro de cada tarea mantiene el orden de arranque, pero con más 
 | Recurso                    | Configuración declarada / diferencia histórica                                                                         | Política IaC al eliminar en el futuro                |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | RDS PostgreSQL 17          | `db.t4g.micro`, 20 GiB, autoscaling hasta 100 GiB, cifrado, Single-AZ, 1 día de backup automático, sin acceso público | `RETAIN` y deletion protection                       |
-| Almacenamiento de archivos | Históricamente S3; Drive seleccionado por la IaC local y pendiente de configuración para redeploy                    | Conservar archivos y bucket hasta validar transición |
+| Almacenamiento de archivos | Google Drive es el proveedor único del código; el inventario histórico observó S3 en staging                    | Los archivos/remotos no se modificaron en este cambio |
 | Logs                       | Grupos separados para migración, API y web; retención de un mes                                                       | `RETAIN`                                             |
 
-El objetivo de producto es usar una unidad compartida de Google Drive para evidencias, firmas y
-reportes; PostgreSQL conserva referencias y metadatos. La IaC local selecciona
-`STORAGE_PROVIDER=drive`, no declara buckets ni permisos S3 nuevos, y requiere los tres campos
-`GOOGLE_DRIVE_*`. La última revisión de tarea observada históricamente usaba S3; no hay una
-revisión desplegada actualmente. Conservar bucket, referencias y permisos necesarios hasta validar
-el reemplazo; cambiar de proveedor no migra archivos existentes.
+Google Drive es el único proveedor de evidencias, firmas y reportes; PostgreSQL conserva referencias
+y metadatos. La aplicación requiere los tres campos `GOOGLE_DRIVE_*` en producción. La última
+revisión de tarea observada históricamente usaba S3; no hay una revisión desplegada actualmente.
+La retirada del código S3/MinIO no cambia ni elimina archivos o recursos remotos.
 La política de respaldo independiente sigue pendiente antes de producción.
 
 ### Stacks CDK
@@ -186,15 +184,10 @@ flowchart LR
 `PukStagingApplication` recibe referencias del stack Foundation, por lo que CDK crea dependencias y exports de CloudFormation. Foundation concentra recursos con estado o compartidos; Application concentra cómputo. Esta separación reduce el riesgo al reemplazar la capa de aplicación, aunque el stack foundation no activa `terminationProtection` a nivel de CloudFormation.
 
 La IaC conserva una referencia a un security group legado del ALB para compatibilidad entre
-stacks. No hay ALB ni NAT Gateway en el inventario regional consultado. Tanto esa referencia
-como los exports S3 requieren limpieza ordenada: preservar el recurso/export original mientras
-Application lo consuma, actualizar primero el consumidor y retirar después sólo lo que quede sin
-uso. El diff actual de Foundation elimina exports S3 aún consumidos y modifica la política del bucket.
-Con Drive configurado y validado, desplegar primero Application con `cdk deploy
-PukStagingApplication --exclusively` desde `infra/cdk`, sin actualizar Foundation como dependencia;
-no empezar con `deploy --all`. Después de liberar imports y validar la aplicación, actualizar
-Foundation. No borrar datos como atajo; volver a comprobar versiones y marcadores de borrado antes
-de considerar el bucket vacío como candidato a limpieza.
+stacks. No hay ALB ni NAT Gateway en el inventario regional consultado. Los cambios de infraestructura
+deben preservar exports mientras sean consumidos, actualizar primero el consumidor y retirar después
+sólo lo que quede sin uso. El CDK actual no declara buckets ni permisos de S3. La remoción local de
+S3 no modifica recursos ni archivos remotos. No empezar con `deploy --all` sin revisar el diff actual.
 
 No se deben renombrar construct IDs ni mover recursos persistentes sin revisar primero `pnpm infra:diff`: un cambio de logical ID puede provocar reemplazo. Tampoco se debe eliminar un export del stack foundation mientras Application lo consuma.
 
@@ -216,7 +209,7 @@ No se deben renombrar construct IDs ni mover recursos persistentes sin revisar p
   automáticamente. Permisos IAM de Google Cloud no sustituyen compartir los recursos de Workspace.
 - La IaC define el rol OIDC `puk-staging-github-deploy`, limitado a `main` del repositorio configurado.
 - Las variables no sensibles se definen en el task definition; nombres de pestañas y
-  `STORAGE_PROVIDER` no cambian editando sólo los IDs en Secrets Manager.
+  los campos de Drive requieren actualizar el mapeo de secretos y desplegar el task definition.
 
 El procedimiento completo de cuentas de servicio, IDs, permisos y actualización parcial está en
 [Configurar Sheets y Drive](../staging-and-deployment.md#dónde-configurar-sheets-y-drive).
@@ -324,8 +317,6 @@ revisar los exports entre stacks; no eliminar datos o el bucket para resolver un
 | `web`        | Nginx + Vue compilado | 4173 externo / 80 interno | No                      |
 | `api`        | Node.js 24 + Express  | 3000                      | No                      |
 | `postgres`   | PostgreSQL 18         | 5432                      | Volumen `postgres-data` |
-| `minio`      | MinIO                 | 9000 API, 9001 consola    | Volumen `minio-data`    |
-| `minio-init` | Cliente `mc`          | No aplica                 | Crea el bucket privado  |
 
 ```mermaid
 flowchart LR
@@ -335,17 +326,17 @@ flowchart LR
     WebCompose[Nginx compilado :4173]
     ApiCompose[API container :3000]
     PG[(PostgreSQL :5432)]
-    FileStore[(Almacenamiento local :9000)]
+    Drive[(Google Drive compartido)]
 
     Browser -->|hot reload| Vite
     Vite -->|proxy /api y /health| ApiHost
     ApiHost --> PG
-    ApiHost --> FileStore
+    ApiHost --> Drive
 
     Browser -.->|modo compilado| WebCompose
     Browser -.->|API publicada aparte| ApiCompose
     ApiCompose --> PG
-    ApiCompose --> FileStore
+    ApiCompose --> Drive
 ```
 
 En hot reload, el proxy de Vite envía `/api` y `/health` a `VITE_API_PROXY_TARGET`. En ECS, Nginx y API comparten tarea y `127.0.0.1:3000` es correcto. En Docker Compose están en contenedores distintos, pero la configuración Nginx también apunta a `127.0.0.1:3000`; por ello el proxy `/api` del contenedor web compilado no alcanza actualmente a `api`. Hasta corregir esa divergencia, use hot reload o el puerto publicado de la API para validar el modo local.
@@ -355,7 +346,7 @@ En hot reload, el proxy de Vite envía `/api` y `/health` a `VITE_API_PROXY_TARG
 ```bash
 pnpm install
 cp .env.example .env
-docker compose up -d postgres minio minio-init
+docker compose up -d postgres
 pnpm prisma:migrate
 pnpm prisma:seed
 pnpm dev
@@ -377,11 +368,10 @@ Los Dockerfiles son multi-stage. La imagen de API se ejecuta como usuario `node`
 | Base de datos     | `DATABASE_URL`, `DIRECT_URL` o variables `PUK_DATABASE_*` en ECS                                             |
 | JWT               | Claves pública y privada, `JWT_ISSUER`, `JWT_AUDIENCE`, TTLs                                                 |
 | Cookies           | `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`                                                         |
-| S3 (legado/local) | Endpoint, región, bucket, credenciales locales y path style; revisión histórica 14 usó S3, Drive está en IaC |
-| Drive             | Cuenta de servicio, clave privada e ID de unidad compartida (`GOOGLE_DRIVE_*`)                               |
+| Drive             | Cuenta de servicio, clave privada e ID de unidad compartida (`GOOGLE_DRIVE_*`); obligatorias en producción |
 | Gmail             | Cuenta de servicio, clave privada y buzón suplantado (`GOOGLE_GMAIL_*`); no mapeado por CDK                  |
 | Sheets            | Spreadsheet, cuenta de servicio, clave privada y pestañas                                                    |
-| Límites           | Tamaños de evidencia y firma, TTL de URLs, caché                                                             |
+| Límites           | Tamaños de evidencia y firma, caché                                                                          |
 | Resiliencia       | Timeouts, reintentos, circuit breaker y polling                                                              |
 | Seed              | Correos y contraseña inicial                                                                                 |
 
@@ -407,7 +397,7 @@ pnpm infra:synth
 pnpm infra:diff
 ```
 
-Antes de desplegar cambios CDK se debe ejecutar `synth` y revisar `diff`, especialmente para RDS, S3, VPC y referencias entre stacks. Hotswap y express mode no forman parte del flujo y no deben usarse en producción.
+Antes de desplegar cambios CDK se debe ejecutar `synth` y revisar `diff`, especialmente para RDS, VPC y referencias entre stacks. Hotswap y express mode no forman parte del flujo y no deben usarse en producción.
 
 La guía operativa y el primer despliegue están en [staging-and-deployment.md](../staging-and-deployment.md). Los scripts `infra/scripts/backup.sh` y `restore.sh` realizan respaldo lógico y restauración de PostgreSQL, pero no están conectados al workflow de AWS; su programación, almacenamiento externo y prueba periódica son responsabilidad operativa.
 
@@ -419,7 +409,7 @@ objetivo con el trabajo previo a producción:
 
 | Pilar          | Configuración objetivo de IaC                                                                    | Trabajo pendiente                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Seguridad      | RDS cifrado; Drive privado pendiente; HTTP público; OIDC en CI; el inventario histórico observó S3 | Configurar dominio y TLS; limitar ingreso; definir controles de Workspace; agregar WAF según riesgo; auditar permisos con cdk-nag |
+| Seguridad      | RDS cifrado; Drive privado requiere credenciales/validación operativa; HTTP público; OIDC en CI | Configurar dominio y TLS; limitar ingreso; definir controles de Workspace; agregar WAF según riesgo; auditar permisos con cdk-nag |
 | Confiabilidad  | Dos AZ para subredes; rollback de ECS; política de retención prevista para RDS                   | RDS Multi-AZ; alarmas; estrategia de migración única; restauraciones probadas                                                     |
 | Rendimiento    | Sin CDN ni caché de borde                                                                        | Autoscaling ECS, pruebas de carga y dimensionamiento de RDS                                                                       |
 | Costos         | Sin NAT; host EC2 único con IPv4 pública y RDS micro                                             | Presupuestos y alarmas de costo; revisar transferencia e IPv4 públicas                                                            |

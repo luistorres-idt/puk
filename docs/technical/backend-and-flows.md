@@ -149,19 +149,13 @@ sequenceDiagram
     alt Google Drive
         W->>API: envía archivo autenticado
         API->>Storage: carga y valida MIME/tamaño
-    else Adaptador de objetos
-        API-->>W: URL temporal de carga
-        W->>Storage: carga archivo
-        API->>Storage: valida MIME/tamaño
     end
     API->>DB: marcar COMPLETED
 ```
 
-Las referencias siguen una identidad estable por evidencia, firma o reporte; el proveedor configurado resuelve su ubicación física. La base nunca almacena bytes ni Base64. En el modo Drive, la API recibe y transmite las cargas autenticadas; el adaptador de objetos conserva su propio protocolo.
+Las referencias siguen una identidad estable por evidencia, firma o reporte; Google Drive resuelve su ubicación física. La base nunca almacena bytes ni Base64. La API recibe, valida y transmite las cargas autenticadas; no existen flujos de URLs prefirmadas.
 
-En el estado actual (2026-10-02), Drive compartido es el proveedor configurado por la IaC de staging,
-pero AWS staging está eliminado y no existe producción desplegada. El adaptador S3/MinIO se mantiene
-para desarrollo local/entornos que lo seleccionen; sus rutas no son el flujo de Drive.
+Drive compartido es el único proveedor de archivos configurado. AWS staging está eliminado y no existe producción desplegada.
 
 ## Generación de reporte PDF
 

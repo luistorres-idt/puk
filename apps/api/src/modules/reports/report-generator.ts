@@ -4,7 +4,10 @@ import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
 import { formatOrderServiceType } from '@puk/contracts';
 
-import type { ObjectStoragePort } from '../../integrations/ports.js';
+
+export interface ReportFileReader {
+  getFile(id: string): Promise<Uint8Array | null>;
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   DASHBOARD: 'Tablero',
@@ -80,7 +83,7 @@ export interface ReportGeneratorPort {
 
 export class ServiceOrderReportGenerator implements ReportGeneratorPort {
   public constructor(
-    private readonly storage: Pick<ObjectStoragePort, 'getObject'>,
+    private readonly files: ReportFileReader,
     private readonly timeZone = 'America/Hermosillo',
   ) {}
 
@@ -476,7 +479,7 @@ export class ServiceOrderReportGenerator implements ReportGeneratorPort {
   }
 
   private async loadImage(objectKey: string, optimize: boolean): Promise<Buffer> {
-    const bytes = await this.storage.getObject(objectKey);
+    const bytes = await this.files.getFile(objectKey);
     if (!bytes) throw new Error(`No se encontró un recurso requerido para el reporte`);
     try {
       const pipeline = sharp(bytes).rotate().flatten({ background: '#ffffff' });

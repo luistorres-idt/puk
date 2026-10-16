@@ -34,13 +34,6 @@ const validEnvironment = {
   NODE_ENV: 'development',
   OUTBOX_POLL_INTERVAL_MS: '5000',
   PORT: '3000',
-  PRESIGNED_URL_TTL_SECONDS: '300',
-  S3_ACCESS_KEY_ID: 'development-only',
-  S3_BUCKET: 'service-orders',
-  S3_ENDPOINT: 'http://localhost:9000',
-  S3_FORCE_PATH_STYLE: 'true',
-  S3_REGION: 'us-east-1',
-  S3_SECRET_ACCESS_KEY: 'development-only',
   SHEETS_RETRY_LIMIT: '3',
   SHEETS_TIMEOUT_MS: '5000',
   TRUST_PROXY: 'false',
@@ -52,8 +45,6 @@ describe('parseEnvironment', () => {
 
     expect(environment.PORT).toBe(3000);
     expect(environment.COOKIE_DOMAIN).toBeUndefined();
-    expect(environment.STORAGE_PROVIDER).toBe('s3');
-    expect(environment.S3_FORCE_PATH_STYLE).toBe(true);
     expect(environment.GOOGLE_TECHNICIANS_SPREADSHEET_ID).toBe('development-only-technicians');
     expect(environment.TECHNICAL_REPORT_CUTOFF_WEEKDAY).toBe(2);
     expect(environment.TECHNICAL_REPORT_SYNC_TIME).toBe('17:00');
@@ -130,34 +121,25 @@ describe('parseEnvironment', () => {
     expect(environment.DIRECT_URL).toBe(environment.DATABASE_URL);
   });
 
-  it('allows omitting S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, and COOKIE_DOMAIN for IAM role authentication in ECS', () => {
-    const envWithoutKeys: Record<string, string | undefined> = { ...validEnvironment };
-    delete envWithoutKeys.COOKIE_DOMAIN;
-    delete envWithoutKeys.S3_ACCESS_KEY_ID;
-    delete envWithoutKeys.S3_SECRET_ACCESS_KEY;
-
-    const environment = parseEnvironment(envWithoutKeys);
-
-    expect(environment.S3_ACCESS_KEY_ID).toBeUndefined();
-    expect(environment.S3_SECRET_ACCESS_KEY).toBeUndefined();
+  it('allows Drive credentials to be omitted for local development', () => {
+    const environment = parseEnvironment({ ...validEnvironment, COOKIE_DOMAIN: '   ' });
+    expect(environment.GOOGLE_DRIVE_CLIENT_EMAIL).toBeUndefined();
     expect(environment.COOKIE_DOMAIN).toBeUndefined();
   });
 
-  it('normalizes empty and whitespace-only optional strings to undefined', () => {
-    const environment = parseEnvironment({
-      ...validEnvironment,
-      COOKIE_DOMAIN: '   ',
-      S3_ACCESS_KEY_ID: '',
-      S3_SECRET_ACCESS_KEY: '  ',
-    });
-
-    expect(environment.COOKIE_DOMAIN).toBeUndefined();
-    expect(environment.S3_ACCESS_KEY_ID).toBeUndefined();
-    expect(environment.S3_SECRET_ACCESS_KEY).toBeUndefined();
+  it('requires complete Drive configuration when any Drive credential is supplied', () => {
+    expect(() =>
+      parseEnvironment({
+        ...validEnvironment,
+        GOOGLE_DRIVE_CLIENT_EMAIL: 'drive-service@example.invalid',
+      }),
+    ).toThrowError(
+      new EnvironmentValidationError(['GOOGLE_DRIVE_PRIVATE_KEY', 'GOOGLE_DRIVE_SHARED_DRIVE_ID']),
+    );
   });
 
-  it('requires a separate Drive identity and shared drive when Drive storage is selected', () => {
-    expect(() => parseEnvironment({ ...validEnvironment, STORAGE_PROVIDER: 'drive' })).toThrowError(
+  it('requires Drive configuration in production', () => {
+    expect(() => parseEnvironment({ ...validEnvironment, NODE_ENV: 'production' })).toThrowError(
       new EnvironmentValidationError([
         'GOOGLE_DRIVE_CLIENT_EMAIL',
         'GOOGLE_DRIVE_PRIVATE_KEY',
@@ -166,27 +148,12 @@ describe('parseEnvironment', () => {
     );
     const environment = parseEnvironment({
       ...validEnvironment,
-      STORAGE_PROVIDER: 'drive',
+      NODE_ENV: 'production',
       GOOGLE_DRIVE_CLIENT_EMAIL: 'drive-service@example.invalid',
       GOOGLE_DRIVE_PRIVATE_KEY: 'test-only-key',
       GOOGLE_DRIVE_SHARED_DRIVE_ID: 'shared-drive-id',
     });
-    expect(environment.STORAGE_PROVIDER).toBe('drive');
-  });
-
-  it('does not require S3 settings in Drive mode', () => {
-    const environment = parseEnvironment({
-      ...validEnvironment,
-      STORAGE_PROVIDER: 'drive',
-      GOOGLE_DRIVE_CLIENT_EMAIL: 'drive-service@example.invalid',
-      GOOGLE_DRIVE_PRIVATE_KEY: 'test-only-key',
-      GOOGLE_DRIVE_SHARED_DRIVE_ID: 'shared-drive-id',
-      S3_BUCKET: undefined,
-      S3_ENDPOINT: undefined,
-      S3_FORCE_PATH_STYLE: undefined,
-      S3_REGION: undefined,
-    });
-    expect(environment.S3_BUCKET).toBeUndefined();
+    expect(environment.GOOGLE_DRIVE_SHARED_DRIVE_ID).toBe('shared-drive-id');
   });
 
   it('defaults to sslmode=no-verify when connecting to an AWS RDS host without explicit sslMode', () => {

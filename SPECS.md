@@ -2,7 +2,7 @@
 
 > Esta especificación mantiene los requisitos funcionales y de diseño del proyecto. No sustituye el
 > estado implementado: el sistema ya incluye administración de usuarios, acceso técnico compartido,
-> tarifas por orden, reportes PDF y Google Drive para archivos. AWS staging fue eliminado y no hay
+> tarifas por orden, reportes PDF y Google Drive como único proveedor de archivos. AWS staging fue eliminado y no hay
 > despliegue productivo; los pendientes de infraestructura/operación se mantienen como tales. Para
 > el estado ejecutable y los detalles actuales, consulta [la documentación técnica](./docs/technical/README.md).
 
@@ -135,7 +135,6 @@ typescript valibot @valibot/to-json-schema axios
 express prisma @prisma/client jose argon2
 cors helmet cookie-parser express-rate-limit morgan winston
 swagger-ui-express opossum googleapis
-@aws-sdk/client-s3 @aws-sdk/s3-request-presigner
 
 # Web
 vue vue-router pinia @tanstack/vue-query
@@ -251,7 +250,7 @@ modules/
 ├── signatures
 ├── discrepancies
 ├── google-sheets
-├── object-storage
+├── google-drive
 ├── audit
 └── health
 ```
@@ -780,20 +779,19 @@ Respuesta de error:
 
 ### 11.7 Checklist y evidencias
 
-| Método | Ruta                                                             | Descripción                   |
-| ------ | ---------------------------------------------------------------- | ----------------------------- |
-| PUT    | `/orders/:id/units/:unitId/checklist`                            | Guardar resultados            |
-| POST   | `/orders/:id/units/:unitId/checklist/:category/evidence/presign` | Crear subida autorizada       |
-| POST   | `/evidence/:id/complete`                                         | Confirmar subida              |
-| DELETE | `/evidence/:id`                                                  | Eliminación lógica autorizada |
+| Método | Ruta                                      | Descripción                   |
+| ------ | ----------------------------------------- | ----------------------------- |
+| PUT    | `/orders/:id/units/:unitId/checklist`     | Guardar resultados            |
+| POST   | `/orders/:id/units/:unitId/evidence/file` | Cargar imagen autenticada     |
+| GET    | `/evidence/:id/file`                      | Descargar imagen privada      |
+| DELETE | `/evidence/:id`                           | Eliminación lógica autorizada |
 
 ### 11.8 Firma
 
-| Método | Ruta                             | Descripción              |
-| ------ | -------------------------------- | ------------------------ |
-| POST   | `/orders/:id/signature/presign`  | Preparar subida de firma |
-| POST   | `/orders/:id/signature/complete` | Confirmar firma y nombre |
-| GET    | `/orders/:id/signature/url`      | URL temporal autorizada  |
+| Método | Ruta                         | Descripción                  |
+| ------ | ---------------------------- | ---------------------------- |
+| PUT    | `/orders/:id/signature/file` | Cargar firma PNG autenticada |
+| GET    | `/orders/:id/signature/file` | Descargar firma privada      |
 
 ### 11.9 Sincronización
 
@@ -835,9 +833,6 @@ AssignEquipmentSchema
 VerifyEquipmentSchema
 ReportDiscrepancySchema
 SaveChecklistSchema
-PresignEvidenceSchema
-CompleteEvidenceSchema
-CompleteSignatureSchema
 CompleteOrderSchema
 FailAppointmentSchema
 OrderPricingOverridesSchema
@@ -1186,17 +1181,13 @@ COOKIE_DOMAIN
 COOKIE_SECURE
 COOKIE_SAME_SITE
 
-S3_ENDPOINT
-S3_REGION
-S3_BUCKET
-S3_ACCESS_KEY_ID
-S3_SECRET_ACCESS_KEY
-S3_FORCE_PATH_STYLE
-
 GOOGLE_SPREADSHEET_ID
 GOOGLE_TECHNICIANS_SPREADSHEET_ID
 GOOGLE_CLIENT_EMAIL
 GOOGLE_PRIVATE_KEY
+GOOGLE_DRIVE_CLIENT_EMAIL
+GOOGLE_DRIVE_PRIVATE_KEY
+GOOGLE_DRIVE_SHARED_DRIVE_ID
 # Opcionales para habilitar el envío manual de reportes por Gmail; ver docs/report-email-delivery.md
 GOOGLE_GMAIL_CLIENT_EMAIL
 GOOGLE_GMAIL_PRIVATE_KEY
@@ -1208,7 +1199,6 @@ GOOGLE_TECHNICIAN_REPORT_SHEET_NAME=2026
 
 MAX_EVIDENCE_BYTES
 MAX_SIGNATURE_BYTES
-PRESIGNED_URL_TTL_SECONDS
 CATALOG_CACHE_TTL_SECONDS
 
 LOG_LEVEL
@@ -1230,9 +1220,10 @@ En producción se preferirán identidades del proveedor y gestores de secretos s
 Docker Compose incluirá:
 
 - PostgreSQL.
-- MinIO como almacenamiento compatible con S3.
 - API.
-- El envío manual de reportes usa Gmail cuando está configurado; no es una interfaz local ni un flujo automático.
+- Web.
+
+Las funciones de archivos usan Google Drive y requieren credenciales válidas incluso en desarrollo local. El envío manual de reportes usa Gmail cuando está configurado; ninguno es un servicio de Docker Compose.
 
 Google Sheets utilizará un documento de prueba separado. Las pruebas automatizadas nunca escribirán en la hoja de producción.
 
@@ -1272,7 +1263,7 @@ pnpm prisma:seed
 - Rutas Express con Supertest.
 - PostgreSQL aislado para pruebas.
 - Transacciones Prisma.
-- Presign y confirmación de objetos con almacenamiento local.
+- Carga y descarga autenticada de evidencias, firmas y reportes mediante la API y Google Drive.
 - Adaptador de Sheets con respuestas simuladas.
 - Conflictos e idempotencia.
 - Worker de outbox y recuperación después de fallo.

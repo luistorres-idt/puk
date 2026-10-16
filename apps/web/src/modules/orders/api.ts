@@ -21,7 +21,6 @@ import type {
   UpdateUnit,
 } from '@puk/contracts';
 import { api, type ApiResponse } from '../../shared/http/client.js';
-import { getStorageMode } from '../service-execution/index.js';
 
 export type { ApiResponse };
 
@@ -251,26 +250,17 @@ export async function fetchReportDownload(
   expiresInSeconds: number;
   fileName: string;
 }> {
-  if ((await getStorageMode()) === 'drive') {
-    const path =
-      version === undefined
-        ? `/orders/${orderId}/report/file`
-        : `/orders/${orderId}/reports/${version}/file`;
-    const response = await api.get<Blob>(path, {
-      responseType: 'blob',
-    });
-    const disposition = response.headers['content-disposition'];
-    const fileName =
-      typeof disposition === 'string'
-        ? (disposition.match(/filename="([^"]+)"/)?.[1] ?? 'service-order.pdf')
-        : 'service-order.pdf';
-    return { url: URL.createObjectURL(response.data), expiresInSeconds: 0, fileName };
-  }
-  if (version !== undefined) {
-    throw new Error('La descarga de versiones anteriores requiere Google Drive');
-  }
-  const response = await api.get<
-    ApiResponse<{ url: string; expiresInSeconds: number; fileName: string }>
-  >(`/orders/${orderId}/report/download`);
-  return response.data.data;
+  const path =
+    version === undefined
+      ? `/orders/${orderId}/report/file`
+      : `/orders/${orderId}/reports/${version}/file`;
+  const response = await api.get<Blob>(path, {
+    responseType: 'blob',
+  });
+  const disposition = response.headers['content-disposition'];
+  const fileName =
+    typeof disposition === 'string'
+      ? (disposition.match(/filename="([^"]+)"/)?.[1] ?? 'service-order.pdf')
+      : 'service-order.pdf';
+  return { url: URL.createObjectURL(response.data), expiresInSeconds: 0, fileName };
 }

@@ -17,7 +17,7 @@ La plataforma sustituye el flujo operativo realizado en AppSheet y reúne en un 
 - Los técnicos pueden guardar una nota general de ejecución antes del cierre; las notas no se separan por unidad.
 - Google Sheets conserva la autoridad sobre los catálogos de clientes y equipos.
 - PostgreSQL mantiene los datos transaccionales, el historial y el estado de sincronización.
-- Las fotografías, firmas y reportes se almacenan de forma privada mediante un adaptador de proveedor. La IaC local configura Google Drive compartido, pero la integración aún requiere configuración y validación antes de un redeploy; el último inventario histórico observó S3. S3 permanece como adaptador alternativo en el código.
+- Las fotografías, firmas y reportes se almacenan de forma privada en Google Drive compartido mediante endpoints autenticados de la API. S3 y MinIO ya no forman parte de la aplicación.
 - Los reportes PDF de órdenes completadas pueden enviarse manualmente por Gmail a destinatarios guardados para el cliente. No se envían automáticamente; Gmail usa delegación de dominio y todavía no está conectado al task definition CDK.
 
 ## Funcionalidades principales
@@ -126,7 +126,7 @@ flowchart TD
 └── SPECS.md
 ```
 
-Los módulos siguen slicing vertical. Cada dominio contiene sus rutas, controladores, servicios, persistencia, contratos y pruebas. Google Sheets y los proveedores de almacenamiento se consumen a través de interfaces/adaptadores reemplazables.
+Los módulos siguen slicing vertical. Cada dominio contiene sus rutas, controladores, servicios, persistencia, contratos y pruebas. Google Sheets y Google Drive se consumen a través de integraciones dedicadas.
 
 ## Estados de una orden
 
@@ -208,12 +208,12 @@ En el reporte técnico (`2026`), cuando una orden cuenta con múltiples unidades
    cp .env.example .env
    ```
 
-   > En desarrollo local, los marcadores `development-only...` activan el mock de Google Sheets y claves JWT efímeras. El almacenamiento local se configura por Docker Compose con MinIO; no implica que staging use MinIO.
+   > En desarrollo local, los marcadores `development-only...` activan el mock de Google Sheets y claves JWT efímeras. Las funciones de archivos requieren credenciales válidas de Google Drive.
 
-3. Para trabajar con recarga en caliente, levantar PostgreSQL y MinIO:
+3. Para trabajar con recarga en caliente, levantar PostgreSQL:
 
    ```bash
-   docker compose up -d postgres minio minio-init
+   docker compose up -d postgres
    ```
 
 4. Generar el cliente de Prisma, aplicar las migraciones y cargar datos iniciales:
@@ -242,7 +242,7 @@ Como alternativa, el stack completo compilado se levanta con:
 docker compose up --build -d
 ```
 
-En esta modalidad, la web se publica por defecto en `http://localhost:4173`, la API en `http://localhost:3000` y la consola de MinIO en `http://localhost:9001`. Los puertos pueden sobrescribirse en `.env` con las variables documentadas en `.env.example`.
+En esta modalidad, la web se publica por defecto en `http://localhost:4173` y la API en `http://localhost:3000`. Los puertos pueden sobrescribirse en `.env` con las variables documentadas en `.env.example`.
 
 ## Configuración
 

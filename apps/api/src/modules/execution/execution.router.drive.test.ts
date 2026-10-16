@@ -14,7 +14,6 @@ type RouteLayer = {
 
 function harness() {
   const service = {
-    getStorageMode: vi.fn(() => 'drive'),
     validateCompleteness: vi.fn().mockResolvedValue({ isComplete: true, missingRequirements: [] }),
     getEvidenceUploadLimit: vi.fn(() => 1024),
     getSignatureUploadLimit: vi.fn(() => 1024),
@@ -55,15 +54,6 @@ function harness() {
 }
 
 describe('Drive execution HTTP handlers', () => {
-  it('reports the active storage provider to authenticated callers', async () => {
-    const { route, response } = harness();
-    await route('/storage/mode')({} as Request, response as unknown as Response);
-    expect(response.json).toHaveBeenCalledWith({
-      data: { provider: 'drive' },
-      meta: { requestId: 'request-1' },
-    });
-  });
-
   it('passes raw evidence bytes, content type and image dimensions to the service', async () => {
     const { route, response, service, auth } = harness();
     const bytes = Buffer.from([1, 2, 3]);

@@ -44,7 +44,6 @@ test('runs one bridge-mode ECS task on an IMDSv2-protected EC2 host', () => {
     ContainerDefinitions: Match.arrayWith([
       Match.objectLike({
         Name: 'api',
-        Environment: Match.arrayWith([{ Name: 'STORAGE_PROVIDER', Value: 'drive' }]),
         Secrets: Match.arrayWith([
           Match.objectLike({ Name: 'GOOGLE_DRIVE_CLIENT_EMAIL' }),
           Match.objectLike({ Name: 'GOOGLE_DRIVE_PRIVATE_KEY' }),

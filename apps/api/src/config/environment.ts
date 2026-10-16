@@ -70,16 +70,8 @@ export const EnvironmentSchema = v.object({
   NODE_ENV: v.picklist(['development', 'test', 'production']),
   OUTBOX_POLL_INTERVAL_MS: integerFromString(100, 300_000),
   PORT: integerFromString(1, 65_535),
-  PRESIGNED_URL_TTL_SECONDS: integerFromString(30, 3_600),
-  S3_ACCESS_KEY_ID: optionalString,
-  S3_BUCKET: optionalString,
-  S3_ENDPOINT: optionalString,
-  S3_FORCE_PATH_STYLE: v.optional(booleanFromString),
-  S3_REGION: optionalString,
-  S3_SECRET_ACCESS_KEY: optionalString,
   SHEETS_RETRY_LIMIT: integerFromString(0, 10),
   SHEETS_TIMEOUT_MS: integerFromString(100, 120_000),
-  STORAGE_PROVIDER: v.optional(v.picklist(['s3', 'drive']), 's3'),
   TECHNICAL_REPORT_CUTOFF_WEEKDAY: v.optional(integerFromString(0, 6), '2'),
   TECHNICAL_REPORT_SYNC_TIME: v.optional(
     v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):[0-5]\d$/)),
@@ -123,26 +115,14 @@ export function parseEnvironment(input: Record<string, string | undefined>): Run
   });
 
   if (result.success) {
-    if (result.output.STORAGE_PROVIDER === 's3') {
-      const missingS3Fields = [
-        'S3_BUCKET',
-        'S3_ENDPOINT',
-        'S3_FORCE_PATH_STYLE',
-        'S3_REGION',
-      ].filter((field) => result.output[field as keyof typeof result.output] === undefined);
-      if (missingS3Fields.length > 0) {
-        throw new EnvironmentValidationError(missingS3Fields);
-      }
-      if (!v.safeParse(v.pipe(v.string(), v.url()), result.output.S3_ENDPOINT).success) {
-        throw new EnvironmentValidationError(['S3_ENDPOINT']);
-      }
-    }
-    if (result.output.STORAGE_PROVIDER === 'drive') {
-      const missingDriveFields = [
-        'GOOGLE_DRIVE_CLIENT_EMAIL',
-        'GOOGLE_DRIVE_PRIVATE_KEY',
-        'GOOGLE_DRIVE_SHARED_DRIVE_ID',
-      ].filter((field) => !result.output[field as keyof typeof result.output]);
+    const driveFields = [
+      'GOOGLE_DRIVE_CLIENT_EMAIL',
+      'GOOGLE_DRIVE_PRIVATE_KEY',
+      'GOOGLE_DRIVE_SHARED_DRIVE_ID',
+    ] as const;
+    const configuredDriveFields = driveFields.filter((field) => result.output[field] !== undefined);
+    if (result.output.NODE_ENV === 'production' || configuredDriveFields.length > 0) {
+      const missingDriveFields = driveFields.filter((field) => !result.output[field]);
       if (missingDriveFields.length > 0) {
         throw new EnvironmentValidationError(missingDriveFields);
       }

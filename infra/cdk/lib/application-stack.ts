@@ -155,8 +155,6 @@ export class PukStagingApplicationStack extends Stack {
         NODE_ENV: 'production',
         OUTBOX_POLL_INTERVAL_MS: '5000',
         PORT: '3000',
-        PRESIGNED_URL_TTL_SECONDS: '300',
-        STORAGE_PROVIDER: 'drive',
         SHEETS_RETRY_LIMIT: '3',
         SHEETS_TIMEOUT_MS: '5000',
         TECHNICAL_REPORT_CUTOFF_WEEKDAY: '2',

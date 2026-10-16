@@ -3,30 +3,10 @@ import {
   CircuitBreaker,
   CircuitBreakerOpenError,
   CircuitBreakerSheetsPort,
-  CircuitBreakerStoragePort,
 } from './circuit-breaker.js';
-import type { ObjectStoragePort, SheetsPort } from '../integrations/ports.js';
-import { ObjectTooLargeError } from '../integrations/object-storage/object-too-large.error.js';
+import type { SheetsPort } from '../integrations/ports.js';
 
 describe('CircuitBreaker', () => {
-  it('does not count a bounded object read rejection as provider failure', async () => {
-    const breaker = new CircuitBreaker({ name: 'bounded-storage', failureThreshold: 1 });
-    const storage: ObjectStoragePort = {
-      createDownloadUrl: vi.fn(),
-      createUploadUrl: vi.fn(),
-      getObject: vi.fn(),
-      getObjectLimited: vi.fn().mockRejectedValue(new ObjectTooLargeError(10)),
-      headObject: vi.fn(),
-      putObject: vi.fn(),
-      removeObject: vi.fn(),
-    };
-    const port = new CircuitBreakerStoragePort(storage, breaker);
-    await expect(port.getObjectLimited('large', 10)).rejects.toBeInstanceOf(ObjectTooLargeError);
-    expect(breaker.getState()).toBe('CLOSED');
-    storage.getObjectLimited = vi.fn().mockResolvedValue(new Uint8Array([1]));
-    await expect(port.getObjectLimited('small', 10)).resolves.toEqual(new Uint8Array([1]));
-  });
-
   it('starts in CLOSED state and executes successful calls', async () => {
     const breaker = new CircuitBreaker({
       name: 'test-service',
@@ -157,29 +137,4 @@ describe('CircuitBreaker Decorators', () => {
     expect(mockSheetsPort.findEquipment).not.toHaveBeenCalled();
   });
 
-  it('protects ObjectStoragePort through CircuitBreakerStoragePort', async () => {
-    const mockStoragePort: ObjectStoragePort = {
-      createDownloadUrl: vi.fn().mockResolvedValue('http://mock/download'),
-      createUploadUrl: vi.fn().mockResolvedValue('http://mock/upload'),
-      getObject: vi.fn().mockResolvedValue(null),
-      getObjectLimited: vi.fn().mockResolvedValue(null),
-      headObject: vi.fn().mockRejectedValue(new Error('s3 service unavailable')),
-      putObject: vi.fn().mockResolvedValue(undefined),
-      removeObject: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const breaker = new CircuitBreaker({
-      name: 'storage-test',
-      failureThreshold: 1,
-      resetTimeoutMs: 1000,
-    });
-
-    const decorated = new CircuitBreakerStoragePort(mockStoragePort, breaker);
-
-    await expect(decorated.headObject('test-key')).rejects.toThrow('s3 service unavailable');
-
-    // Now breaker is OPEN
-    await expect(decorated.getObject('test-key')).rejects.toThrow(CircuitBreakerOpenError);
-    expect(mockStoragePort.getObject).not.toHaveBeenCalled();
-  });
 });

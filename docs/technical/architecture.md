@@ -4,7 +4,7 @@
 
 Bull Dog Solution es un monorepo TypeScript con un frontend Vue y una API Express desplegables por separado. La API implementa un monolito modular: autenticación, órdenes, ejecución técnica, catálogos, sincronización, archivos y reportes comparten proceso y base de datos, pero están separados por módulos de dominio.
 
-PostgreSQL conserva el estado transaccional, incluyendo contactos de correo por cliente. Google Sheets sigue siendo la fuente externa de clientes y equipos. La IaC local configura Google Drive compartido para fotografías, firmas y PDFs, pero staging está eliminado/no desplegado y Drive aún requiere configuración y validación antes de volver a desplegar; el último inventario histórico observó S3. El adaptador de almacenamiento de objetos permanece en el código para compatibilidad y otros entornos. Gmail permite el envío manual del PDF cuando la API está configurada; no hay envío automático. Producción no tiene infraestructura propia y CDK todavía no inyecta credenciales Gmail.
+PostgreSQL conserva el estado transaccional, incluyendo contactos de correo por cliente. Google Sheets sigue siendo la fuente externa de clientes y equipos. Google Drive compartido es el único proveedor de fotografías, firmas y PDFs; la API gestiona cargas y descargas autenticadas. S3 y MinIO se eliminaron del código y del entorno local. Staging está eliminado/no desplegado. Gmail permite el envío manual del PDF cuando la API está configurada; no hay envío automático. Producción no tiene infraestructura propia y CDK todavía no inyecta credenciales Gmail.
 
 ## Diagrama de contexto
 
@@ -54,7 +54,7 @@ flowchart TB
     GmailAdapter --> Gmail[Google Gmail API]
 ```
 
-La topología CDK declarada usa ECS sobre EC2 con tareas en modo `bridge`: Nginx y Express comparten la tarea, y Nginx llega a la API mediante el enlace de contenedor `api` en el puerto 3000. El host publica HTTP por el puerto 80, sin TLS; esta infraestructura no está desplegada actualmente y no debe usarse con datos reales. Docker Compose ofrece MinIO como proveedor local de desarrollo, no como modelo del almacenamiento en staging. La topología detallada, su estado y las diferencias del proxy local están documentados en [Infraestructura y operación](./infrastructure-and-operations.md).
+La topología CDK declarada usa ECS sobre EC2 con tareas en modo `bridge`: Nginx y Express comparten la tarea, y Nginx llega a la API mediante el enlace de contenedor `api` en el puerto 3000. El host publica HTTP por el puerto 80, sin TLS; esta infraestructura no está desplegada actualmente y no debe usarse con datos reales. Docker Compose ofrece PostgreSQL para desarrollo local; las funciones de archivos requieren credenciales de Drive. La topología detallada, su estado y las diferencias del proxy local están documentados en [Infraestructura y operación](./infrastructure-and-operations.md).
 
 ### Despliegue y migraciones
 
@@ -90,7 +90,7 @@ flowchart TD
 - Los routers autentican, autorizan, validan y traducen HTTP; no deben contener reglas de negocio.
 - Los servicios validan estados, propiedad, concurrencia y efectos del dominio.
 - Prisma implementa persistencia y transacciones.
-- Los puertos aíslan SDKs y siguen segregación de interfaces (ISP): `SheetsPort`, `ObjectStoragePort`, `EquipmentCatalogPort`, `ClientCatalogPort`, `CatalogServicePort` y `ReportGeneratorPort`.
+- Los adaptadores aíslan SDKs y siguen segregación de interfaces (ISP): Google Sheets y Google Drive; los servicios conservan puertos de catálogo y generación de reportes.
 - La resiliencia de integración aplica el patrón Decorator con `CircuitBreaker` configurable y telemetría hacia Prometheus.
 - `packages/contracts` comparte esquemas Valibot y tipos de entrada entre API y web.
 

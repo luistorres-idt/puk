@@ -1,13 +1,11 @@
 import type {
   ExternalClientRecord,
   ExternalEquipmentRecord,
-  ObjectStoragePort,
   SheetsPort,
   TechnicalReportRowInput,
 } from '../integrations/ports.js';
 import { MetricsService } from '../observability/metrics.js';
 import { AppError } from '../shared/errors.js';
-import { ObjectTooLargeError } from '../integrations/object-storage/object-too-large.error.js';
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -73,7 +71,7 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (error) {
-      if (!(error instanceof ObjectTooLargeError)) this.onFailure();
+      this.onFailure();
       throw error;
     }
   }
@@ -154,47 +152,5 @@ export class CircuitBreakerSheetsPort implements SheetsPort {
     input: TechnicalReportRowInput,
   ): Promise<{ row: number; created: boolean }> {
     return this.breaker.execute(() => this.inner.syncTechnicalReportRow(input));
-  }
-}
-
-/**
- * Decorator pattern: wraps any ObjectStoragePort implementation with circuit breaker protection.
- */
-export class CircuitBreakerStoragePort implements ObjectStoragePort {
-  public constructor(
-    private readonly inner: ObjectStoragePort,
-    private readonly breaker: CircuitBreaker,
-  ) {}
-
-  public getCircuitBreaker(): CircuitBreaker {
-    return this.breaker;
-  }
-
-  public createUploadUrl(key: string, mimeType: string, expiresInSeconds: number): Promise<string> {
-    return this.breaker.execute(() => this.inner.createUploadUrl(key, mimeType, expiresInSeconds));
-  }
-
-  public createDownloadUrl(key: string, expiresInSeconds: number): Promise<string> {
-    return this.breaker.execute(() => this.inner.createDownloadUrl(key, expiresInSeconds));
-  }
-
-  public headObject(key: string): Promise<{ bytes: number; mimeType: string } | null> {
-    return this.breaker.execute(() => this.inner.headObject(key));
-  }
-
-  public getObject(key: string): Promise<Uint8Array | null> {
-    return this.breaker.execute(() => this.inner.getObject(key));
-  }
-
-  public getObjectLimited(key: string, maxBytes: number): Promise<Uint8Array | null> {
-    return this.breaker.execute(() => this.inner.getObjectLimited(key, maxBytes));
-  }
-
-  public putObject(key: string, body: Uint8Array, mimeType: string): Promise<void> {
-    return this.breaker.execute(() => this.inner.putObject(key, body, mimeType));
-  }
-
-  public removeObject(key: string): Promise<void> {
-    return this.breaker.execute(() => this.inner.removeObject(key));
   }
 }

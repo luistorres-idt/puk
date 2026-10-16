@@ -2,9 +2,11 @@
 
 **Estado:** implementación integrada y validada en desarrollo, incluida carga de evidencia y lectura privada de archivos; la infraestructura de staging ya configura Drive, pero AWS staging está eliminado y no hay despliegue actual. Producción no está desplegada. La validación local no equivale a una validación operativa en producción. La implementación se contrasta con [`spec.md`](../spec.md).
 
-**Alcance:** almacenar en un Drive compartido las nuevas fotografías de evidencia, firmas y reportes PDF de las órdenes de servicio, con acceso privado desde la aplicación. Los archivos actuales de S3 son exclusivamente de prueba: se pueden descartar y **no se migrarán** a Drive.
+> **Estado vigente:** Google Drive es el único proveedor de archivos de la aplicación. S3, MinIO, la selección de proveedor y las rutas prefirmadas fueron retirados del código. Las referencias a archivos remotos de prueba y mediciones anteriores son históricas; esta guía no autoriza eliminarlos.
 
-**Decisión vigente:** Google Drive compartido es el proveedor configurado para un futuro staging y el destino previsto para evidencias, firmas y reportes. El adaptador S3 permanece en el código como alternativa técnica/legado; no se provisiona en el stack de staging. AWS staging fue eliminado y no hay recursos actuales; antes de redeploy se deben recrear infraestructura y secretos. Ver [staging y despliegue](./staging-and-deployment.md).
+**Alcance:** almacenar en un Drive compartido las nuevas fotografías de evidencia, firmas y reportes PDF de las órdenes de servicio, con acceso privado desde la aplicación. No hay lectura dual ni migración automática de archivos de prueba históricos.
+
+**Decisión vigente:** Google Drive compartido es el único proveedor de evidencias, firmas y reportes. AWS staging fue eliminado y no hay recursos actuales; antes de redeploy se deben recrear infraestructura y secretos. Ver [staging y despliegue](./staging-and-deployment.md).
 
 > Las secciones siguientes conservan el diseño y los criterios originales del plan. La implementación
 > de aplicación (carga/lectura privada de evidencias y firmas, generación y almacenamiento de PDF en
@@ -23,13 +25,13 @@
 
 ## Estado actual y alcance técnico
 
-| Archivo     | Estado implementado                                                                                                                                                               | Consideración operativa                                                                              |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Fotografías | La web prepara JPEG y envía la carga autenticada a la API; la API valida, persiste y confirma la referencia privada en Drive. El adaptador S3 permanece en el código como legado. | Validar tipos de archivo, permisos y rendimiento de extremo a extremo en Drive antes del despliegue. |
-| Firmas      | La API recibe PNG autenticado, registra la referencia y mantiene una vista previa privada en Drive.                                                                               | Preservar la firma original conforme a la política de retención.                                     |
-| PDF         | El worker genera la versión del reporte y `report-storage.ts` la persiste en Drive.                                                                                               | Comprobar lectura de evidencias/firma, regeneración y descarga privada en Drive.                     |
+| Archivo     | Estado implementado                                                                                                           | Consideración operativa                                                                              |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Fotografías | La web prepara JPEG y envía la carga autenticada a la API; la API valida, persiste y confirma la referencia privada en Drive. | Validar tipos de archivo, permisos y rendimiento de extremo a extremo en Drive antes del despliegue. |
+| Firmas      | La API recibe PNG autenticado, registra la referencia y mantiene una vista previa privada en Drive.                           | Preservar la firma original conforme a la política de retención.                                     |
+| PDF         | El worker genera la versión del reporte y `report-storage.ts` la persiste en Drive.                                           | Comprobar lectura de evidencias/firma, regeneración y descarga privada en Drive.                     |
 
-El adaptador S3 implementa [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y utiliza URLs temporales; Drive usa IDs de archivo, referencias persistidas y autorización propia. El stack de staging selecciona Drive con `STORAGE_PROVIDER=drive`; el entorno desplegado no existe actualmente. Las referencias de evidencia, firma y reporte se guardan en PostgreSQL y no deben mezclarse entre proveedores. Los registros antiguos de prueba no requieren migración histórica a Drive.
+Históricamente, el almacenamiento S3 utilizaba URLs temporales; la implementación actual usa IDs de Drive, referencias persistidas y autorización propia. Las referencias de evidencia, firma y reporte se guardan en PostgreSQL. Los registros antiguos de prueba no requieren migración a Drive.
 
 ## Requisitos previos de Google Workspace
 
@@ -130,11 +132,11 @@ Google documenta cargas resumibles, descarga de archivos binarios mediante `file
 
 ### Alcance de los cambios en el repositorio
 
-- API y contratos: [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts), servicios de [`ejecución`](../apps/api/src/modules/execution/execution.service.ts) y [`reportes`](../apps/api/src/modules/reports/reports.service.ts), rutas y contratos de carga/descarga, composición en [`server.ts`](../apps/api/src/server.ts).
+- API y contratos actuales: servicios de [`ejecución`](../apps/api/src/modules/execution/execution.service.ts) y [`reportes`](../apps/api/src/modules/reports/reports.service.ts), rutas y contratos de carga/descarga, composición en [`server.ts`](../apps/api/src/server.ts).
 - Persistencia: modelos y migración Prisma para localizar los nuevos archivos y carpetas por sus identificadores de Drive y retirar las referencias de prueba a S3 sin dejar registros que aparenten archivos disponibles.
 - Web: captura de [evidencias](../apps/web/src/modules/service-execution/components/EvidenceCapture.vue), firma y vistas previas/descarga; mantener mensajes de progreso y errores.
-- Configuración y operación: entornos local, pruebas y staging; infraestructura CDK solo después de aprobar el mecanismo de autenticación y salida de red. MinIO/S3 puede seguir sirviendo a pruebas locales, pero no es una dependencia de lectura histórica en producción.
-- Mantenimiento: no ejecutar [`cleanup-orphaned-objects.ts`](../infra/scripts/cleanup-orphaned-objects.ts) como atajo para descartar S3. Hoy considera referencias de evidencia y firma, **pero no las de reportes PDF**; revisar su alcance antes de cualquier limpieza autorizada. No reutilizarlo para Drive sin rediseñar inventario, límites y borrado.
+- Configuración y operación: entornos local, pruebas y staging; configurar credenciales de Drive para probar funciones de archivos, y desplegar infraestructura CDK solo después de aprobar autenticación y salida de red.
+- Mantenimiento: no hay una herramienta local de limpieza de objetos S3. La retirada del código no elimina recursos ni archivos remotos; cualquier operación de ese tipo requiere autorización y verificación independientes.
 
 ## Secuencia de trabajo y criterios de salida
 
@@ -144,9 +146,9 @@ La prueba local confirmada cubre una carga de fotos y la ubicación de sus carpe
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. Piloto              | Medir tamaños esperados y capacidad libre del tenant; validar identidad, permisos, consistencia de serie/VIN, jerarquía de carpetas, carga, lectura y descarga con archivos de prueba. | TI confirma acceso al Drive compartido y se documentan resultados sin datos reales expuestos.                                                   |
 | 2. Adaptación          | Implementar referencias de Drive, creación/reutilización de ambas ramas de carpetas y pruebas de autorización para nuevas cargas y lecturas.                                           | Una orden de prueba con varias unidades funciona de extremo a extremo, con firma y PDF únicos en la carpeta común; no se depende de lectura S3. |
-| 3. Corte y observación | Identificar y descartar de forma controlada los registros y objetos de prueba de S3; activar Drive para nuevas órdenes y vigilar errores, latencia y cuota.                            | No quedan referencias de prueba que aparenten archivos disponibles y el flujo nuevo supera los criterios de aceptación.                         |
+| 3. Corte y observación | Revisar las referencias de archivos de prueba históricos antes de activar datos reales; vigilar errores, latencia y cuota de Drive.                                                    | No quedan referencias de prueba que aparenten archivos disponibles y el flujo nuevo supera los criterios de aceptación.                         |
 
-**Reversión:** antes de crear datos reales, se puede detener el corte y descartar los archivos de prueba. Después del corte, no se promete volver a S3 con un cambio de configuración: los archivos reales nuevos estarán en Drive y cualquier retorno requeriría un plan explícito para conservar su acceso.
+**Reversión:** antes de crear datos reales, se puede detener el corte y revisar los archivos de prueba. Después del corte no existe un cambio de configuración que restaure otro proveedor: los archivos reales nuevos estarán en Drive y cualquier migración futura requerirá un plan explícito para conservar su acceso.
 
 ## Verificación mínima
 
@@ -164,7 +166,7 @@ La prueba local confirmada cubre una carga de fotos y la ubicación de sus carpe
 1. ¿Qué edición y capacidad libre tiene el Workspace, y permite TI agregar la cuenta de servicio al Drive compartido?
 2. ¿Qué mecanismo de credenciales se aprueba para la API que corre en AWS y qué alcance OAuth mínimo funciona en el piloto?
 3. ¿Durante cuánto tiempo deben conservarse originales y versiones de PDF? La eliminación de firmas después de `READY` contradice la retención documentada y hoy impediría su vista previa y regeneración.
-4. ¿Quién confirma que todos los registros y objetos actuales de S3 son descartables y autoriza su eliminación, incluidas las versiones anteriores si existen?
+4. Si aún existen registros u objetos S3 históricos, ¿quién verifica su inventario y autoriza una eventual eliminación, incluidas versiones anteriores?
 
 El volumen comunicado es de aproximadamente 15 reportes semanales y, normalmente, una unidad con al menos 10 fotografías por reporte. Esto orienta el piloto, pero no reemplaza medir tamaños reales, crecimiento, lecturas y capacidad libre. El costo incremental de Drive depende del contrato y la capacidad agrupada del tenant; el esfuerzo de integración y operación también forma parte de la comparación con S3.
 
