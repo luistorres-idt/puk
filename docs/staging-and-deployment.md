@@ -22,7 +22,7 @@ El archivo `.github/workflows/ci.yml` define el flujo de validación automática
 
 Se deben mantener tres ambientes completamente aislados:
 
-- **Desarrollo (Local):** `docker-compose.yml` local con PostgreSQL, MinIO y catálogo simulado de Sheets.
+- **Desarrollo (Local):** `docker-compose.yml` local con PostgreSQL y catálogo simulado de Sheets. Las funciones de archivos usan Google Drive.
 - **Staging (pruebas):** no desplegado actualmente. La IaC describe ECS, PostgreSQL y Google Drive; verificar y desplegar explícitamente esa infraestructura antes de considerarla activa.
 - **Producción:** Infraestructura productiva con políticas de respaldo continuo y hoja principal de clientes y salidas.
 
@@ -34,7 +34,7 @@ Esta sección describe el objetivo general para producción. La arquitectura de 
 
 - **Frontend & API:** Despliegue bajo el mismo dominio público o mediante reverse proxy (ej. Nginx, Caddy o Cloudflare) mapeando `/api` directamente a la instancia de Express y `/` al frontend estático SPA/PWA. Esto elimina complejidades de cookies de terceros y simplifica CORS.
 - **Base de Datos:** PostgreSQL gestionado (ej. Neon, Supabase o AWS RDS PostgreSQL) con migración ejecutada mediante `infra/scripts/migrate.sh` antes de conmutar tráfico.
-- **Archivos de aplicación:** Google Drive compartido privado para evidencias, firmas y reportes. S3 permanece como adaptador alternativo en el código; el último inventario histórico observó S3 en staging y Drive es el proveedor seleccionado por la IaC local, pendiente de validación antes de redeploy.
+- **Archivos de aplicación:** Google Drive compartido privado para evidencias, firmas y reportes. S3 y MinIO fueron retirados del código y de la configuración local. El inventario histórico observó S3 en staging; staging está eliminado y ningún recurso remoto se modificó en este cambio.
 
 ## 4. Procedimiento de Migración y Despliegue
 
@@ -80,7 +80,7 @@ La configuración CDK y el inventario histórico de esta sección no representan
 | Acceso          | `http://18.222.63.51`, IPv4 efímera en esa fecha                  |
 | ECS             | Cluster `puk-staging`, servicio y tarea de API/web ejecutándose   |
 | Persistencia    | RDS separado del host; secreto runtime existente en esa fecha     |
-| Archivos        | Revisión histórica de tarea 14 con configuración S3               |
+| Archivos        | Google Drive es el único proveedor de archivos de la aplicación    |
 | Recursos de red | Sin ALB ni NAT Gateway en el inventario regional consultado       |
 
 En la consulta del 2026-10-05, el bucket `EvidenceBucket` seguía existiendo y la aplicación desplegada
@@ -183,9 +183,9 @@ IDs ficticios ni recursos de producción para superar esta condición.
    servicio, verificar lectura de las pestañas esperadas y lectura de metadatos de la unidad
    mediante un mecanismo seguro que no imprima claves ni contenido de documentos.
 2. Ejecutar `pnpm infra:test`, `pnpm --filter @puk/infra typecheck` y `pnpm infra:synth`.
-   Revisar `pnpm infra:diff` con acceso AWS autorizado. La eliminación de referencias S3 exige
-   preservar los exports de Foundation que todavía consume Application: primero actualizar el
-   consumidor, luego retirar exports o recursos de red sin uso. No desplegar Foundation primero
+   Revisar `pnpm infra:diff` con acceso AWS autorizado. Preservar los exports de Foundation que
+   todavía consume Application: primero actualizar el consumidor, luego retirar exports o recursos
+   de red sin uso. No desplegar Foundation primero
    si intenta eliminar un export aún consumido. No reemplazar RDS, VPC ni secretos por accidente.
 3. Con todos los campos de Drive presentes y requisitos cumplidos, desplegar **sólo Application**
    desde `infra/cdk`, sin actualizar dependencias automáticamente:
@@ -194,20 +194,19 @@ IDs ficticios ni recursos de producción para superar esta condición.
    pnpm exec cdk deploy PukStagingApplication --exclusively --app 'node --import tsx bin/puk.ts'
    ```
 
-   No empezar con `pnpm infra:deploy` / `deploy --all`: el diff actual de Foundation retira
-   exports S3 que todavía consume Application y modifica la política del bucket. Actualizar
-   Foundation después de liberar los imports y validar la aplicación.
+   No empezar con `pnpm infra:deploy` / `deploy --all` sin revisar el diff de Foundation y sus
+   consumidores. Actualizar Foundation después de liberar imports y validar la aplicación.
    Guardar una nueva versión del secreto no cambia contenedores existentes: para cambios sólo
-   de secretos, usar **Force new deployment** en el servicio del cluster ECS `puk-staging`;
-   para el primer cambio S3 → Drive, también debe actualizarse el task definition desde IaC.
+   de secretos, usar **Force new deployment** en el servicio del cluster ECS `puk-staging`; el task
+   definition requiere las credenciales de Drive para habilitar las funciones de archivos.
 
 4. Ejecutar el smoke test y una prueba funcional controlada de carga/lectura de un archivo
    sintético en Drive y escritura de una fila de pruebas en Sheets. `/health/ready` sólo comprueba
    PostgreSQL; un smoke test verde **no verifica** autenticación o permisos de Google.
 5. Sólo después de validar la transición, retirar permisos y recursos obsoletos que no tengan
-   consumidores. Antes de considerar el bucket vacío como candidato a limpieza, volver a comprobar
-   objetos, versiones y marcadores de borrado, sin paginación pendiente. Conservar datos, RDS y
-   secretos; no vaciar almacenamiento para eliminarlo. Cambiar `STORAGE_PROVIDER` o el ID de Drive no migra archivos existentes.
+   consumidores. Los recursos y archivos remotos no fueron inspeccionados ni eliminados como parte
+   de este cambio local. Conservar datos, RDS y secretos; eliminar la integración del código no
+   elimina archivos remotos existentes.
 
 El workflow `.github/workflows/deploy-staging.yml` se ejecuta después de CI exitoso sobre `main`
 sólo si `AWS_STAGING_READY` vale exactamente `true`. Su valor actual no se verificó ni modificó.

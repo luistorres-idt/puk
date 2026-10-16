@@ -27,7 +27,7 @@ Este documento consolida la arquitectura de seguridad, calidad y observabilidad 
   - Rate limiting central (`express-rate-limit`) con cuotas por IP y ventana de tiempo.
   - Validación de esquemas en todas las entradas mediante Valibot.
 - **Archivos privados:**
-  - Google Drive compartido es el proveedor seleccionado por la IaC de staging; S3/MinIO se conserva en el código para otros entornos.
+  - Google Drive compartido es el único proveedor de archivos de la aplicación. S3 y MinIO fueron retirados del código y de la configuración local.
   - En modo Drive, fotografías, firmas y PDFs se transfieren por rutas autenticadas de la API, que comprueba autorización y devuelve archivos privados sin cache. El adaptador de objetos utiliza URLs prefirmadas donde corresponde.
   - Verificación de metadatos (tipo MIME JPEG/PNG/WebP, tamaño máximo por imagen y dimensiones) antes de confirmar el registro.
 - **Redacción de Secretos en Logs:**
@@ -53,4 +53,4 @@ Este documento consolida la arquitectura de seguridad, calidad y observabilidad 
 
 - **Respaldos de Base de Datos:** Script automatizado `infra/scripts/backup.sh` con compresión `gzip`, suma de verificación SHA256 y rotación de 30 días.
 - **Restauración y Recuperación ante Desastres:** Script `infra/scripts/restore.sh` que valida la integridad del archivo y ejecuta la restauración en una sola transacción (`--single-transaction`).
-- **Limpieza de Objetos Abandonados:** existe `infra/scripts/cleanup-orphaned-objects.ts`; su alcance debe revisarse antes de usarlo (no asumir que cubre todas las referencias, en particular reportes Drive). No ejecutarlo para limpieza histórica sin autorización específica.
+- **Archivos remotos históricos:** no hay un script de limpieza S3 en el repositorio. La eliminación de su soporte local no borra recursos ni objetos remotos; cualquier operación externa requiere autorización y verificación independientes.

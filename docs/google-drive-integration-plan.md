@@ -2,9 +2,11 @@
 
 **Estado:** implementación integrada y validada en desarrollo, incluida carga de evidencia y lectura privada de archivos; la infraestructura de staging ya configura Drive, pero AWS staging está eliminado y no hay despliegue actual. Producción no está desplegada. La validación local no equivale a una validación operativa en producción. La implementación se contrasta con [`spec.md`](../spec.md).
 
+> **Actualización posterior:** S3 y MinIO se retiraron de la aplicación, sus rutas prefirmadas y dependencias. El resto de este documento conserva el plan/diseño histórico; las referencias a adaptadores, flags y scripts S3 no describen el código actual. No se eliminaron objetos ni recursos remotos.
+
 **Alcance:** almacenar en un Drive compartido las nuevas fotografías de evidencia, firmas y reportes PDF de las órdenes de servicio, con acceso privado desde la aplicación. Los archivos actuales de S3 son exclusivamente de prueba: se pueden descartar y **no se migrarán** a Drive.
 
-**Decisión vigente:** Google Drive compartido es el proveedor configurado para un futuro staging y el destino previsto para evidencias, firmas y reportes. El adaptador S3 permanece en el código como alternativa técnica/legado; no se provisiona en el stack de staging. AWS staging fue eliminado y no hay recursos actuales; antes de redeploy se deben recrear infraestructura y secretos. Ver [staging y despliegue](./staging-and-deployment.md).
+**Decisión vigente:** Google Drive compartido es el único proveedor de evidencias, firmas y reportes. AWS staging fue eliminado y no hay recursos actuales; antes de redeploy se deben recrear infraestructura y secretos. Ver [staging y despliegue](./staging-and-deployment.md).
 
 > Las secciones siguientes conservan el diseño y los criterios originales del plan. La implementación
 > de aplicación (carga/lectura privada de evidencias y firmas, generación y almacenamiento de PDF en
@@ -29,7 +31,7 @@
 | Firmas      | La API recibe PNG autenticado, registra la referencia y mantiene una vista previa privada en Drive.                                                                               | Preservar la firma original conforme a la política de retención.                                     |
 | PDF         | El worker genera la versión del reporte y `report-storage.ts` la persiste en Drive.                                                                                               | Comprobar lectura de evidencias/firma, regeneración y descarga privada en Drive.                     |
 
-El adaptador S3 implementa [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts) y utiliza URLs temporales; Drive usa IDs de archivo, referencias persistidas y autorización propia. El stack de staging selecciona Drive con `STORAGE_PROVIDER=drive`; el entorno desplegado no existe actualmente. Las referencias de evidencia, firma y reporte se guardan en PostgreSQL y no deben mezclarse entre proveedores. Los registros antiguos de prueba no requieren migración histórica a Drive.
+Históricamente, el almacenamiento S3 utilizaba URLs temporales; la implementación actual usa IDs de Drive, referencias persistidas y autorización propia. Las referencias de evidencia, firma y reporte se guardan en PostgreSQL. Los registros antiguos de prueba no requieren migración a Drive.
 
 ## Requisitos previos de Google Workspace
 
@@ -130,11 +132,11 @@ Google documenta cargas resumibles, descarga de archivos binarios mediante `file
 
 ### Alcance de los cambios en el repositorio
 
-- API y contratos: [`ObjectStoragePort`](../apps/api/src/integrations/ports.ts), servicios de [`ejecución`](../apps/api/src/modules/execution/execution.service.ts) y [`reportes`](../apps/api/src/modules/reports/reports.service.ts), rutas y contratos de carga/descarga, composición en [`server.ts`](../apps/api/src/server.ts).
+- API y contratos actuales: servicios de [`ejecución`](../apps/api/src/modules/execution/execution.service.ts) y [`reportes`](../apps/api/src/modules/reports/reports.service.ts), rutas y contratos de carga/descarga, composición en [`server.ts`](../apps/api/src/server.ts).
 - Persistencia: modelos y migración Prisma para localizar los nuevos archivos y carpetas por sus identificadores de Drive y retirar las referencias de prueba a S3 sin dejar registros que aparenten archivos disponibles.
 - Web: captura de [evidencias](../apps/web/src/modules/service-execution/components/EvidenceCapture.vue), firma y vistas previas/descarga; mantener mensajes de progreso y errores.
 - Configuración y operación: entornos local, pruebas y staging; infraestructura CDK solo después de aprobar el mecanismo de autenticación y salida de red. MinIO/S3 puede seguir sirviendo a pruebas locales, pero no es una dependencia de lectura histórica en producción.
-- Mantenimiento: no ejecutar [`cleanup-orphaned-objects.ts`](../infra/scripts/cleanup-orphaned-objects.ts) como atajo para descartar S3. Hoy considera referencias de evidencia y firma, **pero no las de reportes PDF**; revisar su alcance antes de cualquier limpieza autorizada. No reutilizarlo para Drive sin rediseñar inventario, límites y borrado.
+- Mantenimiento: no hay una herramienta local de limpieza de objetos S3. La retirada del código no elimina recursos ni archivos remotos; cualquier operación de ese tipo requiere autorización y verificación independientes.
 
 ## Secuencia de trabajo y criterios de salida
 

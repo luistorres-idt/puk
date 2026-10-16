@@ -1,7 +1,7 @@
 # Local container stack
 
-The root Compose file builds the API and web applications and starts PostgreSQL and MinIO. Development defaults are non-production values and can be overridden through a local `.env` file.
+The root Compose file builds the API and web applications and starts PostgreSQL. Development defaults are non-production values and can be overridden through a local `.env` file.
 
-The MinIO initialization container creates the configured private bucket. Named volumes preserve PostgreSQL and object data between restarts; `docker compose down` leaves both volumes intact.
+Named volumes preserve PostgreSQL data between restarts; `docker compose down` leaves the database volume intact. File features use Google Drive and require its credentials in the API environment.
 
-The pinned MinIO image is the final official container published by the archived community repository. It is restricted to local development and is not the selected staging provider: CDK configures Google Drive shared storage. AWS staging is currently deleted, and production has no deployment of record. S3 remains an optional code adapter, not a requirement for staging or production.
+S3 and MinIO have been removed from application code and local development. Google Drive is the sole file storage provider. AWS staging is currently deleted, and production has no deployment of record; no remote buckets or stored objects were modified by this cleanup.

@@ -5,6 +5,8 @@ pero AWS staging está eliminado y no hay despliegue actual. La validación en A
 respaldo/retención de producción siguen pendientes. Esta especificación conserva los requisitos y
 límites originales; no autoriza migrar ni borrar archivos históricos de S3.
 
+> **Implementación actualizada:** Google Drive es el único proveedor de archivos en el código; se quitaron S3, MinIO, la selección de proveedor y la carga prefirmada. Esta especificación conserva decisiones históricas sobre datos remotos: el cambio local no borra objetos ni recursos externos.
+
 ## Objetivo
 
 Guardar las nuevas evidencias fotográficas, firmas y versiones PDF de órdenes de servicio en un Drive compartido de la organización. La aplicación conserva el control de acceso: los navegadores no reciben credenciales de Google ni enlaces públicos de Drive.

@@ -6,6 +6,7 @@ Ruta de implementación del MVP basada en `SPECS.md`. Cada fase debe terminar co
 > producto implementa los flujos principales, pero AWS staging fue eliminado y no hay despliegue
 > actual; producción aún no tiene infraestructura propia. La IaC de staging selecciona Google Drive,
 > no S3, para evidencias, firmas y reportes. Ver [infraestructura y operación](./docs/technical/infrastructure-and-operations.md).
+> **Actualización posterior:** el código y Docker Compose ya no incluyen S3 ni MinIO; Drive es el único proveedor de archivos. Los hitos marcados reflejan el estado histórico cuando se completaron.
 
 ## 0. Definiciones y preparación
 
