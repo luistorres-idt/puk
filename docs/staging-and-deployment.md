@@ -63,7 +63,7 @@ No ejecutar este paso como si fuera un paso previo independiente del workflow CD
    ```bash
    TARGET_URL="http://<ipv4-publica-actual>" ./infra/scripts/smoke-test.sh
    ```
-   El script verifica automáticamente liveness (`/health/live`), readiness (`/health/ready`), métricas (`/metrics`) y documentación OpenAPI.
+   El script verifica liveness (`/health/live`), readiness (`/health/ready`) y documentación OpenAPI; también exige que `/metrics` y `/health/metrics` respondan `404` en la entrada pública. Las métricas siguen disponibles para observación interna desde la red del API.
 3. **Procedimiento de Rollback:** En caso de fallo crítico detectado en smoke tests o métricas, se revierte el contenedor a la versión de imagen previa y se restaura el respaldo de base de datos previo mediante `infra/scripts/restore.sh`.
 
 ## 5. Diseño de staging e inventario histórico
@@ -243,7 +243,8 @@ aws logs tail /puk/staging/api --region us-east-2 --since 30m
 TARGET_URL="http://<ipv4-publica-actual>" ./infra/scripts/smoke-test.sh
 ```
 
-El smoke test comprueba `/health/live`, `/health/ready`, `/metrics` y `/docs/`. Si falla una
+El smoke test comprueba `/health/live`, `/health/ready` y `/docs/`, y que `/metrics` y
+`/health/metrics` no estén expuestos públicamente. Si falla una
 migración, la API no inicia: conservar los logs y evaluar la migración antes de reintentar.
 El circuit breaker de ECS puede revertir la revisión de aplicación; no restaura automáticamente
 la base de datos. Para restauraciones, usar sólo un respaldo verificado y aprobación operativa.

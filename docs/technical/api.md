@@ -63,9 +63,10 @@ técnica compartida conserva sus restricciones de rol y designación.
 | PUT | `/api/v1/shared-technician-access/order` | Habilitar o retirar una orden ejecutable; `orders:manage` |
 | GET | `/api/v1/me/order-access` | Consultar modo individual/compartido de la sesión autenticada |
 
-El acceso compartido habilita como máximo una orden a la cuenta de taller designada; no cambia
-el técnico asignado a la orden. Las modificaciones requieren `expectedRevision` para evitar
-actualizaciones concurrentes obsoletas y se auditan.
+La cuenta de taller designada puede acceder a cualquier orden asignada en un estado ejecutable.
+La configuración conserva como máximo una referencia opcional de orden, pero no limita el acceso
+a ella ni cambia el técnico asignado. Las modificaciones requieren `expectedRevision` para evitar actualizaciones
+concurrentes obsoletas y se auditan.
 
 ### Órdenes, unidades y equipos
 

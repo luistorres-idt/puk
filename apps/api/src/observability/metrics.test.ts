@@ -1,5 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { MetricsService } from './metrics.js';
+import express from 'express';
+import request from 'supertest';
+import { MetricsService, metricsMiddleware } from './metrics.js';
 
 describe('MetricsService', () => {
   let metrics: MetricsService;
@@ -59,5 +61,29 @@ describe('MetricsService', () => {
     );
     expect(prom).toContain('auth_login_failures_total 1');
     expect(prom).toContain('# HELP');
+  });
+
+  it('preserves route parameters in Prometheus path labels', async () => {
+    metrics.recordHttpRequest('GET', '/api/v1/orders/123e4567-e89b-12d3-a456-426614174000', 200, 5);
+
+    const prom = await metrics.toPrometheusFormat();
+    expect(prom).toContain('method="GET",path="/api/v1/orders/:id",status="200"');
+    expect(prom).toContain('method="GET",path="/api/v1/orders/:id"}');
+    expect(prom).not.toContain('123e4567-e89b-12d3-a456-426614174000');
+  });
+
+  it('records matched route templates and never records raw unmatched paths', async () => {
+    const app = express();
+    app.use(metricsMiddleware);
+    app.get('/orders/:id', (_request, response) => response.sendStatus(200));
+    app.use((_request, response) => response.sendStatus(404));
+
+    await request(app).get('/orders/customer-private-slug').expect(200);
+    await request(app).get('/unknown/customer-private-slug').expect(404);
+
+    const snapshot = await metrics.getSnapshot();
+    expect(snapshot.httpRequestsTotal['GET:/orders/:id:200']).toBe(1);
+    expect(snapshot.httpRequestsTotal['GET:/unmatched:404']).toBe(1);
+    expect(JSON.stringify(snapshot)).not.toContain('customer-private-slug');
   });
 });
