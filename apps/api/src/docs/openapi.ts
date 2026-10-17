@@ -231,6 +231,7 @@ export const openApiDocument = {
       get: {
         operationId: 'getMetricsPrometheus',
         summary: 'Prometheus metrics exposition',
+        description: 'Internal API network only; blocked at the public web ingress.',
         responses: {
           '200': {
             description: 'Plain text Prometheus metrics',
@@ -243,6 +244,7 @@ export const openApiDocument = {
       get: {
         operationId: 'getMetricsJson',
         summary: 'JSON snapshot of application metrics',
+        description: 'Internal API network only; blocked at the public web ingress.',
         responses: {
           '200': {
             description: 'JSON metrics snapshot',

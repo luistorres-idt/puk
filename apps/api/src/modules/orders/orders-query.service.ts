@@ -29,6 +29,19 @@ const SHARED_LIST_STATUSES = [
   OrderStatus.REQUIRES_CORRECTION,
 ] as const;
 
+const orderListSelect = {
+  id: true,
+  folio: true,
+  status: true,
+  serviceType: true,
+  clientNameSnapshot: true,
+  scheduledAt: true,
+  failedAppointmentResolution: true,
+  technician: { select: { id: true, name: true } },
+  rescheduledOrder: { select: { id: true, folio: true, status: true } },
+  _count: { select: { units: true } },
+} satisfies Prisma.OrderSelect;
+
 export class OrdersQueryService {
   public constructor(private readonly prisma: PrismaClient) {}
 
@@ -134,11 +147,7 @@ export class OrdersQueryService {
         orderBy,
         skip,
         take: pageSize,
-        include: {
-          technician: { select: { id: true, name: true } },
-          rescheduledOrder: { select: { id: true, folio: true, status: true } },
-          _count: { select: { units: true } },
-        },
+        select: orderListSelect,
       }),
     ]);
 

@@ -40,6 +40,48 @@ describe('OrdersQueryService', () => {
     expect(prisma.order.findMany).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { role: 'ADMIN' as const, id: 'admin' },
+    { role: 'TECHNICIAN' as const, id: 'individual' },
+    { role: 'TECHNICIAN' as const, id: 'shared' },
+  ])('selects only list fields for $id', async (actor) => {
+    const { prisma, service } = createService();
+    prisma.sharedTechnicianAccess.findUnique.mockResolvedValue({
+      userId: 'shared',
+      orderId: null,
+    });
+    prisma.user.findUnique.mockResolvedValue({ technicianId: 'tech-1' });
+
+    await service.listOrders(actor, {});
+
+    expect(prisma.order.findMany).toHaveBeenCalledWith({
+      where:
+        actor.id === 'admin'
+          ? {}
+          : actor.id === 'shared'
+            ? {
+                technicianId: { not: null },
+                status: { in: ['ASSIGNED', 'IN_PROGRESS', 'REQUIRES_CORRECTION'] },
+              }
+            : { technicianId: 'tech-1' },
+      orderBy: { scheduledAt: 'desc' },
+      skip: 0,
+      take: 25,
+      select: {
+        id: true,
+        folio: true,
+        status: true,
+        serviceType: true,
+        clientNameSnapshot: true,
+        scheduledAt: true,
+        failedAppointmentResolution: true,
+        technician: { select: { id: true, name: true } },
+        rescheduledOrder: { select: { id: true, folio: true, status: true } },
+        _count: { select: { units: true } },
+      },
+    });
+  });
+
   it('restricts administrative detail before loading an order', async () => {
     const { prisma, service } = createService();
 

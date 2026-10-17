@@ -69,7 +69,7 @@ La administración de cuentas técnicas se compone desde `technicians/views/Tech
 `useTechnicalAccounts` concentra estado y mutaciones, mientras `SharedAccountPanel`,
 `TechnicalAccountTable` y `TechnicalAccountModals` mantienen la presentación separada. Las llamadas
 de usuarios y acceso compartido pertenecen a `modules/technical-accounts`.
-La vista de cuentas técnicas permite designar la cuenta de taller y habilitarle una orden ejecutable;
+La vista de cuentas técnicas permite designar la cuenta de taller y configurar una referencia de orden ejecutable;
 la administración de cuentas ADMIN está separada y no debe confundirse con ese control.
 La vista de ejecución carga `/orders/:id/execution`, cuyo contrato omite información administrativa,
 fiscal y de sincronización. Los técnicos navegan a esa vista también para consultar su historial.

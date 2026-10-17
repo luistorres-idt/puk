@@ -20,10 +20,11 @@ Dentro de `orders`, `reschedule-failed-appointment.ts` concentra la resolución 
 ### Acceso a órdenes técnicas
 
 La API aplica `assertOrderAccess` en operaciones de lectura y ejecución. El modo individual limita
-al técnico a sus propias órdenes. La cuenta TECHNICIAN compartida designada recibe acceso sólo a la
-orden explícitamente habilitada en `SharedTechnicianAccess`; habilitarla no cambia `Order.technicianId`
-y no abre el resto del catálogo. La configuración permite una sola orden, valida que sea ejecutable,
-usa `revision` para control optimista y registra cambios/revocaciones en auditoría.
+al técnico a sus propias órdenes. La cuenta TECHNICIAN compartida designada puede acceder a cualquier
+orden asignada en un estado ejecutable, aunque `SharedTechnicianAccess.orderId` sea nulo o indique otra
+orden. Ese campo conserva una única referencia opcional en la configuración, pero no restringe el acceso;
+no cambia `Order.technicianId`. La configuración valida esa referencia, usa `revision` para control
+optimista y registra cambios/revocaciones en auditoría.
 
 ## Ciclo de una orden
 

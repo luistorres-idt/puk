@@ -135,7 +135,11 @@ export class MetricsService {
     lines.push('# HELP http_requests_total Total number of HTTP requests processed');
     lines.push('# TYPE http_requests_total counter');
     for (const [key, count] of Object.entries(snapshot.httpRequestsTotal)) {
-      const [method, route, status] = key.split(':');
+      const firstSeparator = key.indexOf(':');
+      const lastSeparator = key.lastIndexOf(':');
+      const method = key.slice(0, firstSeparator);
+      const route = key.slice(firstSeparator + 1, lastSeparator);
+      const status = key.slice(lastSeparator + 1);
       lines.push(
         `http_requests_total{method="${method}",path="${route}",status="${status}"} ${count}`,
       );
@@ -144,7 +148,9 @@ export class MetricsService {
     lines.push('# HELP http_request_duration_seconds Average latency of HTTP requests in seconds');
     lines.push('# TYPE http_request_duration_seconds gauge');
     for (const [key, avg] of Object.entries(snapshot.httpRequestDurationSeconds)) {
-      const [method, route] = key.split(':');
+      const firstSeparator = key.indexOf(':');
+      const method = key.slice(0, firstSeparator);
+      const route = key.slice(firstSeparator + 1);
       lines.push(`http_request_duration_seconds{method="${method}",path="${route}"} ${avg}`);
     }
 
@@ -202,9 +208,11 @@ export function metricsMiddleware(request: Request, response: Response, next: Ne
   const start = Date.now();
   response.on('finish', () => {
     const duration = Date.now() - start;
+    // A matched route exposes only its template; unmatched URLs may contain user data.
+    const route = typeof request.route?.path === 'string' ? request.route.path : '/unmatched';
     metrics.recordHttpRequest(
       request.method,
-      request.baseUrl + request.path,
+      request.baseUrl + route,
       response.statusCode,
       duration,
     );

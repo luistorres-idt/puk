@@ -90,7 +90,7 @@ El diagrama muestra la topología definida por CDK: subredes públicas, privadas
 
 1. El navegador accede a `http://<ipv4-publica>` directamente.
 2. El security group acepta sólo HTTP TCP/80 desde Internet; no expone SSH ni el puerto 3000.
-3. Nginx sirve el frontend Vue, aplica fallback a `index.html` y enruta `/api/`, `/health/`, `/docs/` y `/metrics` al API por la red interna de contenedores.
+3. Nginx sirve el frontend Vue, aplica fallback a `index.html` y enruta `/api/`, los checks de `/health/` y `/docs/` al API. Bloquea `/metrics` y `/health/metrics` en la entrada pública.
 4. Express procesa API, salud, métricas y OpenAPI.
 
 Esta entrada no usa TLS: las credenciales y cookies de sesión viajan sin cifrado. La IPv4 es efímera y puede cambiar al detener/reemplazar el host; no existe un dominio estable ni CDN, protección de borde, terminación TLS o caché CDN. No debe usarse para datos reales ni producción.
@@ -223,8 +223,8 @@ Esta sección describe los checks y logs definidos por la IaC y la aplicación; 
 - El host usa ECS-optimized Amazon Linux 2023 x86_64, no expone SSH y acepta HTTP público sólo por TCP/80. No tiene Elastic IP; si la instancia se reemplaza, cambia su IPv4 pública de acceso y egreso.
 - `GET /health/live` comprueba que el proceso de API responda.
 - `GET /health/ready` comprueba sólo conectividad con PostgreSQL y se usa en el smoke test. No prueba Sheets, autenticación de Google ni permisos de Drive; validarlos por separado.
-- `GET /metrics` expone métricas Prometheus, pero el CDK no crea un scraper, alarmas ni dashboards.
-- `GET /health/metrics` ofrece un snapshot JSON desde la aplicación.
+- `GET /metrics` expone métricas Prometheus sólo en la red interna del API; el CDK no crea un scraper, alarmas ni dashboards.
+- `GET /health/metrics` ofrece un snapshot JSON sólo en la red interna del API.
 - Los logs de migración, API y web se envían a grupos separados de CloudWatch Logs con retención de un mes.
 - Cada petición recibe un `requestId`; puede propagarse uno válido desde el cliente.
 
@@ -296,8 +296,8 @@ TARGET_URL="http://<ipv4-publica-actual>" ./infra/scripts/smoke-test.sh
 Consultar siempre la IPv4 actual con el procedimiento de la guía de staging. Antes de desplegar
 Drive, verificar lectura de las pestañas de pruebas y metadatos de la unidad compartida con las
 cuentas de servicio mediante un mecanismo seguro. Después, ejecutar smoke y pruebas funcionales
-con archivos y filas sintéticos. El smoke sólo comprueba `/health/live`, `/health/ready`,
-`/metrics` y `/docs/`; no certifica la integración con Google.
+con archivos y filas sintéticos. El smoke comprueba `/health/live`, `/health/ready`,
+`/docs/` y el bloqueo público de ambas rutas de métricas; no certifica la integración con Google.
 
 Si falla la migración, la API no inicia; conservar logs y evaluar la migración antes de reintentar.
 El circuit breaker de ECS puede revertir la aplicación, pero no restaura automáticamente RDS.

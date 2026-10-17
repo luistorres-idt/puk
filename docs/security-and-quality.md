@@ -17,7 +17,7 @@ Este documento consolida la arquitectura de seguridad, calidad y observabilidad 
 
 - **Tokens Asimétricos:** Emisión de JWT de corta duración (15 minutos) firmados con par de claves asimétricas RSA/EdDSA.
 - **Refresh Tokens Rotativos:** Los refresh tokens se almacenan en PostgreSQL con hash y revocación inmediata. Se transmiten mediante cookie HTTP-only con atributos `Secure`, `SameSite=Strict` y ruta restringida (`/api/v1/auth`).
-- **Acceso técnico:** La política individual limita al técnico a órdenes de su asignación. Una cuenta TECHNICIAN designada para taller puede acceder solo a la única orden explícitamente habilitada; esa concesión no cambia el técnico asignado y se audita.
+- **Acceso técnico:** La política individual limita al técnico a órdenes de su asignación. La cuenta TECHNICIAN designada para taller puede acceder a cualquier orden asignada en un estado ejecutable, sin cambiar el técnico asignado. La configuración de la cuenta y de la referencia opcional de orden se audita.
 
 ## 3. Protección de Datos y Almacenamiento
 
