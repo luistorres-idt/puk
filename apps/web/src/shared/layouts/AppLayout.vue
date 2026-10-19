@@ -46,9 +46,9 @@ async function logout(): Promise<void> {
       <div
         class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6"
       >
-        <div class="flex items-center gap-2 sm:gap-3">
+        <div class="flex min-w-0 items-center gap-2 sm:gap-3">
           <router-link
-            class="flex items-center gap-2 text-sm font-bold tracking-tight text-blue-900 uppercase hover:text-blue-700"
+            class="flex min-w-0 items-center gap-2 text-sm font-bold tracking-tight text-blue-900 uppercase hover:text-blue-700"
             :to="session.user?.orderAccessMode === 'SHARED' ? '/work-order' : '/'"
             @click="isMobileMenuOpen = false"
           >
@@ -77,7 +77,7 @@ async function logout(): Promise<void> {
           </n-tag>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex shrink-0 items-center gap-2">
           <ThemeToggle />
           <OnboardingHelp />
 
