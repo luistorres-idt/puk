@@ -139,7 +139,7 @@ function canProceed(): boolean {
 
 <template>
   <app-layout>
-    <div class="max-w-3xl mx-auto space-y-6">
+    <div data-tour-page="wizard" :data-tour-step="currentStep" class="max-w-3xl mx-auto space-y-6">
       <div class="flex items-center justify-between gap-3">
         <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Nueva Orden de Servicio</h1>
         <NButton secondary size="small" @click="router.push('/orders')">Cancelar</NButton>
@@ -191,7 +191,7 @@ function canProceed(): boolean {
       </NAlert>
 
       <!-- Step 1: Cliente -->
-      <NCard v-if="currentStep === 1" title="Paso 1: Selección de Cliente">
+      <NCard v-if="currentStep === 1" data-tour="wizard-step" title="Paso 1: Selección de Cliente">
         <div class="space-y-4">
           <p class="text-xs text-slate-500">
             Selecciona el cliente para el cual se registrará esta orden de servicio. Podrás agregar
@@ -202,7 +202,11 @@ function canProceed(): boolean {
       </NCard>
 
       <!-- Step 2: Servicios, Unidades y Equipos -->
-      <NCard v-if="currentStep === 2" title="Paso 2: Servicios, Unidades y Equipos">
+      <NCard
+        v-if="currentStep === 2"
+        data-tour="wizard-step"
+        title="Paso 2: Servicios, Unidades y Equipos"
+      >
         <div class="space-y-6">
           <!-- Service selector banner -->
           <div class="p-4 border rounded-lg bg-slate-50 space-y-4">
@@ -608,7 +612,7 @@ function canProceed(): boolean {
       </NCard>
 
       <!-- Step 3: Programación -->
-      <NCard v-if="currentStep === 3" title="Paso 3: Detalles de la Cita">
+      <NCard v-if="currentStep === 3" data-tour="wizard-step" title="Paso 3: Detalles de la Cita">
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1"
@@ -649,7 +653,7 @@ function canProceed(): boolean {
       </NCard>
 
       <!-- Step 4: Técnico -->
-      <NCard v-if="currentStep === 4" title="Paso 4: Técnico Asignado">
+      <NCard v-if="currentStep === 4" data-tour="wizard-step" title="Paso 4: Técnico Asignado">
         <TechnicianSelect
           v-model="technicianId"
           :disabled="loading"
@@ -658,7 +662,11 @@ function canProceed(): boolean {
       </NCard>
 
       <!-- Step 5: Resumen y Confirmación -->
-      <NCard v-if="currentStep === 5" title="Paso 5: Resumen y Confirmación">
+      <NCard
+        v-if="currentStep === 5"
+        data-tour="wizard-step"
+        title="Paso 5: Resumen y Confirmación"
+      >
         <div class="space-y-3 text-sm">
           <div class="p-3 bg-slate-50 rounded">
             <span class="text-slate-500 block">Cliente:</span>
@@ -736,7 +744,7 @@ function canProceed(): boolean {
       </NCard>
 
       <!-- Navigation buttons -->
-      <div class="flex items-center justify-between gap-3 pt-2">
+      <div data-tour="wizard-navigation" class="flex items-center justify-between gap-3 pt-2">
         <NButton
           :disabled="currentStep === 1 || loading"
           class="min-w-24 sm:min-w-28"

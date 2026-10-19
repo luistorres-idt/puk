@@ -4,6 +4,7 @@ import { NButton, NTag } from 'naive-ui';
 import { useRoute, useRouter } from 'vue-router';
 import { useOnline } from '@vueuse/core';
 import ThemeToggle from '@/shared/components/ThemeToggle.vue';
+import { OnboardingHelp } from '@/modules/onboarding';
 import { useSessionStore } from '@/stores/session';
 
 const session = useSessionStore();
@@ -78,10 +79,12 @@ async function logout(): Promise<void> {
 
         <div class="flex items-center gap-2">
           <ThemeToggle />
+          <OnboardingHelp />
 
           <!-- Desktop Navigation -->
           <nav
             v-if="session.user"
+            data-tour="navigation"
             aria-label="Navegación principal"
             class="hidden items-center gap-2 2xl:flex lg:gap-4"
           >
@@ -170,6 +173,7 @@ async function logout(): Promise<void> {
             type="button"
             class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 2xl:hidden focus:outline-none"
             :aria-expanded="isMobileMenuOpen"
+            data-tour="navigation"
             aria-label="Menú principal"
             @click="isMobileMenuOpen = !isMobileMenuOpen"
           >
