@@ -67,7 +67,12 @@ function statusTagType(status: string) {
 
 <template>
   <app-layout>
-    <div class="space-y-6">
+    <div
+      data-tour-page="home"
+      :data-tour-ready="!ordersQuery.isPending.value"
+      :data-tour-error="ordersQuery.isError.value"
+      class="space-y-6"
+    >
       <!-- Welcome Header -->
       <div
         class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm"
@@ -91,12 +96,15 @@ function statusTagType(status: string) {
         <div class="flex flex-wrap items-center gap-2 sm:gap-3">
           <n-button
             v-if="session.user?.role === 'ADMIN'"
+            data-tour="new-order"
             type="primary"
             @click="router.push('/orders/new')"
           >
             + Nueva Orden
           </n-button>
-          <n-button secondary @click="router.push('/orders')"> Ver Todas las Órdenes </n-button>
+          <n-button data-tour="order-list" secondary @click="router.push('/orders')">
+            Ver Todas las Órdenes
+          </n-button>
         </div>
       </div>
 

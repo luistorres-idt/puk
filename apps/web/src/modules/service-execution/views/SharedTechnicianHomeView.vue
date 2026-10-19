@@ -81,7 +81,12 @@ function formatDate(dateStr: string): string {
 
 <template>
   <app-layout>
-    <div class="mx-auto max-w-4xl space-y-6">
+    <div
+      data-tour-page="shared"
+      :data-tour-ready="!loading"
+      :data-tour-error="!!error"
+      class="mx-auto max-w-4xl space-y-6"
+    >
       <!-- Minimalist Header -->
       <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-slate-900">Tablero de Órdenes</h1>
@@ -91,7 +96,7 @@ function formatDate(dateStr: string): string {
       </div>
 
       <!-- Filters -->
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-12">
+      <div data-tour="order-filters" class="grid grid-cols-1 gap-3 sm:grid-cols-12">
         <div class="sm:col-span-8">
           <n-input
             v-model:value="search"
@@ -127,7 +132,7 @@ function formatDate(dateStr: string): string {
       </div>
 
       <!-- Orders List Grid -->
-      <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div v-else data-tour="order-list" class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <n-card
           v-for="order in orders"
           :key="order.id"

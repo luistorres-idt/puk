@@ -277,9 +277,19 @@ onMounted(() => {
 
 <template>
   <app-layout>
-    <div class="max-w-4xl mx-auto space-y-6 pb-12">
+    <div
+      data-tour-page="execution"
+      :data-tour-ready="!!order && !loading"
+      :data-tour-error="!!error"
+      :data-tour-status="order?.status"
+      :data-tour-unit="activeUnitTab"
+      class="max-w-4xl mx-auto space-y-6 pb-12"
+    >
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div
+        data-tour="execution-status"
+        class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+      >
         <div>
           <div class="flex items-center gap-2">
             <NButton secondary size="small" @click="router.push('/orders')">← Volver</NButton>
@@ -340,7 +350,7 @@ onMounted(() => {
       <NSpin :show="loading">
         <div v-if="order" class="space-y-6">
           <!-- Units Execution Stepper / Tabs -->
-          <NCard title="Trabajo por unidad" class="shadow-sm">
+          <NCard data-tour="execution-units" title="Trabajo por unidad" class="shadow-sm">
             <p class="text-xs text-slate-500 mb-3">
               Selecciona una unidad. El tipo de servicio indicado corresponde exclusivamente a esa
               unidad.
@@ -385,7 +395,7 @@ onMounted(() => {
                   </div>
 
                   <!-- Equipments Verification Section -->
-                  <div class="space-y-3">
+                  <div data-tour="execution-equipment" class="space-y-3">
                     <h3 class="text-sm font-bold text-slate-800">
                       Verificación de Equipos Asignados
                     </h3>
@@ -456,7 +466,10 @@ onMounted(() => {
                   </div>
 
                   <!-- Checklist Section -->
-                  <div class="space-y-4 pt-4 border-t border-slate-200">
+                  <div
+                    data-tour="execution-checklist"
+                    class="space-y-4 pt-4 border-t border-slate-200"
+                  >
                     <h3 class="text-sm font-bold text-slate-800">
                       Checklist de Recepción del Vehículo
                     </h3>
@@ -510,7 +523,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Evidence upload for unit -->
-                    <div class="pt-4 border-t border-slate-200">
+                    <div data-tour="execution-evidence" class="pt-4 border-t border-slate-200">
                       <EvidenceCapture
                         :order-id="orderId"
                         :unit-id="unit.id"
@@ -536,6 +549,7 @@ onMounted(() => {
                 order.status === 'REQUIRES_CORRECTION' ||
                 order.signature)
             "
+            data-tour="execution-signature"
             :order-id="orderId"
             :existing-signature="order.signature"
             :disabled="order.status !== 'IN_PROGRESS' && order.status !== 'REQUIRES_CORRECTION'"
@@ -570,7 +584,11 @@ onMounted(() => {
           </NCard>
 
           <!-- Completeness & Closure Section -->
-          <NCard title="Cierre y Finalización del Servicio" class="shadow-sm">
+          <NCard
+            data-tour="execution-close"
+            title="Cierre y Finalización del Servicio"
+            class="shadow-sm"
+          >
             <div class="space-y-4">
               <div
                 v-if="completeness"

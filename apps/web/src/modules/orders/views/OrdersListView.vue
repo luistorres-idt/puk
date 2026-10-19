@@ -123,7 +123,12 @@ const serviceTypeOptions = [
 
 <template>
   <app-layout>
-    <div class="space-y-6">
+    <div
+      data-tour-page="orders"
+      :data-tour-ready="!ordersQuery.isPending.value"
+      :data-tour-error="ordersQuery.isError.value"
+      class="space-y-6"
+    >
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 class="text-2xl font-bold text-slate-800">
@@ -140,6 +145,7 @@ const serviceTypeOptions = [
 
         <n-button
           v-if="session.user?.role === 'ADMIN'"
+          data-tour="new-order"
           type="primary"
           @click="router.push('/orders/new')"
         >
@@ -148,7 +154,7 @@ const serviceTypeOptions = [
       </div>
 
       <!-- Filters Card -->
-      <n-card class="shadow-sm">
+      <n-card data-tour="order-filters" class="shadow-sm">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">Buscar</label>
@@ -214,7 +220,7 @@ const serviceTypeOptions = [
       </div>
 
       <!-- Orders Cards Grid -->
-      <div v-else class="grid grid-cols-1 gap-4">
+      <div v-else data-tour="order-list" class="grid grid-cols-1 gap-4">
         <n-card
           v-for="order in orders"
           :key="order.id"

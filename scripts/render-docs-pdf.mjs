@@ -192,7 +192,7 @@ async function buildPoppinsCss() {
 async function renderUserManual(sourceText, documentOutput, rootOutput) {
   const frontmatter = sourceText.match(/^---\n([\s\S]*?)\n---\s*\n/);
   let markdown = frontmatter ? sourceText.slice(frontmatter[0].length) : sourceText;
-  const styleMatch = frontmatter?.[1].match(/^ {2}style: \|\n((?:[ \t]+.*\n?)*)/m);
+  const styleMatch = frontmatter?.[1].match(/^(?: {2})?style: \|\n((?:[ \t]+.*\n?)*)/m);
   const authoredStyles = styleMatch
     ? styleMatch[1].split('\n').map((line) => line.replace(/^ {2}/, '')).join('\n')
     : '';

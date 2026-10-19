@@ -38,10 +38,7 @@ import {
   useOrderReportVersionsQuery,
   useSyncStatusQuery,
 } from '../queries';
-import {
-  releasePrivateFileUrl,
-  requireCorrection,
-} from '@/modules/service-execution';
+import { releasePrivateFileUrl, requireCorrection } from '@/modules/service-execution';
 import { getDisabledScheduleTimes, isPastCalendarDate } from '../reschedule-schedule.js';
 
 const route = useRoute();
@@ -336,7 +333,13 @@ const statusColor = orderStatusTagType;
 
 <template>
   <app-layout>
-    <div class="space-y-6">
+    <div
+      data-tour-page="detail"
+      :data-tour-ready="!!order && !orderQuery.isPending.value"
+      :data-tour-error="orderQuery.isError.value"
+      :data-tour-status="order?.status"
+      class="space-y-6"
+    >
       <!-- Loading State -->
       <div v-if="orderQuery.isPending.value" class="grid min-h-64 place-items-center">
         <n-spin size="large" />
@@ -349,7 +352,10 @@ const statusColor = orderStatusTagType;
 
       <template v-else-if="order">
         <!-- Header & Action Bar -->
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div
+          data-tour="order-information"
+          class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        >
           <div class="flex flex-wrap items-center gap-3">
             <n-button secondary @click="router.push('/orders')">← Volver</n-button>
             <h1 class="text-2xl font-bold text-slate-800">
@@ -461,6 +467,7 @@ const statusColor = orderStatusTagType;
 
         <order-report-card
           v-if="order.status === 'COMPLETED'"
+          data-tour="order-report"
           :order-id="orderId"
           :report="report"
           :report-versions="reportVersions"
@@ -612,7 +619,7 @@ const statusColor = orderStatusTagType;
         </n-card>
 
         <!-- Tabs Section -->
-        <n-tabs v-model:value="activeTab" type="line" animated>
+        <n-tabs v-model:value="activeTab" data-tour="order-tabs" type="line" animated>
           <!-- Tab 1: Unidades y Equipos -->
           <n-tab-pane name="units" tab="Unidades y Equipos">
             <order-units-tab
