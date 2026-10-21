@@ -337,6 +337,41 @@ describe('useOrderCreationSubmission', () => {
     expect(sessionStorage.getItem('puk:orders:create:pending')).toBeNull();
   });
 
+  it('creates and retries orders when Web Crypto subtle.digest is unavailable', async () => {
+    const originalCrypto = globalThis.crypto;
+    vi.stubGlobal('crypto', {
+      getRandomValues: originalCrypto.getRandomValues.bind(originalCrypto),
+      randomUUID: undefined,
+      subtle: undefined,
+    });
+
+    try {
+      const createOrder = vi
+        .fn<(payload: CreateOrder, key: string) => Promise<{ id: string }>>()
+        .mockRejectedValueOnce(new Error('Response lost'))
+        .mockResolvedValueOnce({ id: 'ORDER-1' });
+      const state = createState();
+
+      await useOrderCreationSubmission(state, dependencies(createOrder)).handleFinish();
+
+      const pending = JSON.parse(
+        sessionStorage.getItem('puk:orders:create:pending') ?? 'null',
+      ) as { payloadHash: string; key: string } | null;
+      expect(pending?.payloadHash).toMatch(/^[0-9a-f]+-[0-9a-f]{8}$/i);
+      expect(pending?.key).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+
+      await useOrderCreationSubmission(state, dependencies(createOrder)).handleFinish();
+
+      expect(createOrder).toHaveBeenCalledTimes(2);
+      expect(createOrder.mock.calls[1]?.[1]).toBe(pending?.key);
+      expect(sessionStorage.getItem('puk:orders:create:pending')).toBeNull();
+    } finally {
+      vi.stubGlobal('crypto', originalCrypto);
+    }
+  });
+
   it('blocks an oversized service address without sending or changing the draft', async () => {
     const state = createState();
     state.serviceAddress.value = '  ' + 'a'.repeat(501) + '  ';

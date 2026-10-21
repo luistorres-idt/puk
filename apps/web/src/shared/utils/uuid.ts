@@ -9,18 +9,26 @@
 export function generateUuid(): string {
   if (typeof crypto !== 'undefined') {
     if (typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
+      try {
+        return crypto.randomUUID();
+      } catch {
+        // Try the broadly available random-values API below.
+      }
     }
     if (typeof crypto.getRandomValues === 'function') {
-      const buffer = new Uint8Array(16);
-      crypto.getRandomValues(buffer);
-      // Set version 4: bits 12-15 of time_hi_and_version to 0100
-      buffer[6] = ((buffer[6] ?? 0) & 0x0f) | 0x40;
-      // Set variant: bits 6-7 of clock_seq_hi_and_reserved to 10
-      buffer[8] = ((buffer[8] ?? 0) & 0x3f) | 0x80;
+      try {
+        const buffer = new Uint8Array(16);
+        crypto.getRandomValues(buffer);
+        // Set version 4: bits 12-15 of time_hi_and_version to 0100
+        buffer[6] = ((buffer[6] ?? 0) & 0x0f) | 0x40;
+        // Set variant: bits 6-7 of clock_seq_hi_and_reserved to 10
+        buffer[8] = ((buffer[8] ?? 0) & 0x3f) | 0x80;
 
-      const hex = Array.from(buffer, (b) => b.toString(16).padStart(2, '0')).join('');
-      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        const hex = Array.from(buffer, (b) => b.toString(16).padStart(2, '0')).join('');
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+      } catch {
+        // Fall through to pseudo-random generation if the API is unavailable at runtime.
+      }
     }
   }
 

@@ -45,6 +45,21 @@ describe('generateUuid', () => {
     expect(v.is(uuidSchema, result)).toBe(true);
   });
 
+  it('falls back when both Web Crypto UUID APIs throw', () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues: () => {
+        throw new Error('Unavailable');
+      },
+      randomUUID: () => {
+        throw new Error('Unavailable');
+      },
+    });
+
+    const result = generateUuid();
+    expect(result).toMatch(UUID_V4_REGEX);
+    expect(v.is(uuidSchema, result)).toBe(true);
+  });
+
   it('falls back to Math.random when crypto is undefined', () => {
     // Total fallback simulation: no crypto object
     Object.defineProperty(globalThis, 'crypto', {
