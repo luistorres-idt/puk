@@ -23,7 +23,7 @@ if (existsSync(envPath)) {
     'AWS_ACCOUNT_ID',
     'AWS_REGION',
     'STAGING_RUNTIME_SECRET_ID',
-    'GITHUB_DEPLOY_ROLE_NAME',
+    'AWS_DEPLOY_ROLE_NAME',
   ]) {
     if (env[key] === undefined && localConfig[key] !== undefined) {
       env[key] = localConfig[key];
