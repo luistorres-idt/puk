@@ -18,7 +18,7 @@ if (!region || !/^[a-z]{2}(?:-[a-z0-9]+)+-\d$/.test(region)) {
 const environment = { account, region };
 const runtimeSecretId = process.env['STAGING_RUNTIME_SECRET_ID']?.trim() || 'puk/staging/runtime';
 const githubDeployRoleName =
-  process.env['GITHUB_DEPLOY_ROLE_NAME']?.trim() || 'puk-staging-github-deploy';
+  process.env['AWS_DEPLOY_ROLE_NAME']?.trim() || 'puk-staging-github-deploy';
 
 const foundation = new PukStagingFoundationStack(app, 'PukStagingFoundation', {
   env: environment,

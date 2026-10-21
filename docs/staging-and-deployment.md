@@ -51,7 +51,7 @@ La cuenta de destino se cambia con `AWS_ACCOUNT_ID`, no editando el código CDK.
 | `AWS_ACCOUNT_ID`            | ID de 12 dígitos de la cuenta AWS destino.                    |
 | `AWS_REGION`                | Región donde se crean los stacks (por ejemplo, `us-east-2`).  |
 | `STAGING_RUNTIME_SECRET_ID` | Nombre/ARN del secreto runtime de staging en Secrets Manager. |
-| `GITHUB_DEPLOY_ROLE_NAME`   | Nombre del rol que GitHub Actions asumirá mediante OIDC.      |
+| `AWS_DEPLOY_ROLE_NAME`      | Nombre del rol que GitHub Actions asumirá mediante OIDC.      |
 
 Para desarrollo local, copiar `.env.example` a `.env` y completar esos valores. Los comandos `pnpm infra:bootstrap`, `pnpm infra:configure`, `pnpm infra:deploy`, `pnpm infra:diff`, `pnpm infra:foundation` e `pnpm infra:synth` cargan desde `.env` únicamente esos cuatro identificadores, sin reemplazar valores ya exportados en la shell. No guardar claves AWS, claves de Google ni otros secretos en `.env`; las credenciales AWS deben venir de un perfil/SSO local autorizado.
 
@@ -62,7 +62,7 @@ Antes de desplegar en una cuenta nueva, seguir este orden:
 3. Preparar el secreto runtime con `pnpm infra:configure` usando el procedimiento seguro de Google descrito abajo. No usar `--overwrite` sobre un secreto existente sin entender que rota claves JWT y contraseñas de seed.
 4. Revisar `pnpm infra:diff` antes de crear o modificar recursos. Para el primer despliegue, confirmar en el diff qué recursos y permisos se van a crear; para cuentas o ambientes ya existentes, conservar los recursos/exports con consumidores.
 5. Desplegar con `pnpm infra:deploy` sólo después de verificar la configuración de Google, el diff y los requisitos de datos. El despliegue crea también el proveedor OIDC y el rol de GitHub.
-6. En la configuración del repositorio de GitHub, definir las mismas cuatro variables como **Repository Variables**. El workflow forma el ARN del rol con `AWS_ACCOUNT_ID` y `GITHUB_DEPLOY_ROLE_NAME`; no requiere claves AWS estáticas. El trust policy CDK está restringido al repositorio y a `main`, así que un cambio de propietario, repositorio o rama requiere revisar esa política en `infra/cdk/lib/foundation-stack.ts`.
+6. En la configuración del repositorio de GitHub, definir las mismas cuatro variables como **Repository Variables**. El workflow forma el ARN del rol con `AWS_ACCOUNT_ID` y `AWS_DEPLOY_ROLE_NAME`; no requiere claves AWS estáticas. El trust policy CDK está restringido al repositorio y a `main`, así que un cambio de propietario, repositorio o rama requiere revisar esa política en `infra/cdk/lib/foundation-stack.ts`.
 7. Ejecutar y aprobar el smoke test antes de habilitar `AWS_STAGING_READY=true`. Esta variable es el interruptor independiente que permite despliegues automáticos tras CI; dejarla desactivada durante la configuración inicial.
 
 `.env` es local e ignorado por Git; no se comparte con GitHub Actions. En CI, los cuatro identificadores de AWS se configuran por separado como **Repository Variables**. Los secretos de aplicación se mantienen en Secrets Manager, no en las variables del workflow.
