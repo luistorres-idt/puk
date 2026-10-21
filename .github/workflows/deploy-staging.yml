@@ -20,6 +20,11 @@ jobs:
     name: Deploy AWS staging
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      GITHUB_DEPLOY_ROLE_NAME: ${{ vars.GITHUB_DEPLOY_ROLE_NAME }}
+      STAGING_RUNTIME_SECRET_ID: ${{ vars.STAGING_RUNTIME_SECRET_ID }}
 
     steps:
       - name: Checkout validated revision
@@ -40,11 +45,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate AWS deployment variables
+        run: |
+          for variable in AWS_ACCOUNT_ID AWS_REGION GITHUB_DEPLOY_ROLE_NAME STAGING_RUNTIME_SECRET_ID; do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::$variable repository variable must be configured"
+              exit 1
+            fi
+          done
+          if [[ ! "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::AWS_ACCOUNT_ID must be a 12-digit account ID"
+            exit 1
+          fi
+
       - name: Authenticate to AWS with OIDC
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::075566976700:role/puk-staging-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.GITHUB_DEPLOY_ROLE_NAME }}
 
       - name: Deploy CDK stacks
         run: pnpm infra:deploy

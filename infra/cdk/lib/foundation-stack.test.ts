@@ -4,17 +4,25 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { PukStagingFoundationStack } from './foundation-stack.js';
 
-function foundationTemplate(context: Record<string, string> = {}): Template {
+function foundationTemplate(
+  context: Record<string, string> = {},
+  options: { githubDeployRoleName?: string; runtimeSecretId?: string } = {},
+): Template {
   const app = new App({ context });
   const stack = new PukStagingFoundationStack(app, 'TestFoundation', {
     env: { account: '123456789012', region: 'us-east-2' },
+    ...options,
   });
   return Template.fromStack(stack);
 }
 
-function assertDeployTrust(template: Template, providerArn: unknown): void {
+function assertDeployTrust(
+  template: Template,
+  providerArn: unknown,
+  roleName = 'puk-staging-github-deploy',
+): void {
   template.hasResourceProperties('AWS::IAM::Role', {
-    RoleName: 'puk-staging-github-deploy',
+    RoleName: roleName,
     AssumeRolePolicyDocument: Match.objectEquals({
       Version: '2012-10-17',
       Statement: [
@@ -85,4 +93,19 @@ test('imports the explicit GitHub OIDC provider ARN without creating a provider'
   const template = foundationTemplate({ githubOidcProviderArn });
   template.resourceCountIs('AWS::IAM::OIDCProvider', 0);
   assertDeployTrust(template, githubOidcProviderArn);
+});
+
+test('uses environment-specific runtime secret and GitHub deploy role names', () => {
+  const template = foundationTemplate(
+    {},
+    {
+      githubDeployRoleName: 'puk-preview-github-deploy',
+      runtimeSecretId: 'puk/preview/runtime',
+    },
+  );
+  const [providerId] = Object.keys(template.findResources('AWS::IAM::OIDCProvider'));
+
+  assert.ok(providerId);
+  template.hasOutput('RuntimeSecretName', { Value: 'puk/preview/runtime' });
+  assertDeployTrust(template, { 'Fn::GetAtt': [providerId, 'Arn'] }, 'puk-preview-github-deploy');
 });

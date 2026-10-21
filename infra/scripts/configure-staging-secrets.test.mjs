@@ -19,7 +19,7 @@ const leak = process.env.FIXTURE_MARKER;
 if (args[0] === 'sts') {
   if (mode === 'identity-error') { console.error(leak); process.exit(1); }
   if (mode === 'identity-json') { console.log(leak); process.exit(0); }
-  console.log(JSON.stringify({Account: mode === 'wrong-account' ? '000000000000' : '075566976700'}));
+  console.log(JSON.stringify({Account: mode === 'wrong-account' ? '000000000000' : process.env.AWS_ACCOUNT_ID}));
 } else if (args[1] === 'describe-secret') {
   if (mode === 'exists') { console.log('{}'); process.exit(0); }
   if (mode === 'denied') { console.error('AccessDeniedException ' + leak); process.exit(1); }
@@ -52,6 +52,8 @@ function runFixture(
     missingClientAdminEmail = false,
     noAws = false,
     region = 'us-east-2',
+    accountId = '123456789012',
+    missingAccountId = false,
   } = {},
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'puk-secret-test-'));
@@ -75,6 +77,8 @@ function runFixture(
     HOME: directory,
     TMPDIR: directory,
     AWS_REGION: region,
+    AWS_ACCOUNT_ID: accountId,
+    STAGING_RUNTIME_SECRET_ID: 'fixture/puk/runtime',
     MODE: mode,
     FIXTURE_MARKER: marker,
     CALLS: callsPath,
@@ -102,6 +106,7 @@ function runFixture(
   if (missingInput) delete env.GOOGLE_SPREADSHEET_ID;
   if (missingDriveInput) delete env.GOOGLE_DRIVE_SHARED_DRIVE_ID;
   if (missingClientAdminEmail) delete env.SEED_CLIENT_ADMIN_EMAIL;
+  if (missingAccountId) delete env.AWS_ACCOUNT_ID;
   const result = spawnSync(process.execPath, [...nodeArgs, script, ...args], {
     env,
     encoding: 'utf8',
@@ -147,6 +152,7 @@ test('creates a missing runtime secret with generated JWT and random seed, using
     ['get-caller-identity', 'describe-secret', 'create-secret'],
   );
   assert.ok(calls[2].includes('--name'));
+  assert.ok(calls[2].includes('fixture/puk/runtime'));
   assert.equal(capture.payload.SEED_ADMIN_PASSWORD.length, 32);
   assert.equal(capture.payload.SEED_CLIENT_ADMIN_PASSWORD.length, 32);
   assert.ok(
@@ -222,7 +228,9 @@ for (const options of [
   { missingClientAdminEmail: true },
   { noAws: true },
   { args: ['--invalid'] },
-  { region: 'us-west-2' },
+  { region: 'invalid-region' },
+  { accountId: 'not-an-account-id' },
+  { missingAccountId: true },
 ]) {
   test(`rejects invalid configuration ${Object.keys(options)[0]}`, (t) => {
     const { result, capture } = runFixture(t, options);

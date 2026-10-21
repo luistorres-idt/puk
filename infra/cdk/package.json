@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bootstrap": "cdk bootstrap aws://075566976700/us-east-2 --app 'node --import tsx bin/puk.ts'",
+    "bootstrap": "cdk bootstrap --app 'node --import tsx bin/puk.ts'",
     "cdk:app": "node --import tsx bin/puk.ts",
     "deploy": "cdk deploy --all --app 'node --import tsx bin/puk.ts' --require-approval never",
     "deploy:foundation": "cdk deploy PukStagingFoundation --app 'node --import tsx bin/puk.ts' --require-approval never",

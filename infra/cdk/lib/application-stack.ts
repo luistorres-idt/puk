@@ -205,6 +205,18 @@ export class PukStagingApplicationStack extends Stack {
           foundation.runtimeSecret,
           'GOOGLE_DRIVE_SHARED_DRIVE_ID',
         ),
+        GOOGLE_GMAIL_CLIENT_EMAIL: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'GOOGLE_GMAIL_CLIENT_EMAIL',
+        ),
+        GOOGLE_GMAIL_PRIVATE_KEY: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'GOOGLE_GMAIL_PRIVATE_KEY',
+        ),
+        GOOGLE_GMAIL_SENDER_EMAIL: ecs.Secret.fromSecretsManager(
+          foundation.runtimeSecret,
+          'GOOGLE_GMAIL_SENDER_EMAIL',
+        ),
         GOOGLE_SPREADSHEET_ID: ecs.Secret.fromSecretsManager(
           foundation.runtimeSecret,
           'GOOGLE_SPREADSHEET_ID',

@@ -7,10 +7,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-const accountId = '075566976700';
-const region = process.env.AWS_REGION ?? 'us-east-2';
-const secretId = 'puk/staging/runtime';
-// Load environment files externally with Node's native --env-file option.
+// The repository-level infra command loads non-secret deployment settings from .env.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     configure();
@@ -24,7 +21,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 }
 
 function configure() {
-  if (region !== 'us-east-2' || process.argv.slice(2).some((arg) => arg !== '--overwrite')) {
+  const accountId = process.env.AWS_ACCOUNT_ID?.trim();
+  const region = process.env.AWS_REGION?.trim() || 'us-east-2';
+  const secretId = process.env.STAGING_RUNTIME_SECRET_ID?.trim() || 'puk/staging/runtime';
+  if (
+    !accountId ||
+    !/^\d{12}$/.test(accountId) ||
+    !/^[a-z]{2}(?:-[a-z0-9]+)+-\d$/.test(region) ||
+    process.argv.slice(2).some((arg) => arg !== '--overwrite')
+  ) {
     throw new Error('Invalid staging configuration arguments.');
   }
   const missing = [];
@@ -49,7 +54,7 @@ function configure() {
     process.exit(1);
   }
 
-  const identity = runAws(['sts', 'get-caller-identity', '--output', 'json']);
+  const identity = runAws(['sts', 'get-caller-identity', '--region', region, '--output', 'json']);
   const caller = JSON.parse(identity.stdout);
   if (caller.Account !== accountId) {
     console.error('The active AWS account is not the staging account.');
