@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
@@ -30,6 +31,8 @@ const VERIFICATION_LABELS: Record<string, string> = {
   DISCREPANCY_REPORTED: 'Discrepancia reportada',
   PENDING: 'Pendiente',
 };
+
+const IDTBN_WORDMARK = readFileSync(new URL('./idtbn-wordmark.png', import.meta.url));
 
 export interface ReportOrder {
   folio: string;
@@ -158,26 +161,7 @@ export class ServiceOrderReportGenerator implements ReportGeneratorPort {
   }
 
   private drawBrand(document: PDFKit.PDFDocument): void {
-    document.roundedRect(46, 42, 52, 52, 10).fill('#1e3a8a');
-    document.circle(72, 68, 17).lineWidth(4).strokeColor('#60a5fa').stroke();
-    document
-      .moveTo(62, 68)
-      .lineTo(69, 75)
-      .lineTo(83, 59)
-      .lineWidth(4)
-      .lineCap('round')
-      .strokeColor('#ffffff')
-      .stroke();
-    document
-      .font('Helvetica-Bold')
-      .fontSize(18)
-      .fillColor('#0f172a')
-      .text('BULL DOG SOLUTION', 112, 55);
-    document
-      .font('Helvetica')
-      .fontSize(9)
-      .fillColor('#64748b')
-      .text('Servicios técnicos vehiculares', 112, 78);
+    document.image(IDTBN_WORDMARK, 46, 46, { width: 150 });
   }
 
   private async drawCover(

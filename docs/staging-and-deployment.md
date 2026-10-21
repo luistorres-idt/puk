@@ -42,6 +42,31 @@ Esta sección describe el objetivo general para producción. La arquitectura de 
 
 El despliegue automatizado de staging se ejecuta desde `.github/workflows/deploy-staging.yml` después de un CI exitoso sobre `main`, únicamente cuando `AWS_STAGING_READY` vale exactamente `true`. El workflow hace checkout del `head_sha` validado, ejecuta `pnpm infra:deploy` y luego el smoke test. Al 2026-10-09 staging está eliminado/no desplegado; el workflow no implica que haya recursos activos.
 
+#### Primera configuración o cambio de cuenta AWS
+
+La cuenta de destino se cambia con `AWS_ACCOUNT_ID`, no editando el código CDK. Los cuatro valores siguientes son identificadores de configuración, no credenciales:
+
+| Variable                    | Uso                                                           |
+| --------------------------- | ------------------------------------------------------------- |
+| `AWS_ACCOUNT_ID`            | ID de 12 dígitos de la cuenta AWS destino.                    |
+| `AWS_REGION`                | Región donde se crean los stacks (por ejemplo, `us-east-2`).  |
+| `STAGING_RUNTIME_SECRET_ID` | Nombre/ARN del secreto runtime de staging en Secrets Manager. |
+| `GITHUB_DEPLOY_ROLE_NAME`   | Nombre del rol que GitHub Actions asumirá mediante OIDC.      |
+
+Para desarrollo local, copiar `.env.example` a `.env` y completar esos valores. Los comandos `pnpm infra:bootstrap`, `pnpm infra:configure`, `pnpm infra:deploy`, `pnpm infra:diff`, `pnpm infra:foundation` e `pnpm infra:synth` cargan desde `.env` únicamente esos cuatro identificadores, sin reemplazar valores ya exportados en la shell. No guardar claves AWS, claves de Google ni otros secretos en `.env`; las credenciales AWS deben venir de un perfil/SSO local autorizado.
+
+Antes de desplegar en una cuenta nueva, seguir este orden:
+
+1. Autenticarse localmente en la cuenta destino con el mecanismo aprobado y comprobar que el perfil apunta a la cuenta indicada en `AWS_ACCOUNT_ID`.
+2. Ejecutar `pnpm infra:bootstrap` para preparar CDK en esa cuenta y región.
+3. Preparar el secreto runtime con `pnpm infra:configure` usando el procedimiento seguro de Google descrito abajo. No usar `--overwrite` sobre un secreto existente sin entender que rota claves JWT y contraseñas de seed.
+4. Revisar `pnpm infra:diff` antes de crear o modificar recursos. Para el primer despliegue, confirmar en el diff qué recursos y permisos se van a crear; para cuentas o ambientes ya existentes, conservar los recursos/exports con consumidores.
+5. Desplegar con `pnpm infra:deploy` sólo después de verificar la configuración de Google, el diff y los requisitos de datos. El despliegue crea también el proveedor OIDC y el rol de GitHub.
+6. En la configuración del repositorio de GitHub, definir las mismas cuatro variables como **Repository Variables**. El workflow forma el ARN del rol con `AWS_ACCOUNT_ID` y `GITHUB_DEPLOY_ROLE_NAME`; no requiere claves AWS estáticas. El trust policy CDK está restringido al repositorio y a `main`, así que un cambio de propietario, repositorio o rama requiere revisar esa política en `infra/cdk/lib/foundation-stack.ts`.
+7. Ejecutar y aprobar el smoke test antes de habilitar `AWS_STAGING_READY=true`. Esta variable es el interruptor independiente que permite despliegues automáticos tras CI; dejarla desactivada durante la configuración inicial.
+
+`.env` es local e ignorado por Git; no se comparte con GitHub Actions. En CI, los cuatro identificadores de AWS se configuran por separado como **Repository Variables**. Los secretos de aplicación se mantienen en Secrets Manager, no en las variables del workflow.
+
 CDK construye las imágenes Docker. Las imágenes de API y migración generan el cliente Prisma durante el build con un `DATABASE_URL` ficticio de compilación; esa generación no conecta a la base de datos de producción ni ejecuta migraciones. Al iniciar una nueva tarea ECS, el contenedor `migration` ejecuta `prisma migrate deploy` y después `prisma/seed.ts`. La API depende de que ese contenedor termine con éxito (`SUCCESS`), y web espera la salud de la API.
 
 `prisma migrate deploy` aplica las migraciones pendientes que estén versionadas en `prisma/migrations/`; editar únicamente `prisma/schema.prisma` no cambia la base de datos. Crear y revisar la migración, incluirla en el commit y desplegarla junto con la versión de la aplicación. El contenedor de migración se ejecuta al iniciar una tarea nueva; si no hay migraciones pendientes, un despliegue de sólo código no modifica el esquema.
@@ -72,7 +97,7 @@ La configuración CDK y el inventario histórico de esta sección no representan
 
 ### Último inventario histórico conocido (2026-10-05; no representa el estado actual)
 
-| Componente      | Última observación histórica (2026-10-05)                          |
+| Componente      | Última observación histórica (2026-10-05)                         |
 | --------------- | ----------------------------------------------------------------- |
 | Cuenta y región | `075566976700`, `us-east-2`                                       |
 | CloudFormation  | Los stacks estaban activos en la fecha indicada; ahora eliminados |
@@ -80,7 +105,7 @@ La configuración CDK y el inventario histórico de esta sección no representan
 | Acceso          | `http://18.222.63.51`, IPv4 efímera en esa fecha                  |
 | ECS             | Cluster `puk-staging`, servicio y tarea de API/web ejecutándose   |
 | Persistencia    | RDS separado del host; secreto runtime existente en esa fecha     |
-| Archivos        | Google Drive es el único proveedor de archivos de la aplicación    |
+| Archivos        | Google Drive es el único proveedor de archivos de la aplicación   |
 | Recursos de red | Sin ALB ni NAT Gateway en el inventario regional consultado       |
 
 En la consulta del 2026-10-05, el bucket `EvidenceBucket` seguía existiendo y la aplicación desplegada
@@ -115,11 +140,12 @@ el repositorio. La configuración local de referencia está en `.env.example`; n
 | `GOOGLE_GMAIL_PRIVATE_KEY`          | `private_key` del mismo JSON de la cuenta Gmail              |
 | `GOOGLE_GMAIL_SENDER_EMAIL`         | Buzón Workspace suplantado y encabezado `From`               |
 
-**Gmail no está conectado al task definition de CDK.** `ApplicationStack` inyecta credenciales
-de Sheets y Drive, pero no `GOOGLE_GMAIL_*`; configurar esos valores en Secrets Manager no basta
-para habilitar envíos en AWS. Se requiere primero mapearlos en IaC/tarea y desplegar. En ejecución
-local, el envío manual funciona con las tres variables, delegación de dominio autorizada y API
-reiniciada al cambiar el remitente. El superadministrador de Workspace debe autorizar el scope
+`ApplicationStack` inyecta `GOOGLE_GMAIL_CLIENT_EMAIL`, `GOOGLE_GMAIL_PRIVATE_KEY` y
+`GOOGLE_GMAIL_SENDER_EMAIL` desde el secreto runtime hacia el contenedor de API. Guardar o rotar
+valores en Secrets Manager no actualiza tareas ya iniciadas: desplegar el cambio de task definition
+(o forzar una nueva implementación del servicio) para que ECS cree tareas que lean los valores
+actuales. En ejecución local, el envío manual requiere las tres variables, delegación de dominio
+autorizada y reiniciar la API al cambiar el remitente. El superadministrador de Workspace debe autorizar el scope
 `https://www.googleapis.com/auth/gmail.send`. La identidad de Gmail separada es recomendada, pero
 la aplicación permite reutilizar la identidad de Sheets/Drive. El envío es manual; no se envía al
 completar órdenes automáticamente. Ver [entrega de reportes por correo](./report-email-delivery.md).

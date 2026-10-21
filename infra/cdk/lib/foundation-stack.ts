@@ -11,13 +11,18 @@ import {
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 
+interface PukStagingFoundationStackProps extends StackProps {
+  githubDeployRoleName?: string;
+  runtimeSecretId?: string;
+}
+
 export class PukStagingFoundationStack extends Stack {
   public readonly applicationSecurityGroup: ec2.SecurityGroup;
   public readonly database: rds.DatabaseInstance;
   public readonly runtimeSecret: secretsmanager.ISecret;
   public readonly vpc: ec2.Vpc;
 
-  public constructor(scope: Construct, id: string, props: StackProps) {
+  public constructor(scope: Construct, id: string, props: PukStagingFoundationStackProps) {
     super(scope, id, props);
 
     this.vpc = new ec2.Vpc(this, 'Vpc', {
@@ -83,7 +88,7 @@ export class PukStagingFoundationStack extends Stack {
     this.runtimeSecret = secretsmanager.Secret.fromSecretNameV2(
       this,
       'RuntimeSecret',
-      'puk/staging/runtime',
+      props.runtimeSecretId ?? 'puk/staging/runtime',
     );
 
     const githubOidcProviderArn = this.node.tryGetContext('githubOidcProviderArn') as
@@ -110,7 +115,7 @@ export class PukStagingFoundationStack extends Stack {
         },
       }),
       description: 'CDK deployments from the puk main branch',
-      roleName: 'puk-staging-github-deploy',
+      roleName: props.githubDeployRoleName ?? 'puk-staging-github-deploy',
     });
     deployRole.addToPolicy(
       new iam.PolicyStatement({
