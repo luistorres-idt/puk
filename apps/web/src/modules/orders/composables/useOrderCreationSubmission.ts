@@ -17,6 +17,8 @@ import type {
 } from '@puk/contracts';
 import { toEquipmentAssignment } from '../../external-catalogs/index.js';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
+import { computeBlobDigest } from '@/shared/utils/digest.js';
+import { generateUuid } from '@/shared/utils/uuid.js';
 import { createOrder } from '../api.js';
 import type { ConfiguredUnitItem } from './configured-order-unit.js';
 
@@ -55,7 +57,7 @@ function readPendingOrderCreation(): { payloadHash: string; key: string } | null
       'key' in parsed &&
       typeof parsed.key === 'string' &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.key) &&
-      /^[0-9a-f]{64}$/.test(parsed.payloadHash)
+      /^(?:[0-9a-f]{64}|[0-9a-f]+-[0-9a-f]{8})$/i.test(parsed.payloadHash)
     ) {
       return { payloadHash: parsed.payloadHash, key: parsed.key };
     }
@@ -76,8 +78,7 @@ function writePendingOrderCreation(value: { payloadHash: string; key: string } |
 
 async function hashOrderCreationPayload(payload: CreateOrder): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return computeBlobDigest(new Blob([bytes]));
 }
 
 function buildUnitsPayload(configuredUnits: ConfiguredUnitItem[]) {
@@ -187,7 +188,7 @@ export function useOrderCreationSubmission(
       };
       const payloadHash = await hashOrderCreationPayload(payload);
       if (!pendingCreation || pendingCreation.payloadHash !== payloadHash) {
-        pendingCreation = { payloadHash, key: crypto.randomUUID() };
+        pendingCreation = { payloadHash, key: generateUuid() };
         writePendingOrderCreation(pendingCreation);
       }
       const idempotencyKey = pendingCreation.key;

@@ -21,6 +21,7 @@ import type {
   UpdateUnit,
 } from '@puk/contracts';
 import { api, type ApiResponse } from '../../shared/http/client.js';
+import { generateUuid } from '../../shared/utils/uuid.js';
 
 export type { ApiResponse };
 
@@ -78,7 +79,7 @@ export async function fetchOrderExecutionById(id: string): Promise<OrderExecutio
 
 export async function createOrder(
   data: CreateOrder,
-  idempotencyKey: string = crypto.randomUUID(),
+  idempotencyKey: string = generateUuid(),
 ): Promise<OrderDetail> {
   const response = await api.post<ApiResponse<OrderDetail>>('/orders', data, {
     headers: { 'Idempotency-Key': idempotencyKey },
