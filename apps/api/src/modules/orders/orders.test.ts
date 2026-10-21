@@ -1121,7 +1121,7 @@ describe('OrdersService & SyncService', () => {
 
     expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        include: expect.objectContaining({
+        select: expect.objectContaining({
           rescheduledOrder: { select: { id: true, folio: true, status: true } },
         }),
       }),
