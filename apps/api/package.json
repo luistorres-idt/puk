@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./dist/app.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && cp src/modules/reports/idtbn-wordmark.png dist/modules/reports/idtbn-wordmark.png",
     "dev": "tsx watch src/server.ts",
     "docs:build": "pnpm build && node dist/docs/build-openapi.js",
     "docs:validate": "pnpm build && node dist/docs/validate-openapi.js",
