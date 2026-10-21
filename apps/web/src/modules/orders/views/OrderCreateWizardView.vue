@@ -145,18 +145,20 @@ function canProceed(): boolean {
         <NButton secondary size="small" @click="router.push('/orders')">Cancelar</NButton>
       </div>
 
-      <!-- Desktop Steps Indicator (sm and above) -->
-      <NSteps :current="currentStep" class="hidden sm:flex py-4">
-        <NStep title="Cliente" description="Selección del cliente" />
-        <NStep title="Servicios y Unidades" description="Configuración por bloques" />
-        <NStep title="Programación" description="Fecha y ubicación" />
-        <NStep title="Técnico" description="Asignación inicial" />
-        <NStep title="Revisión" description="Crear orden" />
-      </NSteps>
+      <!-- Desktop Steps Indicator (md and above) -->
+      <div class="hidden md:block">
+        <NSteps :current="currentStep" class="py-4">
+          <NStep title="Cliente" description="Selección del cliente" />
+          <NStep title="Servicios y Unidades" description="Configuración por bloques" />
+          <NStep title="Programación" description="Fecha y ubicación" />
+          <NStep title="Técnico" description="Asignación inicial" />
+          <NStep title="Revisión" description="Crear orden" />
+        </NSteps>
+      </div>
 
-      <!-- Mobile Compact Step Progress (below sm) -->
+      <!-- Mobile Compact Step Progress (below md) -->
       <div
-        class="flex sm:hidden flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs"
+        class="flex md:hidden flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs"
       >
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-blue-900 uppercase tracking-wider">
