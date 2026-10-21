@@ -234,7 +234,12 @@ export class InventoryAssignmentPreparer {
     equipmentInputs: readonly AssignEquipment[],
   ): Promise<void> {
     const keys = equipmentInputs.map((equipment) => equipment.externalKey);
-    const duplicateKey = keys.find((key, index) => keys.indexOf(key) !== index);
+    const seenKeys = new Set<string>();
+    const duplicateKey = keys.find((key) => {
+      if (seenKeys.has(key)) return true;
+      seenKeys.add(key);
+      return false;
+    });
     if (duplicateKey)
       throw new AppError(
         409,
@@ -242,33 +247,52 @@ export class InventoryAssignmentPreparer {
         `El equipo ${duplicateKey} está duplicado en la orden`,
       );
 
-    for (const externalKey of keys) {
-      if (orderId) {
-        const existingInOrder = await this.prisma.orderEquipment.findFirst({
-          where: { externalKey, orderUnit: { orderId } },
-        });
-        if (existingInOrder)
-          throw new AppError(
-            409,
-            'DUPLICATE_EQUIPMENT',
-            `El equipo ${externalKey} ya se encuentra asignado a esta orden`,
-          );
-      }
+    if (equipmentInputs.length === 0) return;
 
-      const input = equipmentInputs.find((equipment) => equipment.externalKey === externalKey)!;
-      const activeConflict = await this.prisma.orderEquipment.findFirst({
-        where: {
-          ...(isDatabaseEquipment(input) && input.imei
-            ? { OR: [{ externalKey }, { imei: input.imei }] }
-            : { externalKey }),
-          activeAssignment: true,
-        },
-      });
+    const activeIdentityFilters = equipmentInputs.map((input) =>
+      isDatabaseEquipment(input) && input.imei
+        ? { OR: [{ externalKey: input.externalKey }, { imei: input.imei }] }
+        : { externalKey: input.externalKey },
+    );
+    const conflicts = await this.prisma.orderEquipment.findMany({
+      where: {
+        OR: [
+          ...(orderId
+            ? [{ externalKey: { in: keys }, orderUnit: { orderId } }]
+            : []),
+          { activeAssignment: true, OR: activeIdentityFilters },
+        ],
+      },
+      select: {
+        externalKey: true,
+        imei: true,
+        activeAssignment: true,
+        orderUnit: { select: { orderId: true } },
+      },
+    });
+
+    for (const input of equipmentInputs) {
+      const existingInOrder = conflicts.some(
+        (conflict) => conflict.externalKey === input.externalKey && conflict.orderUnit.orderId === orderId,
+      );
+      if (orderId && existingInOrder)
+        throw new AppError(
+          409,
+          'DUPLICATE_EQUIPMENT',
+          `El equipo ${input.externalKey} ya se encuentra asignado a esta orden`,
+        );
+
+      const activeConflict = conflicts.some(
+        (conflict) =>
+          conflict.activeAssignment &&
+          (conflict.externalKey === input.externalKey ||
+            (isDatabaseEquipment(input) && Boolean(input.imei) && conflict.imei === input.imei)),
+      );
       if (activeConflict)
         throw new AppError(
           409,
           'EQUIPMENT_ALREADY_ASSIGNED',
-          `El equipo ${externalKey} ya se encuentra asignado a otra orden activa`,
+          `El equipo ${input.externalKey} ya se encuentra asignado a otra orden activa`,
         );
     }
   }

@@ -238,6 +238,57 @@ describe('releaseOrderInventory', () => {
 });
 
 describe('InventoryAssignmentPreparer', () => {
+  it('checks a batch of equipment identities with one query, including DB IMEI aliases', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const preparer = new InventoryAssignmentPreparer(
+      { orderEquipment: { findMany } } as never,
+      undefined,
+    );
+
+    await preparer.assertEquipmentAvailable(null, [
+      { source: 'DB', inventoryEquipmentId: 'inventory-1', externalKey: 'DB:inventory-1', imei: '123456789012345' },
+      { source: 'SHEETS', externalKey: 'sheet:2', imei: '987654321098765' },
+    ]);
+
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          {
+            activeAssignment: true,
+            OR: [
+              { OR: [{ externalKey: 'DB:inventory-1' }, { imei: '123456789012345' }] },
+              { externalKey: 'sheet:2' },
+            ],
+          },
+        ],
+      },
+      select: {
+        externalKey: true,
+        imei: true,
+        activeAssignment: true,
+        orderUnit: { select: { orderId: true } },
+      },
+    });
+  });
+
+  it('preserves duplicate-in-order precedence and active conflict errors from the batch result', async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { externalKey: 'sheet:existing', imei: null, activeAssignment: false, orderUnit: { orderId: 'order-1' } },
+    ]);
+    const preparer = new InventoryAssignmentPreparer(
+      { orderEquipment: { findMany } } as never,
+      undefined,
+    );
+
+    await expect(
+      preparer.assertEquipmentAvailable('order-1', [
+        { source: 'SHEETS', externalKey: 'sheet:existing' },
+      ]),
+    ).rejects.toMatchObject({ code: 'DUPLICATE_EQUIPMENT', status: 409 });
+    expect(findMany).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     {
       input: { source: 'DB' as const, inventoryEquipmentId: 'equipment-1', externalKey: 'DB:equipment-1', imei: 'imei-1' },
@@ -313,9 +364,9 @@ describe('InventoryAssignmentPreparer', () => {
   });
 
   it('rejects duplicate input before querying existing assignments', async () => {
-    const findFirst = vi.fn();
+    const findMany = vi.fn();
     const preparer = new InventoryAssignmentPreparer(
-      { orderEquipment: { findFirst } } as never,
+      { orderEquipment: { findMany } } as never,
       undefined,
     );
     const duplicate = { source: 'SHEETS' as const, externalKey: 'sheet:1' };
@@ -324,13 +375,15 @@ describe('InventoryAssignmentPreparer', () => {
       code: 'DUPLICATE_EQUIPMENT',
       message: 'El equipo sheet:1 está duplicado en la orden',
     });
-    expect(findFirst).not.toHaveBeenCalled();
+    expect(findMany).not.toHaveBeenCalled();
   });
 
   it('reports an existing assignment in this order before checking active conflicts', async () => {
-    const findFirst = vi.fn().mockResolvedValueOnce({ id: 'existing' });
+    const findMany = vi.fn().mockResolvedValueOnce([
+      { externalKey: 'sheet:1', imei: null, activeAssignment: false, orderUnit: { orderId: 'order-1' } },
+    ]);
     const preparer = new InventoryAssignmentPreparer(
-      { orderEquipment: { findFirst } } as never,
+      { orderEquipment: { findMany } } as never,
       undefined,
     );
 
@@ -340,16 +393,21 @@ describe('InventoryAssignmentPreparer', () => {
       code: 'DUPLICATE_EQUIPMENT',
       message: 'El equipo sheet:1 ya se encuentra asignado a esta orden',
     });
-    expect(findFirst).toHaveBeenCalledTimes(1);
-    expect(findFirst).toHaveBeenCalledWith({
-      where: { externalKey: 'sheet:1', orderUnit: { orderId: 'order-1' } },
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany.mock.calls[0]?.[0].where).toMatchObject({
+      OR: [
+        { externalKey: { in: ['sheet:1'] }, orderUnit: { orderId: 'order-1' } },
+        { activeAssignment: true, OR: [{ externalKey: 'sheet:1' }] },
+      ],
     });
   });
 
   it('checks active DB aliases by external key or IMEI', async () => {
-    const findFirst = vi.fn().mockResolvedValue({ id: 'active' });
+    const findMany = vi.fn().mockResolvedValue([
+      { externalKey: 'DB:other', imei: 'imei-1', activeAssignment: true, orderUnit: { orderId: 'other-order' } },
+    ]);
     const preparer = new InventoryAssignmentPreparer(
-      { orderEquipment: { findFirst } } as never,
+      { orderEquipment: { findMany } } as never,
       undefined,
     );
 
@@ -361,18 +419,18 @@ describe('InventoryAssignmentPreparer', () => {
       code: 'EQUIPMENT_ALREADY_ASSIGNED',
       message: 'El equipo DB:equipment-1 ya se encuentra asignado a otra orden activa',
     });
-    expect(findFirst).toHaveBeenCalledWith({
-      where: {
-        OR: [{ externalKey: 'DB:equipment-1' }, { imei: 'imei-1' }],
-        activeAssignment: true,
-      },
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany.mock.calls[0]?.[0].where).toMatchObject({
+      OR: [{ activeAssignment: true, OR: [{ OR: [{ externalKey: 'DB:equipment-1' }, { imei: 'imei-1' }] }] }],
     });
   });
 
   it('checks non-DB conflicts by external key only', async () => {
-    const findFirst = vi.fn().mockResolvedValue({ id: 'active' });
+    const findMany = vi.fn().mockResolvedValue([
+      { externalKey: 'sheet:1', imei: 'imei-1', activeAssignment: true, orderUnit: { orderId: 'other-order' } },
+    ]);
     const preparer = new InventoryAssignmentPreparer(
-      { orderEquipment: { findFirst } } as never,
+      { orderEquipment: { findMany } } as never,
       undefined,
     );
 
@@ -381,8 +439,9 @@ describe('InventoryAssignmentPreparer', () => {
         { source: 'SHEETS', externalKey: 'sheet:1', imei: 'imei-1' },
       ]),
     ).rejects.toMatchObject({ code: 'EQUIPMENT_ALREADY_ASSIGNED' });
-    expect(findFirst).toHaveBeenCalledWith({
-      where: { externalKey: 'sheet:1', activeAssignment: true },
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany.mock.calls[0]?.[0].where).toMatchObject({
+      OR: [{ activeAssignment: true, OR: [{ externalKey: 'sheet:1' }] }],
     });
   });
 
