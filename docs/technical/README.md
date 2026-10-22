@@ -19,6 +19,7 @@ Este directorio describe la arquitectura y operación técnica del sistema. A di
 7. [Seguridad y calidad](./security-and-quality.md): controles implementados y estrategia de pruebas.
 8. [Línea de tiempo del proyecto](../project-timeline.md): evolución por fases, fechas y commits.
 9. [Ciclo de vida del inventario](./inventory-lifecycle.md): límites de preparación, confirmación, transacción y sincronización con Sheets.
+10. [Análisis de capacidad de equipos por orden](./order-equipment-capacity-analysis.md): límites, concurrencia y riesgos de rendimiento en lectura, creación y auditoría.
 
 ## Fuentes de verdad
 

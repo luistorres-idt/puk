@@ -71,6 +71,7 @@ interface MockDatabase {
   };
   orderEquipment: {
     findFirst: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
   };
@@ -199,6 +200,7 @@ describe('OrdersService & SyncService', () => {
       },
       orderEquipment: {
         findFirst: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
         findUnique: vi.fn(),
         count: vi.fn(),
       },
@@ -457,11 +459,15 @@ describe('OrdersService & SyncService', () => {
   });
 
   it('rejects order creation if equipment is already active elsewhere', async () => {
-    mockPrisma.orderEquipment.findFirst.mockResolvedValue({
-      id: 'active-eq',
-      externalKey: 'EQ-ALREADY-ACTIVE',
-      activeAssignment: true,
-    });
+    mockPrisma.orderEquipment.findMany.mockResolvedValue([
+      {
+        id: 'active-eq',
+        externalKey: 'EQ-ALREADY-ACTIVE',
+        imei: null,
+        activeAssignment: true,
+        orderUnit: { orderId: 'active-order' },
+      },
+    ]);
 
     await expect(
       ordersService.createOrder('user-admin-1', {
