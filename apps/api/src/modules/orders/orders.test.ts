@@ -71,6 +71,7 @@ interface MockDatabase {
   };
   orderEquipment: {
     findFirst: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
   };
