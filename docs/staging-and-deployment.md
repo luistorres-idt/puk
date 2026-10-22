@@ -8,15 +8,10 @@ Este documento detalla los procedimientos de integración continua, despliegue y
 
 El archivo `.github/workflows/ci.yml` define el flujo de validación automática en cada `push` o `pull_request`:
 
-1. **Instalación de dependencias:** Uso de `pnpm install --frozen-lockfile` con almacenamiento en caché.
-2. **Validación Prisma:** Ejecución de `pnpm prisma:validate` y generación del cliente Prisma.
-3. **Análisis Estático (Linting):** Ejecución de `pnpm lint` aplicando las reglas de ESLint de arquitectura modular.
-4. **Comprobación de Tipos (Typecheck):** Ejecución de `pnpm typecheck` en todos los paquetes del monorepo.
-5. **Pruebas Unitarias y de Integración:** Ejecución de `pnpm test` con Vitest.
-6. **Validación de OpenAPI:** Ejecución de `pnpm docs:validate` y verificación de contratos OpenAPI contra endpoints.
-7. **Compilación (Build):** Generación de artefactos optimizados de backend y frontend web.
-8. **Auditoría de Dependencias:** Ejecución de `pnpm audit` verificando 0 vulnerabilidades conocidas.
-9. **Pruebas E2E:** Ejecución de pruebas con Playwright en entornos de escritorio y móvil (`pnpm test:e2e`).
+1. **Instalación y Prisma:** `pnpm install --frozen-lockfile`, validación del schema y generación del cliente.
+2. **Calidad y pruebas:** `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm docs:validate` y `pnpm build`.
+3. **Infraestructura:** `pnpm infra:synth` y `pnpm infra:test`. El synth usa las variables `AWS_ACCOUNT_ID` y `AWS_REGION`, pero el job no asume un rol AWS.
+4. **Seguridad y E2E:** `pnpm audit`, instalación de Chromium con Playwright y `pnpm test:e2e` en escritorio y móvil.
 
 ## 2. Configuración de Entornos y Secretos Separados
 
@@ -44,7 +39,9 @@ El despliegue automatizado de staging se ejecuta desde `.github/workflows/deploy
 
 #### Primera configuración o cambio de cuenta AWS
 
-La cuenta de destino se cambia con `AWS_ACCOUNT_ID`, no editando el código CDK. Los cuatro valores siguientes son identificadores de configuración, no credenciales:
+La cuenta de destino se cambia con `AWS_ACCOUNT_ID`, no editando el código CDK. El despliegue requiere dos piezas distintas: **AWS mantiene el proveedor OIDC y el rol IAM de despliegue; GitHub sólo guarda variables que indican qué cuenta, región, secreto y rol usar**. No se guardan claves AWS estáticas en GitHub.
+
+Los cuatro valores siguientes son identificadores de configuración, no credenciales:
 
 | Variable                    | Uso                                                           |
 | --------------------------- | ------------------------------------------------------------- |
@@ -53,19 +50,31 @@ La cuenta de destino se cambia con `AWS_ACCOUNT_ID`, no editando el código CDK.
 | `STAGING_RUNTIME_SECRET_ID` | Nombre/ARN del secreto runtime de staging en Secrets Manager. |
 | `AWS_DEPLOY_ROLE_NAME`      | Nombre del rol que GitHub Actions asumirá mediante OIDC.      |
 
-Para desarrollo local, copiar `.env.example` a `.env` y completar esos valores. Los comandos `pnpm infra:bootstrap`, `pnpm infra:configure`, `pnpm infra:deploy`, `pnpm infra:diff`, `pnpm infra:foundation` e `pnpm infra:synth` cargan desde `.env` únicamente esos cuatro identificadores, sin reemplazar valores ya exportados en la shell. No guardar claves AWS, claves de Google ni otros secretos en `.env`; las credenciales AWS deben venir de un perfil/SSO local autorizado.
+Para desarrollo local, copiar `.env.example` a `.env` y completar esos cuatro valores. Los comandos `pnpm infra:bootstrap`, `pnpm infra:configure`, `pnpm infra:deploy`, `pnpm infra:diff`, `pnpm infra:foundation` e `pnpm infra:synth` cargan desde `.env` únicamente esos identificadores, sin reemplazar valores ya exportados en la shell. No guardar claves AWS, claves de Google ni otros secretos en `.env`; las credenciales AWS deben venir de un perfil/SSO local autorizado.
 
-Antes de desplegar en una cuenta nueva, seguir este orden:
+Para una cuenta AWS nueva, seguir este orden. `pnpm infra:deploy` crea **ambos stacks**, no sólo el rol: Foundation incluye VPC y RDS, por lo que el `diff` debe revisarse antes de aplicar.
 
 1. Autenticarse localmente en la cuenta destino con el mecanismo aprobado y comprobar que el perfil apunta a la cuenta indicada en `AWS_ACCOUNT_ID`.
 2. Ejecutar `pnpm infra:bootstrap` para preparar CDK en esa cuenta y región.
-3. Preparar el secreto runtime con `pnpm infra:configure` usando el procedimiento seguro de Google descrito abajo. No usar `--overwrite` sobre un secreto existente sin entender que rota claves JWT y contraseñas de seed.
-4. Revisar `pnpm infra:diff` antes de crear o modificar recursos. Para el primer despliegue, confirmar en el diff qué recursos y permisos se van a crear; para cuentas o ambientes ya existentes, conservar los recursos/exports con consumidores.
-5. Desplegar con `pnpm infra:deploy` sólo después de verificar la configuración de Google, el diff y los requisitos de datos. El despliegue crea también el proveedor OIDC y el rol de GitHub.
-6. En la configuración del repositorio de GitHub, definir las mismas cuatro variables como **Repository Variables**. El workflow forma el ARN del rol con `AWS_ACCOUNT_ID` y `AWS_DEPLOY_ROLE_NAME`; no requiere claves AWS estáticas. El trust policy CDK está restringido al repositorio y a `main`, así que un cambio de propietario, repositorio o rama requiere revisar esa política en `infra/cdk/lib/foundation-stack.ts`.
-7. Ejecutar y aprobar el smoke test antes de habilitar `AWS_STAGING_READY=true`. Esta variable es el interruptor independiente que permite despliegues automáticos tras CI; dejarla desactivada durante la configuración inicial.
+3. Preparar el secreto runtime siguiendo [Crear el secreto runtime inicial](#crear-el-secreto-runtime-inicial). Confirmar que el script apunta a la cuenta y región correctas.
+4. Ejecutar `pnpm infra:diff` y revisar qué recursos y permisos se crearán. En cuentas existentes, conservar recursos/exports que tengan consumidores.
+5. Ejecutar `pnpm infra:deploy` sólo después de validar Google, el diff y los requisitos de datos. El stack Foundation crea el proveedor OIDC y el rol de GitHub en **esa cuenta AWS**. El rol puede tener el mismo nombre en cuentas distintas; un rol de otra cuenta no se reutiliza sólo cambiando una variable.
+6. En **GitHub → Settings → Secrets and variables → Actions → Variables**, configurar estas Repository Variables:
 
-`.env` es local e ignorado por Git; no se comparte con GitHub Actions. En CI, los cuatro identificadores de AWS se configuran por separado como **Repository Variables**. Los secretos de aplicación se mantienen en Secrets Manager, no en las variables del workflow.
+   | Variable                    | Valor                                                                           |
+   | --------------------------- | ------------------------------------------------------------------------------- |
+   | `AWS_ACCOUNT_ID`            | Cuenta AWS destino de 12 dígitos.                                               |
+   | `AWS_REGION`                | Región de los stacks.                                                           |
+   | `AWS_DEPLOY_ROLE_NAME`      | Nombre del rol creado por Foundation (por defecto `puk-staging-github-deploy`). |
+   | `STAGING_RUNTIME_SECRET_ID` | Nombre/ARN del secreto runtime.                                                 |
+
+| `AWS_STAGING_READY` | Mantener en `false` o sin definir hasta completar la prueba inicial. |
+
+Estas son variables, no credenciales. GitHub Actions solicita un token OIDC y asume el rol de IAM. La trust policy de CDK está restringida a este repositorio y a `main`; un fork, cambio de propietario/repositorio o cambio de rama requiere revisar `infra/cdk/lib/foundation-stack.ts` y volver a desplegar Foundation.
+
+7. Con infraestructura desplegada, ejecutar y aprobar el smoke test; después habilitar `AWS_STAGING_READY=true`. Un push a `main` con CI exitoso dispara el deploy automático. Un PR o un push a otra rama no lo hace.
+
+`.env` es local e ignorado por Git; no se comparte con GitHub Actions. El job de CI también ejecuta `infra:synth` usando `AWS_ACCOUNT_ID` y `AWS_REGION`, pero no asume un rol AWS. `infra/cdk/cdk.context.json` tiene zonas de disponibilidad cacheadas sólo para `075566976700/us-east-2`; si se cambia la cuenta o región, revisar/actualizar el contexto de CDK para que el synth no requiera una consulta AWS sin credenciales. Los secretos de aplicación se mantienen en Secrets Manager, no en las variables del workflow.
 
 CDK construye las imágenes Docker. Las imágenes de API y migración generan el cliente Prisma durante el build con un `DATABASE_URL` ficticio de compilación; esa generación no conecta a la base de datos de producción ni ejecuta migraciones. Al iniciar una nueva tarea ECS, el contenedor `migration` ejecuta `prisma migrate deploy` y después `prisma/seed.ts`. La API depende de que ese contenedor termine con éxito (`SUCCESS`), y web espera la salud de la API.
 
@@ -163,6 +172,35 @@ reportes; sus variables son `GOOGLE_TECHNICIANS_SHEET_NAME` y
 `GOOGLE_TECHNICIAN_REPORT_SHEET_NAME`. Cambiar nombres de pestañas requiere ajustar la
 configuración del task definition y desplegar, no sólo cambiar un ID de documento.
 
+### Crear el secreto runtime inicial
+
+El comando `pnpm infra:configure` crea el secreto runtime en Secrets Manager, en la cuenta que devuelve `aws sts get-caller-identity`; aborta si no coincide con `AWS_ACCOUNT_ID`. Por defecto el nombre es `puk/staging/runtime`. El comando **sólo crea un secreto inexistente**: si ya existe, se detiene para evitar reemplazarlo accidentalmente.
+
+Antes de ejecutarlo, preparar Sheets, Drive y las cuentas de servicio de prueba en Google Workspace (pasos siguientes), y hacer disponibles estas variables para el proceso local:
+
+| Variable                                                                     | Requerida      | Contenido                                                                                                             |
+| ---------------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_SPREADSHEET_ID`                                                      | Sí             | ID del Sheet de clientes/equipos.                                                                                     |
+| `GOOGLE_TECHNICIANS_SPREADSHEET_ID`                                          | Sí             | ID del Sheet de técnicos/reportes.                                                                                    |
+| `GOOGLE_SERVICE_ACCOUNT_FILE` o `GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY` | Sí, una opción | JSON local de la cuenta Sheets (incluye email y clave) o email y clave privada de esa cuenta.                         |
+| `GOOGLE_DRIVE_CLIENT_EMAIL`                                                  | Sí             | Email de la cuenta de servicio Drive.                                                                                 |
+| `GOOGLE_DRIVE_PRIVATE_KEY`                                                   | Sí             | Clave privada de esa cuenta de Drive.                                                                                 |
+| `GOOGLE_DRIVE_SHARED_DRIVE_ID`                                               | Sí             | ID de la raíz de la unidad compartida de pruebas.                                                                     |
+| `SEED_CLIENT_ADMIN_EMAIL`                                                    | Sí             | Email del administrador de clientes que creará el seed.                                                               |
+| `STAGING_ADMIN_CREDENTIALS_FILE`                                             | Recomendado    | Ruta segura, fuera del repo y aún inexistente, donde guardar las credenciales generadas para los dos administradores. |
+
+`with-staging-env.mjs` carga desde `.env` sólo los cuatro identificadores AWS de la tabla anterior; no carga automáticamente las variables de Google. Inyectarlas al proceso con el mecanismo local aprobado y no imprimirlas ni pegarlas en comandos guardados, logs o chat. Si se usa `GOOGLE_SERVICE_ACCOUNT_FILE`, guardar el JSON fuera del repo con permisos restrictivos. El script guarda el secreto temporalmente en un archivo con permisos `0600`, lo sube a Secrets Manager y elimina ese archivo temporal.
+
+El script genera claves JWT y contraseñas aleatorias para `SEED_ADMIN_*` y `SEED_CLIENT_ADMIN_*`; opcionalmente usa `SEED_ADMIN_EMAIL` y `SEED_TECHNICIAN_EMAIL` (por defecto `admin@staging.invalid` y `technician@staging.invalid`). `STAGING_ADMIN_CREDENTIALS_FILE` guarda localmente los emails y contraseñas de los dos administradores con permisos `0600`; asegúrense de que esa ruta no exista antes de correr el comando y almacenen el archivo como credencial sensible. El script valida esta ruta después de guardar el secreto, así que una ruta ya existente puede hacer que el comando reporte error aunque el secreto haya quedado creado.
+
+Con AWS autenticado en la cuenta destino y las variables anteriores disponibles:
+
+```bash
+pnpm infra:configure
+```
+
+No agregar `--overwrite` para corregir IDs o credenciales. Ese modo reemplaza el secreto completo, rota claves JWT y contraseñas seed, y puede invalidar sesiones o desalinear las contraseñas con usuarios seed existentes. Si el secreto ya existe, usar Secrets Manager para editar únicamente los campos de Google y preservar `JWT_*`, `SEED_*` y los demás campos. Los campos `GOOGLE_GMAIL_*` son opcionales y se agregan sólo si se configura envío manual de reportes; no los genera este comando.
+
 ### Declarar una nueva cuenta de servicio de pruebas
 
 1. Seleccionar un proyecto de Google Cloud dedicado a pruebas y habilitar **Google Sheets API** y
@@ -190,10 +228,10 @@ configuración del task definition y desplegar, no sólo cambiar un ID de docume
    sustituye una unidad compartida: las cuentas de servicio no tienen cuota ni pueden ser
    propietarias de archivos. [Unidades compartidas](https://developers.google.com/workspace/drive/api/guides/about-shareddrives),
    [roles de Drive](https://developers.google.com/workspace/drive/api/guides/ref-roles).
-6. Mediante la consola de Secrets Manager, abrir **Recuperar valor del secreto → Editar** y agregar
-   o modificar **únicamente** los campos de Google de la tabla. Mantener intactos `JWT_*`,
-   `SEED_*` y cualquier otro campo existente. Guardar sin copiar ni imprimir el JSON completo.
-   Esta operación humana no requiere enviar claves al agente.
+6. Si el secreto runtime **ya existe**, editar en Secrets Manager únicamente los campos de Google
+   de la tabla y preservar `JWT_*`, `SEED_*` y cualquier otro campo existente. No copiar ni imprimir
+   el JSON completo. Para un secreto nuevo, usar `pnpm infra:configure` (sección anterior); no
+   crear primero un secreto vacío desde la consola.
 
 > **No usar `configure-staging-secrets.mjs --overwrite` para cambiar IDs o cuentas de servicio.**
 > Es un reemplazo completo: genera nuevas claves JWT y nuevas contraseñas de los dos administradores
