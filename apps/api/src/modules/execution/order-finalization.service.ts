@@ -1,5 +1,8 @@
-import { completeInventoryAssignments, releaseOrderInventory } from '../inventory/index.js';
-import { releaseOrderInventoryForCorrection } from '../inventory/order-inventory.js';
+import {
+  completeInventoryAssignments,
+  releaseOrderInventory,
+  releaseOrderInventoryForCorrection,
+} from '../inventory/index.js';
 import * as v from 'valibot';
 import {
   OrderPricingOverridesReadSchema,
