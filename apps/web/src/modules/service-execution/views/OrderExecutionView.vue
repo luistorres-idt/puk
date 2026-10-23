@@ -82,7 +82,13 @@ const correctionNotes = ref('');
 // Active unit tab
 const activeUnitTab = ref<string>('');
 
-const { createSaveChecklistItems, getUnitItem, initChecklistForUnit } = useUnitChecklists();
+const {
+  createSaveChecklistItems,
+  getUnitItem,
+  initChecklistForUnit,
+  isUnitChecklistDirty,
+  markUnitChecklistSaved,
+} = useUnitChecklists();
 
 function getUnitAllEvidences(unitId: string) {
   const unit = order.value?.units?.find((u) => u.id === unitId);
@@ -182,6 +188,7 @@ async function handleSaveUnitChecklist(unitId: string) {
 
   try {
     await saveChecklist(orderId, unitId, result.items);
+    markUnitChecklistSaved(unitId);
     message.success('Checklist guardado exitosamente');
     await loadData();
   } catch (err: unknown) {
@@ -206,6 +213,27 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
 }
 
 async function handleCompleteOrder() {
+  if (order.value?.units) {
+    for (const unit of order.value.units) {
+      if (isUnitChecklistDirty(unit.id)) {
+        const result = createSaveChecklistItems(unit.id);
+        if (!result) continue;
+        if (!result.ok) {
+          activeUnitTab.value = unit.id;
+          message.error(result.message);
+          return;
+        }
+        try {
+          await saveChecklist(orderId, unit.id, result.items);
+          markUnitChecklistSaved(unit.id);
+        } catch (err: unknown) {
+          message.error(extractApiErrorMessage(err, 'Error al guardar checklist'));
+          return;
+        }
+      }
+    }
+  }
+
   if (executionNotesDirty.value) {
     try {
       await saveExecutionNotes();
@@ -489,9 +517,14 @@ onMounted(() => {
                     data-tour="execution-checklist"
                     class="space-y-4 pt-4 border-t border-slate-200"
                   >
-                    <h3 class="text-sm font-bold text-slate-800">
-                      Checklist de Recepción del Vehículo
-                    </h3>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <h3 class="text-sm font-bold text-slate-800">
+                        Checklist de Recepción del Vehículo
+                      </h3>
+                      <NTag v-if="isUnitChecklistDirty(unit.id)" size="small" type="warning" round>
+                        Cambios sin guardar
+                      </NTag>
+                    </div>
 
                     <div
                       v-for="catKey in CATEGORIES"

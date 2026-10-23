@@ -34,21 +34,63 @@ type SaveChecklistItemsResult =
 
 export function useUnitChecklists() {
   const checklistsByUnit = ref<Record<string, Record<ChecklistCategory, LocalChecklistItem>>>({});
+  const savedChecklistsByUnit = ref<Record<string, Record<ChecklistCategory, LocalChecklistItem>>>(
+    {},
+  );
 
   function initChecklistForUnit(unitId: string, existingItems?: ExistingChecklistItem[]) {
     const existingMap = checklistsByUnit.value[unitId];
     const checklist = {} as Record<ChecklistCategory, LocalChecklistItem>;
+    const savedSnapshot = {} as Record<ChecklistCategory, LocalChecklistItem>;
 
     for (const category of CATEGORIES) {
       const savedItem = existingItems?.find((item) => item.category === category);
+      const serverCondition = savedItem?.condition ?? 'GOOD';
+      const serverNotes = savedItem?.notes ?? '';
+
+      savedSnapshot[category] = {
+        category,
+        condition: serverCondition,
+        notes: serverCondition === 'BAD' ? serverNotes.trim() : '',
+      };
+
       checklist[category] = {
         category,
-        condition: existingMap?.[category]?.condition ?? savedItem?.condition ?? 'GOOD',
-        notes: existingMap?.[category]?.notes ?? savedItem?.notes ?? '',
+        condition: existingMap?.[category]?.condition ?? serverCondition,
+        notes: existingMap?.[category]?.notes ?? serverNotes,
       };
     }
 
+    savedChecklistsByUnit.value[unitId] = savedSnapshot;
     checklistsByUnit.value[unitId] = checklist;
+  }
+
+  function isUnitChecklistDirty(unitId: string): boolean {
+    const current = checklistsByUnit.value[unitId];
+    const saved = savedChecklistsByUnit.value[unitId];
+    if (!current || !saved) return false;
+    return CATEGORIES.some((category) => {
+      const currItem = current[category];
+      const savedItem = saved[category];
+      if (currItem.condition !== savedItem.condition) return true;
+      const currNotes = currItem.condition === 'BAD' ? currItem.notes.trim() : '';
+      const savedNotes = savedItem.condition === 'BAD' ? savedItem.notes.trim() : '';
+      return currNotes !== savedNotes;
+    });
+  }
+
+  function markUnitChecklistSaved(unitId: string): void {
+    const current = checklistsByUnit.value[unitId];
+    if (!current) return;
+    const snapshot = {} as Record<ChecklistCategory, LocalChecklistItem>;
+    for (const category of CATEGORIES) {
+      snapshot[category] = {
+        category,
+        condition: current[category].condition,
+        notes: current[category].condition === 'BAD' ? current[category].notes.trim() : '',
+      };
+    }
+    savedChecklistsByUnit.value[unitId] = snapshot;
   }
 
   function getUnitItem(unitId: string, category: ChecklistCategory): LocalChecklistItem {
@@ -98,5 +140,7 @@ export function useUnitChecklists() {
     createSaveChecklistItems,
     getUnitItem,
     initChecklistForUnit,
+    isUnitChecklistDirty,
+    markUnitChecklistSaved,
   };
 }

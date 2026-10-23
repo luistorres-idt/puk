@@ -77,4 +77,19 @@ describe('useUnitChecklists', () => {
     });
     expect(getUnitItem('unit-1', 'DASHBOARD').notes).toHaveLength(5001);
   });
+
+  it('tracks dirty checklist state per unit and clears it when marked saved', () => {
+    const { getUnitItem, initChecklistForUnit, isUnitChecklistDirty, markUnitChecklistSaved } =
+      useUnitChecklists();
+
+    initChecklistForUnit('unit-1', [{ category: 'DASHBOARD', condition: 'GOOD', notes: null }]);
+    expect(isUnitChecklistDirty('unit-1')).toBe(false);
+
+    getUnitItem('unit-1', 'DASHBOARD').condition = 'BAD';
+    getUnitItem('unit-1', 'DASHBOARD').notes = 'Raspon en tablero';
+    expect(isUnitChecklistDirty('unit-1')).toBe(true);
+
+    markUnitChecklistSaved('unit-1');
+    expect(isUnitChecklistDirty('unit-1')).toBe(false);
+  });
 });
