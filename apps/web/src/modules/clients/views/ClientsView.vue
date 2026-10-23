@@ -173,40 +173,44 @@ onMounted(() => {
                 >
               </n-form>
               <h2 class="mt-6 mb-3 text-lg font-semibold">Correos del cliente</h2>
-              <n-table v-if="selected.emails.length" :single-line="false">
-                <thead>
-                  <tr>
-                    <th>Correo</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="recipient in selected.emails" :key="recipient.id">
-                    <td class="break-all">{{ recipient.email }}</td>
-                    <td>
-                      <n-button
-                        size="small"
-                        :disabled="saving"
-                        @click="
-                          email = recipient.email;
-                          emailId = recipient.id;
-                        "
-                        >Editar</n-button
-                      >
-                      <n-popconfirm
-                        positive-text="Confirmar"
-                        negative-text="Cancelar"
-                        @positive-click="deleteEmail(recipient.id)"
-                        ><template #trigger
-                          ><n-button size="small" type="error" :disabled="saving"
-                            >Eliminar</n-button
-                          ></template
-                        >¿Eliminar este correo?</n-popconfirm
-                      >
-                    </td>
-                  </tr>
-                </tbody>
-              </n-table>
+              <div v-if="selected.emails.length" class="overflow-x-auto">
+                <n-table :single-line="false">
+                  <thead>
+                    <tr>
+                      <th>Correo</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="recipient in selected.emails" :key="recipient.id">
+                      <td class="break-all">{{ recipient.email }}</td>
+                      <td>
+                        <div class="flex flex-wrap gap-2">
+                          <n-button
+                            size="small"
+                            :disabled="saving"
+                            @click="
+                              email = recipient.email;
+                              emailId = recipient.id;
+                            "
+                            >Editar</n-button
+                          >
+                          <n-popconfirm
+                            positive-text="Confirmar"
+                            negative-text="Cancelar"
+                            @positive-click="deleteEmail(recipient.id)"
+                            ><template #trigger
+                              ><n-button size="small" type="error" :disabled="saving"
+                                >Eliminar</n-button
+                              ></template
+                            >¿Eliminar este correo?</n-popconfirm
+                          >
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </n-table>
+              </div>
               <n-empty v-else description="El cliente todavía no tiene correos." />
               <n-form class="mt-4" @submit.prevent="submitEmail">
                 <n-form-item :label="emailId ? 'Editar correo' : 'Agregar correo'"
