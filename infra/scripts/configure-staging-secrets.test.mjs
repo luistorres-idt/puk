@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { createSeedAdminCredentials } from './configure-staging-secrets.mjs';
+import {
+  createSeedAdminCredentials,
+  loadStagingConfiguration,
+} from './configure-staging-secrets.mjs';
 import { seedUsers } from '../../prisma/seed.ts';
 
 const script = fileURLToPath(new URL('./configure-staging-secrets.mjs', import.meta.url));
@@ -54,6 +57,9 @@ function runFixture(
     region = 'us-east-2',
     accountId = '123456789012',
     missingAccountId = false,
+    jsonConfig = false,
+    badConfigShape = false,
+    configEnvOverride = false,
   } = {},
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'puk-secret-test-'));
@@ -102,6 +108,14 @@ function runFixture(
   if (malformedFile) {
     env.GOOGLE_SERVICE_ACCOUNT_FILE = join(directory, 'service-account.json');
     writeFileSync(env.GOOGLE_SERVICE_ACCOUNT_FILE, `{${marker}`, { mode: 0o600 });
+  }
+  if (jsonConfig || badConfigShape) {
+    const configPath = join(directory, 'staging-config.json');
+    const fileConfig = badConfigShape ? { AWS_SECRET_ACCESS_KEY: marker } : config;
+    writeFileSync(configPath, JSON.stringify(fileConfig), { mode: 0o600 });
+    env.STAGING_CONFIG_FILE = configPath;
+    for (const key of Object.keys(config)) delete env[key];
+    if (configEnvOverride) env.GOOGLE_SPREADSHEET_ID = 'process-env-sheet';
   }
   if (missingInput) delete env.GOOGLE_SPREADSHEET_ID;
   if (missingDriveInput) delete env.GOOGLE_DRIVE_SHARED_DRIVE_ID;
@@ -203,6 +217,37 @@ test('redacts malformed service-account JSON errors', (t) => {
   const { result, capture } = runFixture(t, { malformedFile: true });
   assert.equal(result.status, 1);
   assert.equal(capture, undefined);
+});
+
+test('loads Google runtime values from STAGING_CONFIG_FILE and keeps process env precedence', (t) => {
+  const { result, calls, capture } = runFixture(t, {
+    jsonConfig: true,
+    configEnvOverride: true,
+  });
+  assert.equal(
+    result.status,
+    0,
+    JSON.stringify({
+      status: result.status,
+      calls: calls.map((call) => call.slice(0, 2)),
+      captured: Boolean(capture),
+    }),
+  );
+  assert.equal(capture.payload.GOOGLE_SPREADSHEET_ID, 'process-env-sheet');
+  assert.equal(capture.payload.GOOGLE_PRIVATE_KEY.includes('fixture-key-'), true);
+});
+
+test('rejects config JSON fields outside the Google/runtime allowlist without exposing values', (t) => {
+  const { result, capture } = runFixture(t, { badConfigShape: true });
+  assert.equal(result.status, 1);
+  assert.equal(capture, undefined);
+});
+
+test('rejects non-string config values without including their contents in errors', () => {
+  assert.throws(
+    () => loadStagingConfiguration({ STAGING_CONFIG_FILE: '/nonexistent/config.json' }),
+    /Invalid staging configuration file/,
+  );
 });
 
 test('generates distinct admin passwords and uses the configured client email', () => {
