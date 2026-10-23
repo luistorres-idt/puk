@@ -214,6 +214,7 @@ function formatDate(value: string | null | undefined): string {
           <div>
             <label class="mb-1 block text-xs text-slate-500">Hora de envío</label
             ><n-time-picker
+              class="w-full"
               :formatted-value="scheduleForm.syncTime"
               format="HH:mm"
               value-format="HH:mm"
