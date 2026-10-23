@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
-import { NSelect, NButton, NAlert, NInput, NInputNumber } from 'naive-ui';
+import { ref, computed, h, onMounted, watch } from 'vue';
+import { NSelect, NButton, NAlert, NInput, NInputNumber, type SelectOption } from 'naive-ui';
 import type { ExternalEquipment, OrderServiceType } from '@puk/contracts';
 import { fetchEquipment, refreshCatalogs, registerEquipment } from '../api.js';
 import { useSessionStore } from '@/stores/session';
@@ -132,6 +132,14 @@ function handleUpdate(value: string | null) {
   emit('select', selected);
 }
 
+function renderEquipmentOptionLabel(option: SelectOption) {
+  return h(
+    'span',
+    { class: 'block whitespace-normal break-words leading-snug py-0.5 text-xs sm:text-sm' },
+    String(option.label ?? ''),
+  );
+}
+
 watch(filteredEquipment, (available) => {
   if (!props.modelValue || loading.value) return;
   const selected = available.find(
@@ -214,6 +222,7 @@ onMounted(() => {
       "
       :loading="loading"
       :disabled="props.disabled || loading"
+      :render-label="renderEquipmentOptionLabel"
       filterable
       placeholder="Buscar equipo por ID, IMEI o modelo..."
       clearable
