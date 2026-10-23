@@ -460,20 +460,22 @@ onMounted(() => {
                         </NTag>
                       </div>
 
-                      <div v-if="order.status === 'IN_PROGRESS'" class="flex gap-2 pt-1">
+                      <div v-if="order.status === 'IN_PROGRESS'" class="flex flex-wrap gap-2 pt-1">
                         <NButton
-                          size="tiny"
+                          size="small"
                           type="success"
                           secondary
+                          class="flex-1 sm:flex-initial"
                           @click="handleVerifyEquipment(unit.id, eq.id)"
                         >
                           Coincide Físicamente
                         </NButton>
 
                         <NButton
-                          size="tiny"
+                          size="small"
                           type="warning"
                           secondary
+                          class="flex-1 sm:flex-initial"
                           @click="openDiscrepancyModal(unit.id, eq.id)"
                         >
                           Reportar Discrepancia

@@ -5,10 +5,7 @@ import { MIN_REQUIRED_EVIDENCE_PHOTOS } from '@puk/contracts';
 import { createEvidenceUploadRetryKeys } from '../evidence-upload-retry.js';
 import { preprocessEvidenceImage } from '../image-preprocessing.js';
 import { useEvidenceGallery } from '../composables/useEvidenceGallery.js';
-import {
-  deleteEvidence,
-  uploadEvidenceFile,
-} from '../api.js';
+import { deleteEvidence, uploadEvidenceFile } from '../api.js';
 
 const props = withDefaults(
   defineProps<{
@@ -229,7 +226,7 @@ async function handleDelete(evidenceId: string) {
       </div>
       <NButton
         v-if="!disabled && !uploading"
-        size="tiny"
+        size="small"
         type="warning"
         ghost
         class="self-start sm:self-auto shrink-0"
@@ -282,7 +279,7 @@ async function handleDelete(evidenceId: string) {
                 <template #trigger>
                   <button
                     type="button"
-                    class="bg-red-600/90 hover:bg-red-700 text-white rounded px-1.5 py-0.5 text-[10px] font-medium shadow-md transition-transform active:scale-95 cursor-pointer disabled:opacity-50"
+                    class="inline-flex min-h-7 items-center justify-center bg-red-600/90 hover:bg-red-700 text-white rounded px-2 py-1 text-[11px] font-medium shadow-md transition-transform active:scale-95 cursor-pointer disabled:opacity-50"
                     :title="`Eliminar foto #${idx + 1}`"
                     :disabled="deletingId === ev.id"
                     @click.stop
