@@ -14,6 +14,9 @@ interface MockPrismaExecution {
     findUnique: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  equipment: {
+    updateMany: ReturnType<typeof vi.fn>;
+  };
   user: {
     findUnique: ReturnType<typeof vi.fn>;
   };
@@ -120,6 +123,7 @@ describe('ExecutionService', () => {
             updateMany: vi.fn(),
             findMany: vi.fn().mockResolvedValue([{ id: 'unit-1' }]),
           },
+          equipment: { updateMany: mockPrisma.equipment.updateMany },
           orderEquipment: {
             update: vi.fn(
               async ({
@@ -180,6 +184,9 @@ describe('ExecutionService', () => {
       order: {
         findUnique: vi.fn(),
         update: vi.fn(),
+      },
+      equipment: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       user: {
         findUnique: vi.fn(),
@@ -410,12 +417,25 @@ describe('ExecutionService', () => {
       id: 'order-1',
       folio: 'OS-001',
       serviceType: 'INSTALLATION',
+      clientSheetId: 'client-sheet-1',
       clientNameSnapshot: 'Cliente Demo',
       scheduledAt: new Date(),
       status: OrderStatus.COMPLETED,
       generalNotes: 'Notas iniciales',
       technician: { id: 'tech-1', name: 'Tecnico Demo', installationRate: 500, departureCost: 100 },
-      units: [],
+      units: [
+        {
+          id: 'unit-1',
+          serviceType: 'INSTALLATION',
+          equipment: [
+            {
+              source: 'DB',
+              inventoryEquipmentId: 'inventory-1',
+              externalKey: 'DB:inventory-1',
+            },
+          ],
+        },
+      ],
     });
 
     const result = await service.requireCorrection('admin-1', 'order-1', {
@@ -423,6 +443,25 @@ describe('ExecutionService', () => {
     });
     expect(result.status).toBe(OrderStatus.REQUIRES_CORRECTION);
     expect(result.generalNotes).toContain('Corrección solicitada');
+    expect(mockPrisma.equipment.updateMany).toHaveBeenLastCalledWith({
+      where: {
+        id: { in: ['inventory-1'] },
+        state: 'INSTALLED',
+        currentClientSheetId: 'client-sheet-1',
+        OR: [{ reservedOrderId: null }, { reservedOrderId: 'order-1' }],
+      },
+      data: {
+        state: 'AVAILABLE',
+        currentClientSheetId: null,
+        currentClientName: null,
+        unitLabel: null,
+        unitMakeModel: null,
+        unitSerialNumber: null,
+        unitYear: null,
+        reservedOrderId: null,
+        version: { increment: 1 },
+      },
+    });
   });
 
   it('rejects non-admin users attempting to reopen completed order for correction', async () => {

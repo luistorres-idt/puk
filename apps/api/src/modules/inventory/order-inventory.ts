@@ -104,8 +104,7 @@ export function toOrderEquipmentCreateData(
 
 /** Resolves and validates DB equipment selections before the caller opens its transaction. */
 export class InventoryAssignmentPreparer {
-  private freshCatalogRequest:
-    ReturnType<EquipmentCatalogPort['getEquipment']> | undefined;
+  private freshCatalogRequest: ReturnType<EquipmentCatalogPort['getEquipment']> | undefined;
 
   public constructor(
     private readonly prisma: PrismaClient,
@@ -172,7 +171,9 @@ export class InventoryAssignmentPreparer {
         );
 
       for (const item of equipment.filter((entry) => !isDatabaseEquipment(entry))) {
-        const fresh = freshEquipmentCatalog.data.find((entry) => entry.externalKey === item.externalKey);
+        const fresh = freshEquipmentCatalog.data.find(
+          (entry) => entry.externalKey === item.externalKey,
+        );
         if (!fresh || !fresh.hasValidIdentity)
           throw new AppError(
             409,
@@ -257,9 +258,7 @@ export class InventoryAssignmentPreparer {
     const conflicts = await this.prisma.orderEquipment.findMany({
       where: {
         OR: [
-          ...(orderId
-            ? [{ externalKey: { in: keys }, orderUnit: { orderId } }]
-            : []),
+          ...(orderId ? [{ externalKey: { in: keys }, orderUnit: { orderId } }] : []),
           { activeAssignment: true, OR: activeIdentityFilters },
         ],
       },
@@ -273,7 +272,8 @@ export class InventoryAssignmentPreparer {
 
     for (const input of equipmentInputs) {
       const existingInOrder = conflicts.some(
-        (conflict) => conflict.externalKey === input.externalKey && conflict.orderUnit.orderId === orderId,
+        (conflict) =>
+          conflict.externalKey === input.externalKey && conflict.orderUnit.orderId === orderId,
       );
       if (orderId && existingInOrder)
         throw new AppError(
@@ -454,11 +454,85 @@ export async function releaseOrderInventory(
   tx: Prisma.TransactionClient,
   orderId: string,
   units: readonly {
-    equipment: readonly { source?: string; inventoryEquipmentId?: string | null; externalKey: string }[];
+    equipment: readonly {
+      source?: string;
+      inventoryEquipmentId?: string | null;
+      externalKey: string;
+    }[];
   }[],
 ) {
   if (!units.some((unit) => unit.equipment.some(isDatabaseEquipment))) return;
   await releaseInventory(tx, orderId);
+}
+
+/** Releases an order's equipment claims when the work is returned for correction. */
+export async function releaseOrderInventoryForCorrection(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  wasCompleted: boolean,
+  orderService: OrderServiceType,
+  clientSheetId: string,
+  units: readonly {
+    id: string;
+    serviceType: OrderServiceType | null;
+    equipment: readonly {
+      source?: string;
+      inventoryEquipmentId?: string | null;
+      externalKey: string;
+    }[];
+  }[],
+) {
+  const unitIds = units.map((unit) => unit.id);
+  if (unitIds.length > 0) {
+    await tx.orderEquipment.updateMany({
+      where: { orderUnitId: { in: unitIds } },
+      data: { activeAssignment: false },
+    });
+  }
+
+  await releaseOrderInventory(tx, orderId, units);
+  if (!wasCompleted) return;
+
+  const installationInventoryIds = [
+    ...new Set(
+      units.flatMap((unit) => {
+        const service = unit.serviceType ?? orderService;
+        if (service !== 'INSTALLATION' && service !== 'FUEL_SENSOR') return [];
+        return unit.equipment
+          .filter(isDatabaseEquipment)
+          .flatMap((equipment) => equipment.inventoryEquipmentId ?? []);
+      }),
+    ),
+  ];
+  if (installationInventoryIds.length === 0) return;
+
+  const released = await tx.equipment.updateMany({
+    where: {
+      id: { in: installationInventoryIds },
+      state: 'INSTALLED',
+      currentClientSheetId: clientSheetId,
+      OR: [{ reservedOrderId: null }, { reservedOrderId: orderId }],
+    },
+    data: {
+      state: 'AVAILABLE',
+      currentClientSheetId: null,
+      currentClientName: null,
+      unitLabel: null,
+      unitMakeModel: null,
+      unitSerialNumber: null,
+      unitYear: null,
+      reservedOrderId: null,
+      version: { increment: 1 },
+    },
+  });
+
+  if (released.count !== installationInventoryIds.length) {
+    throw new AppError(
+      409,
+      'EQUIPMENT_ALREADY_ASSIGNED',
+      'No se pudo liberar el inventario porque uno o más equipos están reservados por otra orden.',
+    );
+  }
 }
 
 export async function completeInventoryEquipment(
