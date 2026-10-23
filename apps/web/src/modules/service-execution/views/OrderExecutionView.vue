@@ -10,6 +10,7 @@ import {
   NInput,
   NModal,
   NAlert,
+  NSelect,
   NSpin,
   NTabs,
   NTabPane,
@@ -355,12 +356,28 @@ onMounted(() => {
               Selecciona una unidad. El tipo de servicio indicado corresponde exclusivamente a esa
               unidad.
             </p>
+            <div v-if="order.units.length > 1" class="mb-3 sm:hidden">
+              <label class="mb-1 block text-xs font-semibold text-slate-600">
+                Cambiar unidad ({{ order.units.length }} disponibles)
+              </label>
+              <NSelect
+                v-model:value="activeUnitTab"
+                size="small"
+                :options="
+                  order.units.map((u, idx) => ({
+                    label: `#${idx + 1} ${u.label} · ${formatServiceType(u.serviceType)}`,
+                    value: u.id,
+                  }))
+                "
+                :input-props="{ 'aria-label': 'Seleccionar unidad' }"
+              />
+            </div>
             <NTabs v-model:value="activeUnitTab" type="line" animated>
               <NTabPane v-for="unit in order.units" :key="unit.id" :name="unit.id">
                 <template #tab>
                   <span class="inline-flex items-center gap-2">
                     <span>{{ unit.label }}</span>
-                    <NTag size="small" type="info" :bordered="false">
+                    <NTag size="small" type="info" :bordered="false" class="hidden sm:inline-flex">
                       {{ formatServiceType(unit.serviceType) }}
                     </NTag>
                   </span>
