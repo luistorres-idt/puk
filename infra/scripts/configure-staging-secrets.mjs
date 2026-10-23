@@ -7,6 +7,20 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
+const stagingConfigFields = new Set([
+  'GOOGLE_CLIENT_EMAIL',
+  'GOOGLE_PRIVATE_KEY',
+  'GOOGLE_DRIVE_CLIENT_EMAIL',
+  'GOOGLE_DRIVE_PRIVATE_KEY',
+  'GOOGLE_DRIVE_SHARED_DRIVE_ID',
+  'GOOGLE_SPREADSHEET_ID',
+  'GOOGLE_TECHNICIANS_SPREADSHEET_ID',
+  'SEED_CLIENT_ADMIN_EMAIL',
+  'SEED_ADMIN_EMAIL',
+  'SEED_TECHNICIAN_EMAIL',
+  'STAGING_ADMIN_CREDENTIALS_FILE',
+]);
+
 // The repository-level infra command loads non-secret deployment settings from .env.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
@@ -21,9 +35,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 }
 
 function configure() {
-  const accountId = process.env.AWS_ACCOUNT_ID?.trim();
-  const region = process.env.AWS_REGION?.trim() || 'us-east-2';
-  const secretId = process.env.STAGING_RUNTIME_SECRET_ID?.trim() || 'puk/staging/runtime';
+  const environment = loadStagingConfiguration(process.env);
+  const accountId = environment.AWS_ACCOUNT_ID?.trim();
+  const region = environment.AWS_REGION?.trim() || 'us-east-2';
+  const secretId = environment.STAGING_RUNTIME_SECRET_ID?.trim() || 'puk/staging/runtime';
   if (
     !accountId ||
     !/^\d{12}$/.test(accountId) ||
@@ -41,9 +56,9 @@ function configure() {
     'GOOGLE_DRIVE_SHARED_DRIVE_ID',
     'SEED_CLIENT_ADMIN_EMAIL',
   ]) {
-    if (!process.env[name]) missing.push(name);
+    if (!environment[name]) missing.push(name);
   }
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_FILE && !process.env.GOOGLE_PRIVATE_KEY) {
+  if (!environment.GOOGLE_SERVICE_ACCOUNT_FILE && !environment.GOOGLE_PRIVATE_KEY) {
     missing.push('GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_PRIVATE_KEY');
   }
   if (missing.length > 0) {
@@ -84,25 +99,25 @@ function configure() {
 
   const access = generateKeyPairSync('ed25519');
   const refresh = generateKeyPairSync('ed25519');
-  const serviceAccount = process.env.GOOGLE_SERVICE_ACCOUNT_FILE
-    ? JSON.parse(readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_FILE, 'utf8'))
+  const serviceAccount = environment.GOOGLE_SERVICE_ACCOUNT_FILE
+    ? JSON.parse(readFileSync(environment.GOOGLE_SERVICE_ACCOUNT_FILE, 'utf8'))
     : undefined;
-  const googleClientEmail = process.env.GOOGLE_CLIENT_EMAIL ?? serviceAccount?.client_email;
-  const googlePrivateKey = process.env.GOOGLE_PRIVATE_KEY ?? serviceAccount?.private_key;
+  const googleClientEmail = environment.GOOGLE_CLIENT_EMAIL ?? serviceAccount?.client_email;
+  const googlePrivateKey = environment.GOOGLE_PRIVATE_KEY ?? serviceAccount?.private_key;
   if (!googleClientEmail || !googlePrivateKey) {
     console.error('The Google service account email or private key is missing.');
     process.exit(1);
   }
-  const seedAdminCredentials = createSeedAdminCredentials(process.env);
-  const seedTechnicianEmail = process.env.SEED_TECHNICIAN_EMAIL ?? 'technician@staging.invalid';
+  const seedAdminCredentials = createSeedAdminCredentials(environment);
+  const seedTechnicianEmail = environment.SEED_TECHNICIAN_EMAIL ?? 'technician@staging.invalid';
   const secret = JSON.stringify({
     GOOGLE_CLIENT_EMAIL: googleClientEmail,
     GOOGLE_PRIVATE_KEY: googlePrivateKey,
-    GOOGLE_DRIVE_CLIENT_EMAIL: process.env.GOOGLE_DRIVE_CLIENT_EMAIL,
-    GOOGLE_DRIVE_PRIVATE_KEY: process.env.GOOGLE_DRIVE_PRIVATE_KEY,
-    GOOGLE_DRIVE_SHARED_DRIVE_ID: process.env.GOOGLE_DRIVE_SHARED_DRIVE_ID,
-    GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID,
-    GOOGLE_TECHNICIANS_SPREADSHEET_ID: process.env.GOOGLE_TECHNICIANS_SPREADSHEET_ID,
+    GOOGLE_DRIVE_CLIENT_EMAIL: environment.GOOGLE_DRIVE_CLIENT_EMAIL,
+    GOOGLE_DRIVE_PRIVATE_KEY: environment.GOOGLE_DRIVE_PRIVATE_KEY,
+    GOOGLE_DRIVE_SHARED_DRIVE_ID: environment.GOOGLE_DRIVE_SHARED_DRIVE_ID,
+    GOOGLE_SPREADSHEET_ID: environment.GOOGLE_SPREADSHEET_ID,
+    GOOGLE_TECHNICIANS_SPREADSHEET_ID: environment.GOOGLE_TECHNICIANS_SPREADSHEET_ID,
     JWT_ACCESS_PRIVATE_KEY: access.privateKey.export({ format: 'pem', type: 'pkcs8' }),
     JWT_ACCESS_PUBLIC_KEY: access.publicKey.export({ format: 'pem', type: 'spki' }),
     JWT_REFRESH_PRIVATE_KEY: refresh.privateKey.export({ format: 'pem', type: 'pkcs8' }),
@@ -131,7 +146,7 @@ function configure() {
   } finally {
     rmSync(temporaryDirectory, { force: true, recursive: true });
   }
-  const credentialsFile = process.env.STAGING_ADMIN_CREDENTIALS_FILE;
+  const credentialsFile = environment.STAGING_ADMIN_CREDENTIALS_FILE;
   if (credentialsFile) {
     if (existsSync(credentialsFile)) {
       throw new Error('Staging admin credentials file already exists.');
@@ -153,6 +168,26 @@ function configure() {
     );
   }
   console.log('Staging runtime secret configured successfully. Secret values are not displayed.');
+}
+
+export function loadStagingConfiguration(environment = process.env) {
+  const configPath = environment.STAGING_CONFIG_FILE;
+  if (!configPath) return environment;
+  let config;
+  try {
+    config = JSON.parse(readFileSync(configPath, 'utf8'));
+  } catch {
+    throw new Error('Invalid staging configuration file.');
+  }
+  if (!config || Array.isArray(config) || typeof config !== 'object') {
+    throw new Error('Invalid staging configuration file.');
+  }
+  for (const [name, value] of Object.entries(config)) {
+    if (!stagingConfigFields.has(name) || typeof value !== 'string') {
+      throw new Error('Invalid staging configuration file.');
+    }
+  }
+  return { ...config, ...environment };
 }
 
 export function createSeedAdminCredentials(

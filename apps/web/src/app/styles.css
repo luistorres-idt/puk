@@ -152,7 +152,8 @@ select {
   }
 
   :root[data-theme='dark'] .text-emerald-700,
-  :root[data-theme='dark'] .text-emerald-800 {
+  :root[data-theme='dark'] .text-emerald-800,
+  :root[data-theme='dark'] .text-green-700 {
     color: #6ee7b7;
   }
 
@@ -184,6 +185,7 @@ select {
     border-color: #166534;
   }
 
+  :root[data-theme='dark'] .border-indigo-100,
   :root[data-theme='dark'] .border-indigo-200,
   :root[data-theme='dark'] .border-indigo-400 {
     border-color: #6366f1;

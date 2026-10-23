@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { refDebounced } from '@vueuse/core';
 import {
   NAlert,
   NButton,
@@ -27,9 +28,14 @@ const router = useRouter();
 const session = useSessionStore();
 
 const search = ref('');
+const debouncedSearch = refDebounced(search, 250);
 const statusFilter = ref<OrderStatus | ''>('');
 const page = ref(1);
 const pageSize = 12;
+
+watch([debouncedSearch, statusFilter], () => {
+  page.value = 1;
+});
 
 const statusOptions = [
   { label: 'Todas las activas', value: '' },
@@ -39,7 +45,7 @@ const statusOptions = [
 ];
 
 const queryParams = computed(() => ({
-  search: search.value ? search.value.trim() : undefined,
+  search: debouncedSearch.value ? debouncedSearch.value.trim() : undefined,
   status: statusFilter.value ? statusFilter.value : undefined,
   page: page.value,
   pageSize,

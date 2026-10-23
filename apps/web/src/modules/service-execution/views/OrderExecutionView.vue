@@ -10,6 +10,7 @@ import {
   NInput,
   NModal,
   NAlert,
+  NSelect,
   NSpin,
   NTabs,
   NTabPane,
@@ -81,7 +82,13 @@ const correctionNotes = ref('');
 // Active unit tab
 const activeUnitTab = ref<string>('');
 
-const { createSaveChecklistItems, getUnitItem, initChecklistForUnit } = useUnitChecklists();
+const {
+  createSaveChecklistItems,
+  getUnitItem,
+  initChecklistForUnit,
+  isUnitChecklistDirty,
+  markUnitChecklistSaved,
+} = useUnitChecklists();
 
 function getUnitAllEvidences(unitId: string) {
   const unit = order.value?.units?.find((u) => u.id === unitId);
@@ -181,6 +188,7 @@ async function handleSaveUnitChecklist(unitId: string) {
 
   try {
     await saveChecklist(orderId, unitId, result.items);
+    markUnitChecklistSaved(unitId);
     message.success('Checklist guardado exitosamente');
     await loadData();
   } catch (err: unknown) {
@@ -205,6 +213,27 @@ async function handleSaveSignature(payload: { signerName: string; blob: Blob }) 
 }
 
 async function handleCompleteOrder() {
+  if (order.value?.units) {
+    for (const unit of order.value.units) {
+      if (isUnitChecklistDirty(unit.id)) {
+        const result = createSaveChecklistItems(unit.id);
+        if (!result) continue;
+        if (!result.ok) {
+          activeUnitTab.value = unit.id;
+          message.error(result.message);
+          return;
+        }
+        try {
+          await saveChecklist(orderId, unit.id, result.items);
+          markUnitChecklistSaved(unit.id);
+        } catch (err: unknown) {
+          message.error(extractApiErrorMessage(err, 'Error al guardar checklist'));
+          return;
+        }
+      }
+    }
+  }
+
   if (executionNotesDirty.value) {
     try {
       await saveExecutionNotes();
@@ -355,12 +384,28 @@ onMounted(() => {
               Selecciona una unidad. El tipo de servicio indicado corresponde exclusivamente a esa
               unidad.
             </p>
+            <div v-if="order.units.length > 1" class="mb-3 sm:hidden">
+              <label class="mb-1 block text-xs font-semibold text-slate-600">
+                Cambiar unidad ({{ order.units.length }} disponibles)
+              </label>
+              <NSelect
+                v-model:value="activeUnitTab"
+                size="small"
+                :options="
+                  order.units.map((u, idx) => ({
+                    label: `#${idx + 1} ${u.label} · ${formatServiceType(u.serviceType)}`,
+                    value: u.id,
+                  }))
+                "
+                :input-props="{ 'aria-label': 'Seleccionar unidad' }"
+              />
+            </div>
             <NTabs v-model:value="activeUnitTab" type="line" animated>
               <NTabPane v-for="unit in order.units" :key="unit.id" :name="unit.id">
                 <template #tab>
                   <span class="inline-flex items-center gap-2">
                     <span>{{ unit.label }}</span>
-                    <NTag size="small" type="info" :bordered="false">
+                    <NTag size="small" type="info" :bordered="false" class="hidden sm:inline-flex">
                       {{ formatServiceType(unit.serviceType) }}
                     </NTag>
                   </span>
@@ -443,20 +488,22 @@ onMounted(() => {
                         </NTag>
                       </div>
 
-                      <div v-if="order.status === 'IN_PROGRESS'" class="flex gap-2 pt-1">
+                      <div v-if="order.status === 'IN_PROGRESS'" class="flex flex-wrap gap-2 pt-1">
                         <NButton
-                          size="tiny"
+                          size="small"
                           type="success"
                           secondary
+                          class="flex-1 sm:flex-initial"
                           @click="handleVerifyEquipment(unit.id, eq.id)"
                         >
                           Coincide Físicamente
                         </NButton>
 
                         <NButton
-                          size="tiny"
+                          size="small"
                           type="warning"
                           secondary
+                          class="flex-1 sm:flex-initial"
                           @click="openDiscrepancyModal(unit.id, eq.id)"
                         >
                           Reportar Discrepancia
@@ -470,9 +517,14 @@ onMounted(() => {
                     data-tour="execution-checklist"
                     class="space-y-4 pt-4 border-t border-slate-200"
                   >
-                    <h3 class="text-sm font-bold text-slate-800">
-                      Checklist de Recepción del Vehículo
-                    </h3>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <h3 class="text-sm font-bold text-slate-800">
+                        Checklist de Recepción del Vehículo
+                      </h3>
+                      <NTag v-if="isUnitChecklistDirty(unit.id)" size="small" type="warning" round>
+                        Cambios sin guardar
+                      </NTag>
+                    </div>
 
                     <div
                       v-for="catKey in CATEGORIES"

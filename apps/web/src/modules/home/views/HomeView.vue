@@ -120,7 +120,12 @@ function statusTagType(status: string) {
       <template v-else>
         <!-- Metrics Cards (Admin) -->
         <div v-if="session.user?.role === 'ADMIN'" class="space-y-4">
-          <h2 class="text-base font-semibold text-slate-800">Métricas Operativas</h2>
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="text-base font-semibold text-slate-800">Métricas Operativas</h2>
+            <span v-if="totalOrders > orders.length" class="text-xs text-slate-500">
+              Desglose por estado sobre las {{ orders.length }} órdenes más recientes
+            </span>
+          </div>
           <n-grid cols="2 s:3 m:6" responsive="screen" :x-gap="12" :y-gap="12">
             <n-grid-item>
               <n-card class="shadow-sm border-l-4 border-l-slate-400" size="small">

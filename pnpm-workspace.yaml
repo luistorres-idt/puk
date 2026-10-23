@@ -28,6 +28,7 @@ overrides:
   proxy-addr@>=1.1.0 <2.0.8: ^2.0.8
   sharp@<0.35.5: ^0.35.5
   source-map-js@>=1.0.0 <1.2.2: ^1.2.2
+  'chromium-bidi>zod': 4.6.6
 
 forceLegacyDeploy: true
 

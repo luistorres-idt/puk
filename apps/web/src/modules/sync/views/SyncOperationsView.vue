@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
+import { refDebounced } from '@vueuse/core';
 import {
   NAlert,
   NButton,
@@ -26,11 +27,16 @@ import {
 
 const message = useMessage();
 const queryClient = useQueryClient();
+const searchInput = ref('');
+const debouncedSearch = refDebounced(searchInput, 250);
 const filters = reactive({
   operationType: 'SHEET_TECHNICAL_REPORT' as string | null,
   page: 1,
   search: '',
   status: null as string | null,
+});
+watch(debouncedSearch, (val) => {
+  filters.search = val;
 });
 const scheduleForm = reactive<UpdateTechnicalReportSyncSchedule>({
   cutoffWeekday: 2,
@@ -208,6 +214,7 @@ function formatDate(value: string | null | undefined): string {
           <div>
             <label class="mb-1 block text-xs text-slate-500">Hora de envío</label
             ><n-time-picker
+              class="w-full"
               :formatted-value="scheduleForm.syncTime"
               format="HH:mm"
               value-format="HH:mm"
@@ -250,7 +257,7 @@ function formatDate(value: string | null | undefined): string {
       <n-card class="shadow-sm">
         <div class="mb-4 grid gap-3 md:grid-cols-3">
           <n-input
-            v-model:value="filters.search"
+            v-model:value="searchInput"
             clearable
             placeholder="Buscar folio, cliente o técnico"
           />

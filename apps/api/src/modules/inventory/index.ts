@@ -15,6 +15,7 @@ export {
   completeInventoryEquipment,
   completeInventoryAssignments,
   inventoryAssignment,
+  releaseOrderInventoryForCorrection,
   toOrderEquipmentCreateData,
   isDatabaseEquipment,
   releaseInventory,

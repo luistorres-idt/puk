@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { refDebounced, useDebounceFn } from '@vueuse/core';
 import {
   NAlert,
   NButton,
@@ -29,6 +30,7 @@ const session = useSessionStore();
 
 // Initialize filters from URL query
 const search = ref<string>(typeof route.query.search === 'string' ? route.query.search : '');
+const debouncedSearch = refDebounced(search, 250);
 const statusFilter = ref<string>(typeof route.query.status === 'string' ? route.query.status : '');
 const serviceTypeFilter = ref<OrderServiceType | ''>(
   OrderServiceTypeSchema.options.find((type) => type === route.query.serviceType) ?? '',
@@ -41,7 +43,7 @@ const page = ref<number>(
 const pageSize = 15;
 
 const queryParams = computed(() => ({
-  search: search.value ? search.value.trim() : undefined,
+  search: debouncedSearch.value ? debouncedSearch.value.trim() : undefined,
   status: statusFilter.value ? (statusFilter.value as OrderStatus) : undefined,
   serviceType: serviceTypeFilter.value || undefined,
   page: page.value,
@@ -88,6 +90,8 @@ function onFilterChange() {
   page.value = 1;
   updateUrlQuery();
 }
+
+const onSearchChange = useDebounceFn(onFilterChange, 250);
 
 function onPageChange(newPage: number) {
   page.value = newPage;
@@ -162,7 +166,7 @@ const serviceTypeOptions = [
               v-model:value="search"
               placeholder="Folio o cliente..."
               clearable
-              @update:value="onFilterChange"
+              @update:value="onSearchChange"
             />
           </div>
           <div>

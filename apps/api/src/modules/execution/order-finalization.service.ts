@@ -1,4 +1,8 @@
-import { completeInventoryAssignments, releaseOrderInventory } from '../inventory/index.js';
+import {
+  completeInventoryAssignments,
+  releaseOrderInventory,
+  releaseOrderInventoryForCorrection,
+} from '../inventory/index.js';
 import * as v from 'valibot';
 import {
   OrderPricingOverridesReadSchema,
@@ -431,6 +435,15 @@ export class OrderFinalizationService {
       ? await this.options.technicalReportScheduling?.getNextScheduledAt(correctionTime)
       : undefined;
     return domainTransaction(this.prisma, async (tx, effects) => {
+      await releaseOrderInventoryForCorrection(
+        tx,
+        orderId,
+        order.status === OrderStatus.COMPLETED,
+        order.serviceType,
+        order.clientSheetId,
+        order.units,
+      );
+
       const notesText = input.notes?.trim();
       const nextNotes = notesText
         ? `${order.generalNotes ? `${order.generalNotes}\n` : ''}Corrección solicitada: ${notesText}`

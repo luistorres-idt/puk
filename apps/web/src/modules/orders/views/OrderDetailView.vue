@@ -8,6 +8,7 @@ import {
   NDatePicker,
   NInput,
   NModal,
+  NSelect,
   NSpin,
   NTabPane,
   NTabs,
@@ -619,6 +620,20 @@ const statusColor = orderStatusTagType;
         </n-card>
 
         <!-- Tabs Section -->
+        <div class="sm:hidden">
+          <label class="mb-1 block text-xs font-semibold text-slate-600">Sección de la orden</label>
+          <n-select
+            v-model:value="activeTab"
+            size="small"
+            :options="[
+              { label: 'Sección: Unidades y Equipos', value: 'units' },
+              { label: 'Sección: Evidencias y Firma', value: 'evidence' },
+              { label: 'Sección: Registro de Auditoría', value: 'audit' },
+              { label: 'Sección: Sincronización Sheets', value: 'sync' },
+            ]"
+            :input-props="{ 'aria-label': 'Sección de la orden' }"
+          />
+        </div>
         <n-tabs v-model:value="activeTab" data-tour="order-tabs" type="line" animated>
           <!-- Tab 1: Unidades y Equipos -->
           <n-tab-pane name="units" tab="Unidades y Equipos">

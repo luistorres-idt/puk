@@ -17,6 +17,7 @@ overrides:
   proxy-addr@>=1.1.0 <2.0.8: ^2.0.8
   sharp@<0.35.5: ^0.35.5
   source-map-js@>=1.0.0 <1.2.2: ^1.2.2
+  chromium-bidi>zod: 4.6.6
 
 importers:
 
@@ -4199,8 +4200,8 @@ packages:
   zeptomatch@2.1.0:
     resolution: {integrity: sha512-KiGErG2J0G82LSpniV0CtIzjlJ10E04j02VOudJsPyPwNZgGnRKQy7I1R7GMyg/QswnE4l7ohSGrQbQbjXPPDA==}
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
 snapshots:
 
@@ -5951,7 +5952,7 @@ snapshots:
     dependencies:
       devtools-protocol: 0.0.1687809
       mitt: 3.0.1
-      zod: 3.25.76
+      zod: 4.6.6
 
   class-variance-authority@0.7.1:
     dependencies:
@@ -8089,4 +8090,4 @@ snapshots:
       grammex: 3.1.13
       graphmatch: 1.1.1
 
-  zod@3.25.76: {}
+  zod@4.6.6: {}

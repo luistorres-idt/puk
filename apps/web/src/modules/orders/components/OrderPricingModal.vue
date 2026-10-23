@@ -84,13 +84,15 @@ defineExpose({
       </p>
 
       <!-- Clean Tabular Pricing Form -->
-      <div class="border border-slate-200 rounded-lg overflow-hidden">
+      <div class="border border-slate-200 rounded-lg overflow-x-auto">
         <table class="w-full text-xs text-left border-collapse">
           <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
             <tr>
-              <th class="py-2 px-3 font-semibold">Servicio</th>
-              <th class="py-2 px-3 font-semibold text-right">Tarifa Base</th>
-              <th class="py-2 px-3 font-semibold text-right w-44">Tarifa de la Orden</th>
+              <th class="py-2 px-2.5 sm:px-3 font-semibold">Servicio</th>
+              <th class="py-2 px-2.5 sm:px-3 font-semibold text-right">Tarifa Base</th>
+              <th class="py-2 px-2.5 sm:px-3 font-semibold text-right w-28 sm:w-44">
+                Tarifa de la Orden
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -99,17 +101,17 @@ defineExpose({
               :key="svc"
               class="hover:bg-slate-50/50 transition-colors"
             >
-              <td class="py-2 px-3">
+              <td class="py-2 px-2.5 sm:px-3">
                 <span class="font-medium text-slate-800">{{ ORDER_SERVICE_LABELS[svc] }}</span>
               </td>
-              <td class="py-2 px-3 text-right font-mono text-slate-500">
+              <td class="py-2 px-2.5 sm:px-3 text-right font-mono text-slate-500 whitespace-nowrap">
                 {{
                   getTechnicianBaseRate(svc, order)
                     ? `$${Number(getTechnicianBaseRate(svc, order)).toFixed(2)}`
                     : '—'
                 }}
               </td>
-              <td class="py-1.5 px-3 text-right">
+              <td class="py-1.5 px-2.5 sm:px-3 text-right">
                 <n-input
                   v-model:value="rates[svc]"
                   type="text"
@@ -142,12 +144,14 @@ defineExpose({
       </div>
 
       <!-- Travel Expenses Row -->
-      <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+      <div
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs"
+      >
         <div>
           <span class="font-medium text-slate-800 block">Viáticos / Costo de salida</span>
           <span class="text-slate-400 text-[11px]">Traslado acordado para esta orden</span>
         </div>
-        <div class="w-44">
+        <div class="w-full sm:w-44">
           <n-input
             v-model:value="travelExpenses"
             type="text"
