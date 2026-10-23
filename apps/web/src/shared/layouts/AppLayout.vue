@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { NButton, NTag } from 'naive-ui';
+import { computed, ref, watch } from 'vue';
+import { NButton, NDropdown, NTag } from 'naive-ui';
 import { useRoute, useRouter } from 'vue-router';
 import { useOnline } from '@vueuse/core';
 import ThemeToggle from '@/shared/components/ThemeToggle.vue';
@@ -12,6 +12,22 @@ const router = useRouter();
 const route = useRoute();
 const isOnline = useOnline();
 const isMobileMenuOpen = ref(false);
+
+const adminDropdownOptions = [
+  { label: 'Técnicos', key: '/technicians' },
+  { label: 'Cuentas Técnicas', key: '/technical-accounts' },
+  { label: 'Clientes', key: '/admin/clients' },
+  { label: 'Administradores', key: '/admin/users' },
+  { label: 'Sincronización', key: '/sync' },
+];
+
+const isAdminRouteActive = computed(() =>
+  adminDropdownOptions.some((opt) => route.path.startsWith(opt.key)),
+);
+
+function handleAdminNavSelect(path: string): void {
+  void router.push(path);
+}
 
 watch(
   () => route.fullPath,
@@ -86,7 +102,7 @@ async function logout(): Promise<void> {
             v-if="session.user"
             data-tour="navigation"
             aria-label="Navegación principal"
-            class="hidden items-center gap-2 2xl:flex lg:gap-4"
+            class="hidden items-center gap-2 lg:flex lg:gap-3"
           >
             <template v-if="session.user.orderAccessMode === 'SHARED'">
               <router-link
@@ -113,54 +129,34 @@ async function logout(): Promise<void> {
                 {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
               </router-link>
               <template v-if="session.user.role === 'ADMIN'">
-                <span
-                  class="mx-1 hidden h-5 border-l border-slate-200 lg:block"
-                  aria-hidden="true"
-                />
-                <span
-                  class="hidden text-[10px] font-bold uppercase tracking-wider text-slate-400 lg:inline"
+                <n-dropdown
+                  trigger="click"
+                  :options="adminDropdownOptions"
+                  @select="handleAdminNavSelect"
                 >
-                  Administración
-                </span>
-                <router-link
-                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                  active-class="bg-blue-50 text-blue-900 font-semibold"
-                  to="/technicians"
-                >
-                  Técnicos
-                </router-link>
-                <router-link
-                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                  active-class="bg-blue-50 text-blue-900 font-semibold"
-                  to="/technical-accounts"
-                >
-                  Cuentas Técnicas
-                </router-link>
-                <router-link
-                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                  active-class="bg-blue-50 text-blue-900 font-semibold"
-                  to="/admin/clients"
-                >
-                  Clientes
-                </router-link>
-                <router-link
-                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                  active-class="bg-blue-50 text-blue-900 font-semibold"
-                  to="/admin/users"
-                >
-                  Administradores
-                </router-link>
-                <router-link
-                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
-                  active-class="bg-blue-50 text-blue-900 font-semibold"
-                  to="/sync"
-                >
-                  Sincronización
-                </router-link>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800 cursor-pointer"
+                    :class="{ 'bg-blue-50 text-blue-900 font-semibold': isAdminRouteActive }"
+                    aria-haspopup="menu"
+                  >
+                    <span>Administración</span>
+                    <svg
+                      class="h-3.5 w-3.5 opacity-70"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </n-dropdown>
               </template>
             </template>
 
-            <span class="hidden text-xs text-slate-500 lg:inline">
+            <span class="hidden max-w-40 truncate text-xs text-slate-500 lg:inline">
               {{ session.user.name }}
             </span>
 
@@ -171,7 +167,7 @@ async function logout(): Promise<void> {
           <button
             v-if="session.user"
             type="button"
-            class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 2xl:hidden focus:outline-none"
+            class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 lg:hidden focus:outline-none"
             :aria-expanded="isMobileMenuOpen"
             data-tour="navigation"
             aria-label="Menú principal"
@@ -204,7 +200,7 @@ async function logout(): Promise<void> {
       <!-- Mobile Navigation Drawer / Dropdown -->
       <div
         v-if="session.user && isMobileMenuOpen"
-        class="app-mobile-menu absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 py-3 shadow-lg 2xl:hidden"
+        class="app-mobile-menu absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 py-3 shadow-lg lg:hidden"
       >
         <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
           <div>
