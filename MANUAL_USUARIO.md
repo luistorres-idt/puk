@@ -139,7 +139,7 @@ Actualizado: 19 de octubre de 2026. Describe la versión del código revisada; l
 
 **Importante:** asignar no significa enviar un correo al cliente ni garantizar una notificación externa al técnico. Coordina la cita por los canales de tu organización.
 
-**Si ya no se hará la cita:** usa **Cancelar Orden**, escribe el motivo y pulsa **Confirmar Cancelación**. No se cancela una orden completada; para una cita fallida, sigue la sección 15.
+**Si ya no se hará la cita o hubo un error al crear la orden:** los administradores pueden pulsar **Eliminar** directamente en la tarjeta del listado o en el detalle administrativo. Se abre una confirmación donde puedes indicar el motivo; al confirmar, la orden se anula y los equipos vinculados se liberan automáticamente para otros servicios. No es posible eliminar órdenes completadas; para una cita fallida, sigue la sección 15.
 
 ---
 
@@ -278,7 +278,7 @@ No necesitas inventar un checklist, diez fotos ni una firma para este cierre.
 | Completada | El cierre quedó guardado. Administración puede revisar el resultado y el PDF. |
 | Requiere Corrección | Administración pidió cambios. Debe volver a asignarla para retomarlos. |
 | Cita Fallida | No se pudo hacer el servicio. Administración decide si crea otra cita o cancela. |
-| Cancelada | La orden ya no se trabaja. Se conserva como registro. |
+| Cancelada | La orden ya no se trabaja (anulada o eliminada). Se conserva como registro histórico. En el listado general se oculta por defecto para evitar saturación visual y se puede consultar seleccionando explícitamente el filtro **Cancelada**. |
 
 **Para buscar:** abre Órdenes o Mis Órdenes y utiliza el folio, el cliente y los filtros disponibles. Si no aparece, quita los filtros y revisa tu acceso con administración.
 

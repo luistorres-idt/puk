@@ -41,10 +41,18 @@ stateDiagram-v2
     COMPLETED --> REQUIRES_CORRECTION: solicitud administrativa
     REQUIRES_CORRECTION --> IN_PROGRESS: reiniciar trabajo
     REQUIRES_CORRECTION --> COMPLETED: completar corrección
-    DRAFT --> CANCELLED: cancelar
-    ASSIGNED --> CANCELLED: cancelar
-    IN_PROGRESS --> CANCELLED: cancelar
+    REQUIRES_CORRECTION --> CANCELLED: cancelar
+    DRAFT --> CANCELLED: cancelar / eliminar
+    ASSIGNED --> CANCELLED: cancelar / eliminar
+    IN_PROGRESS --> CANCELLED: cancelar / eliminar
 ```
+
+### Cancelación y eliminación lógica de órdenes
+
+Las órdenes en estados no terminales (`DRAFT`, `ASSIGNED`, `IN_PROGRESS`, `REQUIRES_CORRECTION`) pueden anularse o eliminarse administrativamente (`cancelOrder`):
+- **Restricción de completitud**: Las órdenes en estado `COMPLETED` no pueden ser canceladas ni eliminadas, protegiendo los cierres formales y reportes emitidos.
+- **Liberación de inventario**: Transaccionalmente se liberan todas las reservas de hardware en `Equipment` (`releaseOrderInventory`) y se desactiva `activeAssignment` en `OrderEquipment` para que los dispositivos queden disponibles inmediatamente para otros servicios.
+- **Trazabilidad y auditoría**: La orden pasa a `CANCELLED` y se registra la acción `ORDER_CANCELLED` en la bitácora de auditoría.
 
 ### Validación de completitud (Specification Pattern)
 
