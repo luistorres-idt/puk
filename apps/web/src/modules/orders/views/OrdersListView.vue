@@ -7,11 +7,11 @@ import {
   NButton,
   NCard,
   NEmpty,
-  NInput,
   NPagination,
   NSelect,
   NSpin,
   NTag,
+  useMessage,
 } from 'naive-ui';
 import {
   ORDER_SERVICE_LABELS,
@@ -20,6 +20,8 @@ import {
   type OrderServiceType,
 } from '@puk/contracts';
 import { formatOrderStatus, formatServiceType, orderStatusTagType } from '../formatters.js';
+import DeleteOrderModal from '../components/DeleteOrderModal.vue';
+import { useDeleteOrder } from '../composables/useDeleteOrder.js';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { useSessionStore } from '@/stores/session';
 import { useOrdersQuery } from '../queries';
@@ -54,6 +56,21 @@ const ordersQuery = useOrdersQuery(queryParams);
 
 const orders = computed(() => ordersQuery.data.value?.data ?? []);
 const pagination = computed(() => ordersQuery.data.value?.meta.pagination);
+
+const displayedOrders = computed(() => {
+  const list = orders.value;
+  if (statusFilter.value === 'CANCELLED') {
+    return list;
+  }
+  return list.filter((order) => order.status !== 'CANCELLED');
+});
+
+const message = useMessage();
+const deleteOrder = useDeleteOrder({
+  notifySuccess: (msg) => message.success(msg),
+  notifyError: (msg) => message.error(msg),
+  onSuccess: () => ordersQuery.refetch(),
+});
 
 // Sync query changes to URL query
 function updateUrlQuery() {
@@ -206,7 +223,7 @@ const serviceTypeOptions = [
 
       <!-- Empty State -->
       <div
-        v-else-if="orders.length === 0"
+        v-else-if="displayedOrders.length === 0"
         class="bg-white rounded-xl border border-slate-200 py-12 px-4 text-center"
       >
         <n-empty description="No se encontraron órdenes con los filtros seleccionados.">
@@ -226,7 +243,7 @@ const serviceTypeOptions = [
       <!-- Orders Cards Grid -->
       <div v-else data-tour="order-list" class="grid grid-cols-1 gap-4">
         <n-card
-          v-for="order in orders"
+          v-for="order in displayedOrders"
           :key="order.id"
           hoverable
           class="cursor-pointer transition-shadow"
@@ -305,7 +322,7 @@ const serviceTypeOptions = [
                   }}
                 </span>
               </div>
-              <div>
+              <div class="flex items-center gap-2">
                 <n-button
                   v-if="session.user?.role === 'TECHNICIAN'"
                   size="small"
@@ -314,14 +331,24 @@ const serviceTypeOptions = [
                 >
                   Ver Orden →
                 </n-button>
-                <n-button
-                  v-else
-                  size="small"
-                  secondary
-                  @click.stop="router.push(`/orders/${order.id}`)"
-                >
-                  Detalle →
-                </n-button>
+                <template v-else>
+                  <n-button
+                    v-if="deleteOrder.canDeleteOrder(order.status, session.user?.role)"
+                    size="small"
+                    type="error"
+                    secondary
+                    @click.stop="deleteOrder.open(order)"
+                  >
+                    Eliminar
+                  </n-button>
+                  <n-button
+                    size="small"
+                    secondary
+                    @click.stop="router.push(`/orders/${order.id}`)"
+                  >
+                    Detalle →
+                  </n-button>
+                </template>
               </div>
             </div>
           </div>
@@ -337,6 +364,15 @@ const serviceTypeOptions = [
           />
         </div>
       </div>
+
+      <!-- Modal: Delete Order -->
+      <delete-order-modal
+        v-model:show="deleteOrder.showModal.value"
+        v-model:reason="deleteOrder.deleteReason.value"
+        :folio="deleteOrder.targetOrder.value?.folio"
+        :loading="deleteOrder.isDeleting.value"
+        @confirm="deleteOrder.confirm"
+      />
     </div>
   </app-layout>
 </template>
