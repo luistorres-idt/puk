@@ -39,6 +39,7 @@ function app(role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
 const operations = [
   ['get', '/clients', undefined, 'list'],
   ['get', `/clients/${id}`, undefined, 'get'],
+  ['post', '/clients', { name: 'Client' }, 'create'],
   ['post', '/clients', { clientSheetId: 'C1', name: 'Client' }, 'create'],
   ['patch', `/clients/${id}`, { name: 'Renamed' }, 'update'],
   ['post', `/clients/${id}/emails`, { email: ' A@Example.com ' }, 'addEmail'],
@@ -77,6 +78,14 @@ describe('ADMIN client HTTP management', () => {
       for (const mock of Object.values(service)) expect(mock).not.toHaveBeenCalled();
     },
   );
+  it('accepts a name-only client without requiring an external identity', async () => {
+    const response = await request(app())
+      .post('/clients')
+      .set('Authorization', 'Bearer test')
+      .send({ name: ' Local client ' });
+    expect(response.status).toBe(201);
+    expect(service.create).toHaveBeenCalledWith(id, { name: 'Local client' });
+  });
   it('normalizes recipient inputs before passing them to the service', async () => {
     await request(app())
       .post(`/clients/${id}/emails`)
@@ -87,7 +96,7 @@ describe('ADMIN client HTTP management', () => {
   it('rejects invalid body, UUID, email and identifier mutation', async () => {
     const application = app();
     for (const [method, path, body] of [
-      ['post', '/clients', { name: 'Client' }],
+      ['post', '/clients', { name: ' ' }],
       ['get', '/clients/not-uuid', {}],
       ['post', `/clients/${id}/emails`, { email: 'invalid' }],
       ['patch', `/clients/${id}`, { name: 'Client', clientSheetId: 'OTHER' }],

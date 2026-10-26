@@ -63,7 +63,7 @@ export interface ClientCatalogPort {
   getClients(options?: {
     forceFresh?: boolean;
     search?: string;
-  }): Promise<{ data: readonly ExternalClient[]; fetchedAt: string }>;
+  }): Promise<{ data: readonly ExternalClient[]; fetchedAt: string; sheetsAvailable?: boolean }>;
 }
 
 export interface CatalogServicePort extends EquipmentCatalogPort, ClientCatalogPort {

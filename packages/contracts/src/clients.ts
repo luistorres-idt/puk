@@ -5,7 +5,10 @@ const clientSheetId = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(2
 const email = v.pipe(v.string(), v.trim(), v.email(), v.maxLength(254), v.toLowerCase());
 const id = v.pipe(v.string(), v.uuid());
 
-export const CreateClientSchema = v.strictObject({ clientSheetId, name: clientName });
+export const CreateClientSchema = v.strictObject({
+  clientSheetId: v.optional(clientSheetId),
+  name: clientName,
+});
 export const UpdateClientSchema = v.strictObject({ name: clientName });
 export const SaveClientEmailSchema = v.strictObject({ email });
 export const ClientEmailParamsSchema = v.object({ id, emailId: id });

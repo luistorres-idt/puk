@@ -19,24 +19,19 @@ import { useClients } from '../useClients.js';
 
 const {
   clients,
-  catalog,
   selectedId,
   selected,
   loading,
-  catalogLoading,
   saving,
   error,
-  catalogError,
   formError,
   load,
-  loadCatalog,
   register,
   rename,
   saveEmail,
   removeEmail,
 } = useClients();
 const message = useMessage();
-const sheetId = ref<string | null>(null);
 const newName = ref('');
 const name = ref('');
 const email = ref('');
@@ -47,14 +42,6 @@ const clientOptions = computed(() =>
     value: client.id,
   })),
 );
-const sheetOptions = computed(() =>
-  catalog.value
-    .filter((client) => !clients.value.some((stored) => stored.clientSheetId === client.id))
-    .map((client) => ({ label: `${client.name} (${client.id})`, value: client.id })),
-);
-watch(sheetId, (id) => {
-  newName.value = catalog.value.find((client) => client.id === id)?.name ?? '';
-});
 watch(selected, (client) => {
   name.value = client?.name ?? '';
   cancelEmail();
@@ -65,9 +52,8 @@ function cancelEmail(): void {
   emailId.value = undefined;
 }
 async function create(): Promise<void> {
-  if (!sheetId.value) return;
-  if (await register(sheetId.value, newName.value)) {
-    sheetId.value = null;
+  if (await register(newName.value)) {
+    newName.value = '';
     message.success('Cliente registrado.');
   }
 }
@@ -89,7 +75,6 @@ async function deleteEmail(id: string): Promise<void> {
 }
 onMounted(() => {
   void load();
-  void loadCatalog();
 });
 </script>
 
@@ -99,7 +84,7 @@ onMounted(() => {
       <header>
         <h1 class="text-2xl font-bold">Clientes y correos</h1>
         <p class="text-sm text-slate-600">
-          Administra los destinatarios de reportes sin modificar Google Sheets.
+          Crea clientes y administra sus destinatarios de reportes en la base de datos.
         </p>
       </header>
       <n-alert v-if="error" type="error"
@@ -107,25 +92,7 @@ onMounted(() => {
       >
       <n-alert v-if="formError" type="error">{{ formError }}</n-alert>
       <n-card title="Registrar cliente">
-        <n-alert v-if="catalogError" class="mb-4" type="warning"
-          >{{ catalogError }}
-          <n-button size="small" :loading="catalogLoading" @click="loadCatalog"
-            >Reintentar</n-button
-          ></n-alert
-        >
         <n-form @submit.prevent="create">
-          <n-form-item label="Cliente de Google Sheets">
-            <n-select
-              v-model:value="sheetId"
-              filterable
-              clearable
-              :options="sheetOptions"
-              :loading="catalogLoading"
-              :disabled="saving || catalogLoading || !!catalogError"
-              placeholder="Selecciona un cliente existente"
-              :input-props="{ 'aria-label': 'Cliente de Google Sheets' }"
-            />
-          </n-form-item>
           <n-form-item label="Nombre en el sistema">
             <n-input
               v-model:value="newName"
@@ -138,7 +105,7 @@ onMounted(() => {
             attr-type="submit"
             type="primary"
             :loading="saving"
-            :disabled="!sheetId || !newName.trim() || !!catalogError"
+            :disabled="saving || !newName.trim()"
             >Registrar</n-button
           >
         </n-form>
@@ -157,7 +124,7 @@ onMounted(() => {
             />
             <template v-if="selected">
               <p class="my-4 text-sm text-slate-600">
-                ID de Google Sheets: {{ selected.clientSheetId }}. Este identificador no se
+                Identificador del cliente: {{ selected.clientSheetId }}. Este identificador no se
                 modifica.
               </p>
               <n-form @submit.prevent="saveName">

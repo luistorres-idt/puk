@@ -1,22 +1,18 @@
 import { computed, ref } from 'vue';
-import { SaveClientEmailSchema, type Client, type ExternalClient } from '@puk/contracts';
+import { CreateClientSchema, SaveClientEmailSchema, type Client } from '@puk/contracts';
 import { safeParse } from 'valibot';
-import { fetchClients } from '@/modules/external-catalogs';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import * as clientApi from './api.js';
 
 export function useClients() {
   const clients = ref<Client[]>([]);
-  const catalog = ref<ExternalClient[]>([]);
   const selectedId = ref<string | null>(null);
   const selected = computed(
     () => clients.value.find((client) => client.id === selectedId.value) ?? null,
   );
   const loading = ref(false);
-  const catalogLoading = ref(false);
   const saving = ref(false);
   const error = ref<string | null>(null);
-  const catalogError = ref<string | null>(null);
   const formError = ref<string | null>(null);
 
   async function load(): Promise<void> {
@@ -31,18 +27,6 @@ export function useClients() {
       error.value = extractApiErrorMessage(err, 'No se pudieron cargar los clientes.');
     } finally {
       loading.value = false;
-    }
-  }
-  async function loadCatalog(): Promise<void> {
-    catalogLoading.value = true;
-    catalogError.value = null;
-    try {
-      catalog.value = (await fetchClients()).clients;
-    } catch {
-      catalogError.value =
-        'No se pudo cargar el catálogo de Google Sheets. Puedes administrar los clientes registrados.';
-    } finally {
-      catalogLoading.value = false;
     }
   }
   function storeClient(client: Client): void {
@@ -65,8 +49,13 @@ export function useClients() {
       saving.value = false;
     }
   }
-  function register(clientSheetId: string, name: string): Promise<boolean> {
-    return save(async () => storeClient(await clientApi.createClient({ clientSheetId, name })));
+  function register(name: string): Promise<boolean> {
+    const parsed = safeParse(CreateClientSchema, { name });
+    if (!parsed.success) {
+      formError.value = 'Ingresa un nombre de cliente de entre 1 y 200 caracteres.';
+      return Promise.resolve(false);
+    }
+    return save(async () => storeClient(await clientApi.createClient(parsed.output)));
   }
   function rename(id: string, name: string): Promise<boolean> {
     return save(async () => storeClient(await clientApi.updateClient(id, { name })));
@@ -93,17 +82,13 @@ export function useClients() {
   }
   return {
     clients,
-    catalog,
     selectedId,
     selected,
     loading,
-    catalogLoading,
     saving,
     error,
-    catalogError,
     formError,
     load,
-    loadCatalog,
     register,
     rename,
     saveEmail,

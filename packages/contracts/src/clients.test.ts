@@ -3,7 +3,14 @@ import * as v from 'valibot';
 import { CreateClientSchema, SaveClientEmailSchema, UpdateClientSchema } from './clients.js';
 
 describe('client management contracts', () => {
-  it('trims names and stable Sheets identifiers', () => {
+  it('creates a client with only a trimmed name', () => {
+    expect(v.parse(CreateClientSchema, { name: ' Local client ' })).toEqual({
+      name: 'Local client',
+    });
+    expect(v.safeParse(CreateClientSchema, { name: ' ' }).success).toBe(false);
+    expect(v.safeParse(CreateClientSchema, { name: 'x'.repeat(201) }).success).toBe(false);
+  });
+  it('trims names and optional legacy Sheets identifiers', () => {
     expect(v.parse(CreateClientSchema, { clientSheetId: ' C-1 ', name: ' Client ' })).toEqual({
       clientSheetId: 'C-1',
       name: 'Client',

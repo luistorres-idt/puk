@@ -1,13 +1,15 @@
-import type { ExternalClient, ExternalEquipment, RegisterEquipment } from '@puk/contracts';
+import type {
+  CatalogMetadata,
+  ExternalClient,
+  ExternalEquipment,
+  RegisterEquipment,
+} from '@puk/contracts';
 import { api } from '../../shared/http/client.js';
 
 export interface CatalogResponse<T> {
   data: T[];
-  meta: {
+  meta: CatalogMetadata & {
     requestId: string;
-    fetchedAt: string;
-    total: number;
-    sheetsAvailable?: boolean;
     registrationAllowed?: boolean;
     warnings?: string[];
   };
@@ -16,6 +18,7 @@ export interface CatalogResponse<T> {
 export async function fetchClients(search?: string): Promise<{
   clients: ExternalClient[];
   fetchedAt: string;
+  sheetsAvailable: boolean;
 }> {
   const response = await api.get<CatalogResponse<ExternalClient>>('/external/clients', {
     params: search ? { search } : undefined,
@@ -23,6 +26,7 @@ export async function fetchClients(search?: string): Promise<{
   return {
     clients: response.data.data,
     fetchedAt: response.data.meta.fetchedAt,
+    sheetsAvailable: response.data.meta.sheetsAvailable ?? true,
   };
 }
 

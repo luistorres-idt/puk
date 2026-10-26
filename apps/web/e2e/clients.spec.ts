@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { Client } from '@puk/contracts';
 
 const clientId = '00000000-0000-4000-8000-000000000011';
+const localClientKey = `DB:${clientId}`;
 const emailId = '00000000-0000-4000-8000-000000000012';
 async function mockClients(page: Page, role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
   let client: Client | undefined;
@@ -24,11 +25,13 @@ async function mockClients(page: Page, role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
     if (path.endsWith('/auth/refresh')) return respond({ accessToken: 'mock-only', user });
     if (path.endsWith('/auth/me')) return respond(user);
     requests.push(`${method} ${path}`);
-    if (path.endsWith('/external/clients')) return respond([{ id: 'C1', name: 'Sheets client' }]);
+    if (path.endsWith('/external/clients'))
+      return route.fulfill({ status: 503, json: { error: { message: 'Sheets offline' } } });
     if (path.endsWith('/clients') && method === 'GET') return respond(client ? [client] : []);
     if (path.endsWith('/clients') && method === 'POST') {
-      const body = request.postDataJSON() as { clientSheetId: string; name: string };
-      client = { id: clientId, ...body, emails: [] };
+      const body = request.postDataJSON() as { name: string };
+      expect(body).toEqual({ name: 'Local client' });
+      client = { id: clientId, clientSheetId: localClientKey, ...body, emails: [] };
       return respond(client, 201);
     }
     if (path.endsWith(`/clients/${clientId}`) && method === 'PATCH') {
@@ -64,20 +67,20 @@ async function mockClients(page: Page, role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
   return requests;
 }
 
-test('administrator registers a Sheets client and manages recipients without Sheets writes', async ({
+test('administrator creates a local client and manages recipients without Sheets access', async ({
   page,
 }) => {
   const requests = await mockClients(page);
   await page.goto('/admin/clients');
   await expect(page.getByRole('heading', { name: 'Clientes y correos' })).toBeVisible();
-  await page.locator('.n-base-selection').first().click();
-  await page.getByText('Sheets client (C1)', { exact: true }).click();
   await page.getByLabel('Nombre del nuevo cliente').fill('Local client');
   await page.getByRole('button', { name: 'Registrar', exact: true }).click();
-  await expect(page.getByText('ID de Google Sheets: C1.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText(`Identificador del cliente: ${localClientKey}.`, { exact: false }),
+  ).toBeVisible();
   await page.getByLabel('Nombre del cliente', { exact: true }).fill('Renamed client');
   await page.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
-  await expect(page.getByText('Renamed client (C1)', { exact: true })).toBeVisible();
+  await expect(page.getByText(`Renamed client (${localClientKey})`, { exact: true })).toBeVisible();
   await page.getByLabel('Correo del cliente').fill(' Recipient@Example.invalid ');
   await page.getByRole('button', { name: 'Agregar correo', exact: true }).click();
   await expect(
@@ -94,9 +97,9 @@ test('administrator registers a Sheets client and manages recipients without She
   await expect(
     page.getByText('El cliente todavía no tiene correos.', { exact: true }),
   ).toBeVisible();
-  expect(requests.filter((request) => request.includes('/external/'))).toEqual([
-    'GET /api/v1/external/clients',
-  ]);
+  expect(requests.filter((request) => request.includes('/external/'))).toEqual([]);
+  await page.reload();
+  await expect(page.getByText(`Renamed client (${localClientKey})`, { exact: true })).toBeVisible();
   expect(requests).toContain(`DELETE /api/v1/clients/${clientId}/emails/${emailId}`);
 });
 

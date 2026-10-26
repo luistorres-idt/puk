@@ -7,7 +7,7 @@ function setup() {
   const tx = {
     client: {
       findUnique: vi.fn().mockResolvedValue(client),
-      create: vi.fn().mockResolvedValue(client),
+      create: vi.fn<(input: unknown) => Promise<typeof client>>().mockResolvedValue(client),
       update: vi.fn().mockResolvedValue({ ...client, name: 'Renamed' }),
       findMany: vi.fn().mockResolvedValue([client]),
     },
@@ -40,6 +40,28 @@ describe('ClientsService', () => {
   let context: ReturnType<typeof setup>;
   beforeEach(() => {
     context = setup();
+  });
+  it('creates independent clients without consulting Sheets, with unique stable keys and audit', async () => {
+    context.catalog.getClients.mockRejectedValue(new Error('offline'));
+    await context.service.create('actor', { name: ' Local client ' });
+    await context.service.create('actor', { name: 'Another client' });
+    expect(context.catalog.getClients).not.toHaveBeenCalled();
+    const first = context.tx.client.create.mock.calls[0]![0] as {
+      data: { clientSheetId: string; name: string };
+    };
+    const second = context.tx.client.create.mock.calls[1]![0] as {
+      data: { clientSheetId: string };
+    };
+    expect(first.data).toEqual({
+      clientSheetId: expect.stringMatching(/^DB:[0-9a-f-]{36}$/),
+      name: 'Local client',
+    });
+    expect(first.data.clientSheetId).not.toBe(second.data.clientSheetId);
+    expect(context.tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'CLIENT_CREATED', actorUserId: 'actor' }),
+      }),
+    );
   });
   it('verifies a fresh Sheets ID and persists display name independently', async () => {
     await context.service.create('actor', { clientSheetId: ' C1 ', name: ' Local name ' });
