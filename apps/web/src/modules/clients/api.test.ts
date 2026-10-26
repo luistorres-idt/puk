@@ -27,9 +27,9 @@ describe('client management API adapter', () => {
     expect(api.get).toHaveBeenCalledWith('/clients/client-1');
   });
   it('sends explicit create and immutable-identity update bodies', async () => {
-    await expect(createClient({ clientSheetId: 'C1', name: 'Client' })).resolves.toEqual(client);
+    await expect(createClient({ name: 'Client' })).resolves.toEqual(client);
     await updateClient(client.id, { name: 'Renamed' });
-    expect(api.post).toHaveBeenCalledWith('/clients', { clientSheetId: 'C1', name: 'Client' });
+    expect(api.post).toHaveBeenCalledWith('/clients', { name: 'Client' });
     expect(api.patch).toHaveBeenCalledWith('/clients/client-1', { name: 'Renamed' });
   });
   it('scopes recipient create/edit/delete to their owning client', async () => {

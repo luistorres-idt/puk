@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Client, CreateClient, SaveClientEmail, UpdateClient } from '@puk/contracts';
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import type { ClientCatalogPort } from '../../integrations/ports.js';
@@ -27,6 +28,21 @@ export class ClientsService {
   }
 
   public async create(actorUserId: string, input: CreateClient): Promise<Client> {
+    const clientKey = input.clientSheetId?.trim() ?? `DB:${randomUUID()}`;
+    if (input.clientSheetId !== undefined) {
+      await this.verifySheetClient(clientKey);
+    }
+    return this.mutate('CLIENT_ALREADY_EXISTS', async (tx) => {
+      const client = await tx.client.create({
+        data: { clientSheetId: clientKey, name: input.name.trim() },
+        select: clientSelection,
+      });
+      await this.audit(tx, actorUserId, 'CLIENT_CREATED', client.id, null, client);
+      return client;
+    });
+  }
+
+  private async verifySheetClient(sheetId: string): Promise<void> {
     let catalog;
     try {
       catalog = await this.catalog.getClients({ forceFresh: true });
@@ -37,7 +53,6 @@ export class ClientsService {
         'No se pudo verificar el cliente en Google Sheets. Intenta nuevamente.',
       );
     }
-    const sheetId = input.clientSheetId.trim();
     if (!catalog.data.some((client) => client.id === sheetId)) {
       throw new AppError(
         400,
@@ -45,14 +60,6 @@ export class ClientsService {
         'Selecciona un cliente existente en Google Sheets.',
       );
     }
-    return this.mutate('CLIENT_ALREADY_EXISTS', async (tx) => {
-      const client = await tx.client.create({
-        data: { clientSheetId: sheetId, name: input.name.trim() },
-        select: clientSelection,
-      });
-      await this.audit(tx, actorUserId, 'CLIENT_CREATED', client.id, null, client);
-      return client;
-    });
   }
 
   public update(actorUserId: string, id: string, input: UpdateClient): Promise<Client> {

@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPrismaClient } from '../../database/client.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { ClientsService } from './clients.service.js';
+import { HybridEquipmentCatalog } from '../inventory/index.js';
+import type { CatalogServicePort } from '../../integrations/ports.js';
 
 const databaseUrl = process.env['TEST_DATABASE_URL'];
 function isIsolatedLocalDatabase(url?: string): boolean {
@@ -28,6 +30,7 @@ describe.runIf(isIsolatedLocalDatabase(databaseUrl))(
     let clientId: string;
     let secondClientId: string;
     let emailId: string;
+    let localClientId: string | undefined;
     beforeAll(async () => {
       prisma = createPrismaClient(databaseUrl!);
       actor = (
@@ -52,7 +55,12 @@ describe.runIf(isIsolatedLocalDatabase(databaseUrl))(
     });
     afterAll(async () => {
       await prisma.client.deleteMany({
-        where: { clientSheetId: { in: [sheetId, secondSheetId] } },
+        where: {
+          OR: [
+            { clientSheetId: { in: [sheetId, secondSheetId] } },
+            ...(localClientId ? [{ id: localClientId }] : []),
+          ],
+        },
       });
       await prisma.auditLog.deleteMany({ where: { actorUserId: actor } });
       await prisma.user.delete({ where: { id: actor } });
@@ -111,6 +119,27 @@ describe.runIf(isIsolatedLocalDatabase(databaseUrl))(
           'CLIENT_EMAIL_DELETED',
         ]),
       );
+    });
+    it('persists a local client without Sheets and exposes the same key for order selection', async () => {
+      const offlineCatalog = {
+        getClients: async () => {
+          throw new Error('Sheets offline');
+        },
+      };
+      const independentService = new ClientsService(prisma, offlineCatalog);
+      const created = await independentService.create(actor, { name: 'Independent client' });
+      localClientId = created.id;
+      expect(created.clientSheetId).toMatch(/^DB:[0-9a-f-]{36}$/);
+      expect(await independentService.get(created.id)).toEqual(created);
+      const catalog = new HybridEquipmentCatalog(
+        prisma,
+        offlineCatalog as unknown as CatalogServicePort,
+      );
+      expect((await catalog.getClients({ search: created.clientSheetId })).data).toEqual([
+        { id: created.clientSheetId, name: 'Independent client' },
+      ]);
+      await independentService.update(actor, created.id, { name: 'Renamed independent client' });
+      expect((await independentService.get(created.id)).clientSheetId).toBe(created.clientSheetId);
     });
     it('rolls back recipient persistence if the audit actor is invalid', async () => {
       await expect(

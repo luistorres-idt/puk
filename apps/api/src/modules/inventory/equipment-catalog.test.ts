@@ -117,3 +117,61 @@ it('does not collapse matching names with conflicting stable client IDs', () => 
   );
   expect(result.conflicts).toBe(true);
 });
+
+describe('hybrid client catalog', () => {
+  function setup() {
+    const findMany = vi.fn().mockResolvedValue([
+      { clientSheetId: 'DB:local', name: 'Local client' },
+      { clientSheetId: 'C1', name: 'Renamed client' },
+    ]);
+    const getClients = vi.fn().mockResolvedValue({
+      data: [
+        { id: 'C1', name: 'Old name' },
+        { id: 'C2', name: 'Legacy client' },
+      ],
+      fetchedAt: 'legacy timestamp',
+    });
+    const catalog = new HybridEquipmentCatalog(
+      { client: { findMany } } as unknown as PrismaClient,
+      { getClients } as unknown as CatalogServicePort,
+    );
+    return { findMany, getClients, catalog };
+  }
+  it('offers local and legacy clients once per stable ID, with DB names taking precedence', async () => {
+    const { catalog } = setup();
+    const result = await catalog.getClients();
+    expect(result.sheetsAvailable).toBe(true);
+    expect(result.data).toEqual([
+      { id: 'C2', name: 'Legacy client' },
+      { id: 'DB:local', name: 'Local client' },
+      { id: 'C1', name: 'Renamed client' },
+    ]);
+  });
+  it('serves uncached DB clients when Sheets is offline', async () => {
+    const { catalog, getClients, findMany } = setup();
+    getClients.mockRejectedValue(new Error('offline'));
+    const offline = await catalog.getClients();
+    expect(offline.sheetsAvailable).toBe(false);
+    expect(offline.data).toHaveLength(2);
+    findMany.mockResolvedValue([{ clientSheetId: 'DB:new', name: 'New client' }]);
+    expect((await catalog.getClients()).data).toEqual([{ id: 'DB:new', name: 'New client' }]);
+  });
+  it('reports unavailable legacy clients even with no DB clients, then clears on recovery', async () => {
+    const { catalog, getClients, findMany } = setup();
+    findMany.mockResolvedValue([]);
+    getClients.mockRejectedValueOnce(new Error('offline'));
+    expect(await catalog.getClients()).toMatchObject({ data: [], sheetsAvailable: false });
+    expect(await catalog.getClients()).toMatchObject({ sheetsAvailable: true });
+  });
+  it('filters after local name overrides and supports ID search and fresh legacy reads', async () => {
+    const { catalog, getClients } = setup();
+    expect((await catalog.getClients({ search: 'old name' })).data).toEqual([]);
+    expect((await catalog.getClients({ search: ' renamed ' })).data).toEqual([
+      { id: 'C1', name: 'Renamed client' },
+    ]);
+    expect((await catalog.getClients({ search: 'db:LOCAL', forceFresh: true })).data).toEqual([
+      { id: 'DB:local', name: 'Local client' },
+    ]);
+    expect(getClients).toHaveBeenLastCalledWith({ forceFresh: true });
+  });
+});

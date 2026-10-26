@@ -18,6 +18,7 @@ const clients = ref<ExternalClient[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const fetchedAt = ref<string | null>(null);
+const sheetsAvailable = ref(true);
 
 async function loadClients(force = false) {
   loading.value = true;
@@ -29,6 +30,7 @@ async function loadClients(force = false) {
     const res = await fetchClients();
     clients.value = res.clients;
     fetchedAt.value = res.fetchedAt;
+    sheetsAvailable.value = res.sheetsAvailable;
   } catch (err: unknown) {
     const message =
       err && typeof err === 'object' && 'response' in err
@@ -55,7 +57,7 @@ onMounted(() => {
 <template>
   <div class="space-y-2">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-      <label class="text-sm font-medium text-slate-700">Cliente (Google Sheets)</label>
+      <label class="text-sm font-medium text-slate-700">Cliente</label>
       <div v-if="fetchedAt" class="text-xs text-slate-500">
         Obtenido: {{ new Date(fetchedAt).toLocaleTimeString() }}
         <button
@@ -75,6 +77,11 @@ onMounted(() => {
         <NButton size="tiny" secondary @click="loadClients()">Reintentar</NButton>
       </div>
     </NAlert>
+
+    <p v-if="!sheetsAvailable && !error" role="status" class="text-xs text-slate-500">
+      Google Sheets no está disponible por el momento. Solo se muestran clientes guardados en el
+      sistema.
+    </p>
 
     <NSelect
       :value="props.modelValue ?? null"

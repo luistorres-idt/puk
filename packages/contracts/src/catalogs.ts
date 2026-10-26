@@ -45,6 +45,7 @@ export type CatalogSearchQuery = v.InferOutput<typeof CatalogSearchQuerySchema>;
 export const CatalogMetadataSchema = v.object({
   fetchedAt: v.pipe(v.string(), v.isoTimestamp()),
   total: v.number(),
+  sheetsAvailable: v.optional(v.boolean()),
 });
 
 export type CatalogMetadata = v.InferOutput<typeof CatalogMetadataSchema>;

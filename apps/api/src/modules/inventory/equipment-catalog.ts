@@ -1,4 +1,9 @@
-import { isMatchingClient, normalizeString, type ExternalEquipment } from '@puk/contracts';
+import {
+  isMatchingClient,
+  normalizeString,
+  type ExternalClient,
+  type ExternalEquipment,
+} from '@puk/contracts';
 import type { Equipment } from '../../generated/prisma/client.js';
 import type { CatalogServicePort } from '../../integrations/ports.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
@@ -92,8 +97,34 @@ export class HybridEquipmentCatalog implements CatalogServicePort {
     private readonly prisma: PrismaClient,
     private readonly sheets: CatalogServicePort,
   ) {}
-  public getClients(options?: { forceFresh?: boolean; search?: string }) {
-    return this.sheets.getClients(options);
+  public async getClients(options: { forceFresh?: boolean; search?: string } = {}) {
+    const stored = await this.prisma.client.findMany({
+      select: { clientSheetId: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    let legacy: readonly ExternalClient[] = [];
+    let sheetsAvailable = true;
+    try {
+      legacy = (
+        await this.sheets.getClients(
+          options.forceFresh === undefined ? {} : { forceFresh: options.forceFresh },
+        )
+      ).data;
+    } catch {
+      sheetsAvailable = false;
+    }
+    const clients = new Map(legacy.map((client) => [client.id, client]));
+    for (const client of stored) {
+      clients.set(client.clientSheetId, { id: client.clientSheetId, name: client.name });
+    }
+    const term = options.search?.trim().toLowerCase();
+    const data = [...clients.values()]
+      .filter(
+        (client) =>
+          !term || [client.id, client.name].some((value) => value.toLowerCase().includes(term)),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { data, fetchedAt: new Date().toISOString(), sheetsAvailable };
   }
   public invalidateCache() {
     this.sheets.invalidateCache();

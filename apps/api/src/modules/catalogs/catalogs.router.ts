@@ -23,10 +23,14 @@ export function createCatalogsRouter(options: {
     async (request, response) => {
       await rejectSharedCatalogAccess(options.prisma, request.auth!);
       const search = typeof request.query.search === 'string' ? request.query.search : undefined;
-      const { data, fetchedAt } = await options.catalogsService.getClients(
+      const { data, fetchedAt, sheetsAvailable } = await options.catalogsService.getClients(
         search !== undefined ? { search } : {},
       );
-      sendSuccess(response, data, 200, { fetchedAt, total: data.length });
+      sendSuccess(response, data, 200, {
+        fetchedAt,
+        total: data.length,
+        ...(sheetsAvailable === undefined ? {} : { sheetsAvailable }),
+      });
     },
   );
 

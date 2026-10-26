@@ -7,6 +7,7 @@ import {
   NButton,
   NCard,
   NEmpty,
+  NInput,
   NPagination,
   NSelect,
   NSpin,
