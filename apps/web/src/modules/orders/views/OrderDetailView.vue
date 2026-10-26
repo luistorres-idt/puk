@@ -229,7 +229,7 @@ async function handleCancelOrder() {
     message.success(
       wasFailedAppointment
         ? 'La cita fallida quedó cerrada administrativamente.'
-        : 'Orden cancelada exitosamente.',
+        : 'Orden eliminada y equipos liberados exitosamente.',
     );
   } catch (err) {
     message.error(getErrorMessage(err, 'Error al cancelar orden'));
@@ -410,7 +410,7 @@ const statusColor = orderStatusTagType;
             </n-button>
 
             <n-button v-if="canCancelOrder" type="error" secondary @click="showCancelModal = true">
-              {{ order.status === 'FAILED_APPOINTMENT' ? 'Cancelar Servicio' : 'Cancelar Orden' }}
+              {{ order.status === 'FAILED_APPOINTMENT' ? 'Cancelar Servicio' : 'Eliminar Orden' }}
             </n-button>
           </div>
         </div>
@@ -702,11 +702,11 @@ const statusColor = orderStatusTagType;
         :attach-equipment-pending="mutations.attachEquipment.isPending.value"
       />
 
-      <!-- Modal: Cancel Order -->
+      <!-- Modal: Cancel / Delete Order -->
       <n-modal
         v-model:show="showCancelModal"
         preset="card"
-        :title="isFailedAppointment ? 'Cancelar Servicio' : 'Cancelar Orden de Servicio'"
+        :title="isFailedAppointment ? 'Cancelar Servicio' : 'Eliminar Orden de Servicio'"
         class="w-[92vw] max-w-md"
       >
         <div class="space-y-4">
@@ -716,18 +716,18 @@ const statusColor = orderStatusTagType;
               administrativamente y ya no podrá reprogramarse.
             </template>
             <template v-else>
-              ¿Estás seguro de cancelar esta orden? Los equipos asignados serán liberados para su
-              uso en otras órdenes.
+              ¿Estás seguro de que deseas eliminar esta orden? Los equipos asignados serán liberados
+              inmediatamente para su uso en otras órdenes.
             </template>
           </p>
           <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1"
-              >Motivo de la Cancelación</label
-            >
+            <label class="block text-xs font-medium text-slate-600 mb-1">
+              {{ isFailedAppointment ? 'Motivo de la Cancelación' : 'Motivo de la Eliminación (opcional)' }}
+            </label>
             <n-input
               v-model:value="cancelReason"
               type="textarea"
-              placeholder="Razón de la cancelación..."
+              :placeholder="isFailedAppointment ? 'Razón de la cancelación...' : 'Razón de la eliminación...'"
             />
           </div>
           <div class="flex justify-end gap-2 pt-2">
@@ -737,7 +737,7 @@ const statusColor = orderStatusTagType;
               :loading="mutations.cancel.isPending.value"
               @click="handleCancelOrder"
             >
-              Confirmar Cancelación
+              {{ isFailedAppointment ? 'Confirmar Cancelación' : 'Confirmar Eliminación' }}
             </n-button>
           </div>
         </div>
