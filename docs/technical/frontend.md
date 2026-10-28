@@ -11,6 +11,7 @@ apps/web/src/
 │   ├── auth/             inicio de sesión
 │   ├── home/             tablero inicial
 │   ├── external-catalogs/selectores de Sheets
+│   ├── inventory/        catálogo y gestión de equipos DB
 │   ├── orders/           lista, alta y detalle administrativo
 │   ├── service-execution/flujo móvil, cámara y firma
 │   ├── technicians/      directorio y cuentas técnicas
@@ -45,21 +46,23 @@ flowchart LR
 - Tras mutaciones se invalidan órdenes, auditoría, sincronización o reporte según corresponda.
 - **Auditoría:** al agregar una acción nueva en el backend, agrega su título en español a `AUDIT_ACTION_LABELS` en `apps/web/src/modules/orders/formatters.ts`; el registro conserva la clave técnica en inglés.
 - En el detalle administrativo, `useOrderMedia` administra el ciclo de vida de las URLs privadas y `useAddOrderUnit` encapsula el formulario de alta; `AddOrderUnitModal`, `OrderEvidenceTab`, `OrderSyncTab`, `OrderReportCard` y `OrderAuditTab` separan la presentación de la orquestación de la vista. Asimismo, `OrderPricingModal` y `useOrderPricingModal` aíslan el formulario y validación para configurar tarifas acordadas y reajustar liquidaciones técnicas en formato tabular. La vista conserva las consultas y mutaciones de TanStack Query.
-- `OrderUnitsTab` presenta unidades y equipos con propiedades/eventos tipados; `AttachOrderEquipmentModal` y `useAttachOrderEquipment` aíslan el formulario de vinculación. `useEvidenceGallery` administra URLs privadas y descarta respuestas obsoletas al cambiar de contexto. Estos límites no trasladan las mutaciones ni la autoridad de permisos fuera de la vista/backend.
+- `OrderUnitsTab` presenta unidades y equipos con propiedades/eventos tipados; `AttachOrderEquipmentModal` y `useAttachOrderEquipment` aíslan el formulario de vinculación. Asimismo, la acción de asignar y notificar en `OrderDetailView` y `OrderUnitsTab` valida que la orden contenga al menos un equipo asignado, deshabilitando la opción con advertencia visual si la orden carece de equipos. `useEvidenceGallery` administra URLs privadas y descarta respuestas obsoletas al cambiar de contexto. Estos límites no trasladan las mutaciones ni la autoridad de permisos fuera de la vista/backend.
 - En el listado general (`OrdersListView`), `useDeleteOrder` y `DeleteOrderModal` encapsulan el flujo de eliminación/anulación administrativa de órdenes erróneas o canceladas, validando el rol de administrador, impidiendo la eliminación sobre órdenes `COMPLETED` o ya `CANCELLED` y disparando la liberación de equipos asignados. Adicionalmente, el listado filtra por defecto las órdenes en estado `CANCELLED` para no saturar las listas operativas, mostrándolas únicamente al seleccionar de forma explícita el filtro "Cancelada".
+- En la administración de inventario (`EquipmentView`), `useInventory` gestiona la consulta, filtrado por estado (`AVAILABLE`, `INSTALLED`, `DEFECTIVE`) y búsqueda reactiva en memoria (por IMEI, marca, modelo, cliente o unidad) de los equipos locales sin dependencia de Google Sheets. Controla modales para editar metadatos con detección de colisiones de versión concurrente (`INVENTORY_EQUIPMENT_CONFLICT`) y para retirar lógicamente equipos disponibles y sin reserva (`canDelete`), informando si el retiro desvinculará asignaciones de borradores existentes.
 
 ## Rutas
 
-| Ruta                  | Vista                                    | Perfil                              |
-| --------------------- | ---------------------------------------- | ----------------------------------- |
-| `/login`              | inicio de sesión                         | público                             |
-| `/`                   | dashboard / órdenes recientes            | autenticado                         |
-| `/orders`             | listado y filtros                        | autenticado; datos filtrados en API |
-| `/orders/new`         | asistente de creación                    | administrador                       |
-| `/orders/:id`         | detalle, evidencias, reporte y auditoría | administrador                       |
-| `/orders/:id/execute` | ejecución mobile-first                   | técnico autorizado o administrador  |
-| `/technicians`        | administración de técnicos               | administrador                       |
-| `/admin/users`        | administración de cuentas ADMIN          | administrador                       |
+| Ruta                   | Vista                                    | Perfil                              |
+| ---------------------- | ---------------------------------------- | ----------------------------------- |
+| `/login`               | inicio de sesión                         | público                             |
+| `/`                    | dashboard / órdenes recientes            | autenticado                         |
+| `/orders`              | listado y filtros                        | autenticado; datos filtrados en API |
+| `/orders/new`          | asistente de creación                    | administrador                       |
+| `/orders/:id`          | detalle, evidencias, reporte y auditoría | administrador                       |
+| `/orders/:id/execute`  | ejecución mobile-first                   | técnico autorizado o administrador  |
+| `/inventory/equipment` | administración de equipos                | administrador                       |
+| `/technicians`         | administración de técnicos               | administrador                       |
+| `/admin/users`         | administración de cuentas ADMIN          | administrador                       |
 
 La guarda de navegación inicializa la sesión, revalida la identidad cuando vence el TTL, redirige
 según `orderAccessMode` y aplica `requiresRole`. Recuperar el foco y actualizar manualmente el

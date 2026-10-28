@@ -59,7 +59,7 @@ El diagrama muestra límites y orden general; las validaciones y excepciones de 
 
 ## Flujo de asignación
 
-1. `OrdersService.assignAndSyncOrder` valida la transición, el técnico y la orden.
+1. `OrdersService.assignAndSyncOrder` valida la transición, el técnico y la orden, y comprueba que la orden contenga al menos un equipo asignado (`NO_EQUIPMENT`).
 2. `InventoryAssignmentPreparer.prepareOrderAssignment` clasifica equipos por fuente y, si existen equipos de Sheets, solicita una lectura fresca de su catálogo con el `forceFresh` recibido (por defecto `true`). Valida disponibilidad de Sheets, existencia/identidad de cada fila y cliente antes de consultar el inventario DB.
 3. La misma operación recorre los equipos en su orden persistido. Para cada equipo DB valida referencia, prepara el snapshot con identidad fresca, vuelve a leer el registro DB, valida compatibilidad y captura la versión. Después consulta conflictos activos para todos los equipos, también en orden.
 4. Dentro de la transacción propiedad del caso de uso, `confirmOrderInventoryAssignment` reserva equipos DB con control optimista de versión y comprueba alias activos por IMEI. Luego recorre todos los equipos en orden: activa la asignación y encola la actualización de Sheets cuando corresponda.
@@ -80,6 +80,18 @@ El diagrama muestra límites y orden general; las validaciones y excepciones de 
 - Se mantienen el orden secuencial y la precedencia de errores del flujo anterior; una reserva fallida o un alias por IMEI aborta la transacción antes de activar asignaciones.
 - La clave de idempotencia de Sheets sigue siendo `ASSIGN:<orderId>:<equipmentId>:<orderVersion>` y la fila desconocida usa `0`.
 - La asignación no traslada validaciones ajenas al inventario, como las comprobaciones de duplicados de la misma orden.
+
+## Administración directa de inventario
+
+Adicionalmente a los flujos ligados a órdenes, los administradores pueden gestionar el catálogo local mediante `InventoryService` y los endpoints `/api/v1/inventory/equipment`:
+
+- **Listado y disponibilidad (`list`)**: Lee exclusivamente la base de datos local (omitiendo equipos archivados mediante `deletedAt`), exponiendo `canDelete: boolean` calculado como:
+  ```ts
+  canDelete = deletedAt === null && state === 'AVAILABLE' && reservedOrderId === null;
+  ```
+  Permite operar incluso durante cortes de Google Sheets.
+- **Edición con bloqueo optimista (`update`)**: Permite corregir marca, modelo e IMEI requiriendo `version`. Un cambio de IMEI verifica unicidad local y contra Sheets forzando recarga fresca (`forceFresh: true`). Las modificaciones no alteran los snapshots históricos ya congelados en `OrderEquipment`.
+- **Retiro y archivado lógico (`remove`)**: Realiza soft-delete marcando `deletedAt = now()` e incrementando `version`. Valida atómicamente que el equipo esté disponible y sin orden reservada. Si el equipo estaba asignado a órdenes aún en `DRAFT`, la transacción desvincula las asignaciones en borrador y audita `EQUIPMENT_REMOVED`, manteniendo la consistencia de inventario.
 
 ## Por qué se hizo y qué mejora
 

@@ -88,18 +88,18 @@ flowchart TD
     Worker --> Sheets
 ```
 
-| Capa            | Tecnologías                                                                           |
-| --------------- | ------------------------------------------------------------------------------------- |
-| Lenguaje        | TypeScript                                                                            |
-| Frontend        | Vue 3, Vite, Vue Router, Pinia, TanStack Query                                        |
-| Interfaz        | Naive UI, Tailwind CSS, VueUse                                                        |
-| API             | Node.js, Express 5, Valibot                                                           |
-| Persistencia    | PostgreSQL, Prisma                                                                    |
-| Autenticación   | JWT, Argon2id                                                                         |
-| Integraciones   | Google Sheets API, Google Drive privado, Gmail para envío manual de reportes PDF       |
-| Documentación   | OpenAPI 3.1, Swagger UI                                                               |
-| Pruebas         | Vitest, Supertest, Playwright                                                         |
-| Infraestructura | Docker Compose local; AWS CDK para staging                                            |
+| Capa            | Tecnologías                                                                      |
+| --------------- | -------------------------------------------------------------------------------- |
+| Lenguaje        | TypeScript                                                                       |
+| Frontend        | Vue 3, Vite, Vue Router, Pinia, TanStack Query                                   |
+| Interfaz        | Naive UI, Tailwind CSS, VueUse                                                   |
+| API             | Node.js, Express 5, Valibot                                                      |
+| Persistencia    | PostgreSQL, Prisma                                                               |
+| Autenticación   | JWT, Argon2id                                                                    |
+| Integraciones   | Google Sheets API, Google Drive privado, Gmail para envío manual de reportes PDF |
+| Documentación   | OpenAPI 3.1, Swagger UI                                                          |
+| Pruebas         | Vitest, Supertest, Playwright                                                    |
+| Infraestructura | Docker Compose local; AWS CDK para staging                                       |
 
 ## Estructura del repositorio
 
@@ -188,7 +188,7 @@ En el reporte técnico (`2026`), cuando una orden cuenta con múltiples unidades
 
 ## Requisitos
 
-- Node.js 24.20.0 LTS, fijado en `.nvmrc` y `.node-version`.
+- Node.js 24.22.1 LTS, fijado en `.nvmrc` y `.node-version`.
 - pnpm 11.9.0 mediante Corepack.
 - Docker y Docker Compose.
 - Credenciales de Google Sheets y del proveedor de almacenamiento elegido para entornos no locales (en desarrollo local se cuenta con emuladores y mocks en memoria integrados).
