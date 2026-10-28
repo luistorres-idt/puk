@@ -156,9 +156,9 @@ describe.runIf(isolatedLocalDatabase(databaseUrl))('isolated PostgreSQL inventor
   });
   it('administers local metadata during Sheets outage without rewriting order snapshots', async () => {
     const actor = { id: userId, role: 'ADMIN' as const };
-    const registered = await inventory.register(actor, input());
+    const registered = await inventory.register(actor, input('REVIEW'));
     const id = registered.inventoryEquipmentId!;
-    await createOrder([assignment(registered)]);
+    await createOrder([assignment(registered)], 'REVIEW');
     const snapshotBefore = await prisma.orderEquipment.findFirstOrThrow({
       where: { inventoryEquipmentId: id },
     });

@@ -42,13 +42,13 @@ function requireAdmin(actor: InventoryActor): void {
     throw new AppError(403, 'FORBIDDEN', 'Solo un administrador puede administrar equipos.');
 }
 function toManagementEquipment(row: ManagedEquipmentRow): InventoryEquipment {
-  const { createdAt, updatedAt, deletedAt: _deletedAt, ...equipment } = row;
+  const { createdAt, updatedAt, deletedAt, ...equipment } = row;
   return {
     ...equipment,
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
     canDelete:
-      row.deletedAt === null &&
+      deletedAt === null &&
       row.state === 'AVAILABLE' &&
       row.reservedOrderId === null,
   };
