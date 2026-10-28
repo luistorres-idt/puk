@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NCard, NPopconfirm, NTag } from 'naive-ui';
+import { NAlert, NButton, NCard, NPopconfirm, NTag } from 'naive-ui';
 import type { OrderDetail } from '../api.js';
 import {
   formatEquipmentStatus,
@@ -24,6 +24,14 @@ const emit = defineEmits<{
 
 <template>
   <div class="space-y-4">
+    <n-alert
+      v-if="order.status === 'DRAFT' && !order.units.some((unit) => unit.equipment?.length)"
+      type="warning"
+      :show-icon="false"
+    >
+      Asigna al menos un equipo para poder continuar con esta orden.
+    </n-alert>
+
     <div class="flex items-center justify-between">
       <h2 class="text-base font-bold text-slate-800">
         Unidades Registradas ({{ order.units?.length || 0 }})

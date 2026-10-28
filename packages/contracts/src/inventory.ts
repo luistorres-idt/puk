@@ -54,3 +54,43 @@ export const RegisterEquipmentSchema = v.pipe(
   ),
 );
 export type RegisterEquipment = v.InferOutput<typeof RegisterEquipmentSchema>;
+
+const EquipmentVersionSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
+const EquipmentDescriptionSchema = v.pipe(
+  RequiredText,
+  v.maxLength(200, 'Usa un máximo de 200 caracteres.'),
+);
+
+export const UpdateInventoryEquipmentSchema = v.strictObject({
+  imei: v.pipe(
+    v.string(),
+    v.trim(),
+    v.regex(/^\d{15}$/, 'El IMEI debe contener exactamente 15 dígitos.'),
+  ),
+  brand: EquipmentDescriptionSchema,
+  model: EquipmentDescriptionSchema,
+  version: EquipmentVersionSchema,
+});
+export type UpdateInventoryEquipment = v.InferOutput<typeof UpdateInventoryEquipmentSchema>;
+
+export const DeleteInventoryEquipmentSchema = v.strictObject({ version: EquipmentVersionSchema });
+export type DeleteInventoryEquipment = v.InferOutput<typeof DeleteInventoryEquipmentSchema>;
+
+export interface InventoryEquipment {
+  id: string;
+  imei: string;
+  brand: string;
+  model: string;
+  state: 'AVAILABLE' | 'INSTALLED';
+  currentClientSheetId: string | null;
+  currentClientName: string | null;
+  unitLabel: string | null;
+  unitMakeModel: string | null;
+  unitSerialNumber: string | null;
+  unitYear: number | null;
+  reservedOrderId: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  canDelete: boolean;
+}

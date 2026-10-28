@@ -17,6 +17,7 @@ const adminDropdownOptions = [
   { label: 'Técnicos', key: '/technicians' },
   { label: 'Cuentas Técnicas', key: '/technical-accounts' },
   { label: 'Clientes', key: '/admin/clients' },
+  { label: 'Equipos', key: '/admin/equipment' },
   { label: 'Administradores', key: '/admin/users' },
   { label: 'Sincronización', key: '/sync' },
 ];
@@ -278,6 +279,14 @@ async function logout(): Promise<void> {
                 @click="isMobileMenuOpen = false"
               >
                 Clientes
+              </router-link>
+              <router-link
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/admin/equipment"
+                @click="isMobileMenuOpen = false"
+              >
+                Equipos
               </router-link>
               <router-link
                 class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"

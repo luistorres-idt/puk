@@ -17,7 +17,7 @@ describe('completeInventoryAssignments', () => {
       equipment: {
         findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
           events.push(`read:${where.id}`);
-          return { id: where.id, version: 1 };
+          return { id: where.id, version: 1, deletedAt: null };
         }),
         updateMany: vi.fn(async ({ where }: { where: { id: string } }) => {
           events.push(`reserve:${where.id}`);
@@ -449,12 +449,13 @@ describe('InventoryAssignmentPreparer', () => {
     const events: string[] = [];
     const tx = {
       equipment: {
-        findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
+        findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
           events.push(`db:${where.id}`);
           return {
             id: where.id, imei: where.id, brand: 'Brand', model: 'Model', state: 'AVAILABLE',
             currentClientSheetId: null, currentClientName: null, reservedOrderId: null,
             version: where.id === 'equipment-1' ? 2 : 3,
+            deletedAt: null,
           };
         }),
       },
@@ -495,7 +496,7 @@ describe('InventoryAssignmentPreparer', () => {
       currentClientName: 'Client',
       reservedOrderId: null,
     };
-    const findUnique = vi.fn().mockResolvedValue(equipment);
+    const findFirst = vi.fn().mockResolvedValue(equipment);
     const getEquipment = vi.fn().mockResolvedValue({
       data: [
         {
@@ -507,7 +508,7 @@ describe('InventoryAssignmentPreparer', () => {
       fetchedAt: 'now',
     });
     const preparer = new InventoryAssignmentPreparer(
-      { equipment: { findUnique } } as never,
+      { equipment: { findFirst } } as never,
       { getEquipment } as never,
     );
 
@@ -519,7 +520,7 @@ describe('InventoryAssignmentPreparer', () => {
     );
 
     expect(getEquipment).toHaveBeenCalledWith({ forceFresh: true });
-    expect(findUnique).toHaveBeenCalledWith({ where: { id: 'equipment-1' } });
+    expect(findFirst).toHaveBeenCalledWith({ where: { id: 'equipment-1', deletedAt: null } });
     expect(result[0]).toMatchObject({
       source: 'DB',
       externalKey: 'DB:equipment-1',
@@ -530,7 +531,7 @@ describe('InventoryAssignmentPreparer', () => {
   });
 
   it('rejects a fresh catalog identity conflict before returning a DB assignment', async () => {
-    const findUnique = vi.fn().mockResolvedValue({
+    const findFirst = vi.fn().mockResolvedValue({
       id: 'equipment-1',
       imei: 'imei-1',
       brand: 'Brand',
@@ -541,7 +542,7 @@ describe('InventoryAssignmentPreparer', () => {
       reservedOrderId: null,
     });
     const preparer = new InventoryAssignmentPreparer(
-      { equipment: { findUnique } } as never,
+      { equipment: { findFirst } } as never,
       {
         getEquipment: vi.fn().mockResolvedValue({
           data: [

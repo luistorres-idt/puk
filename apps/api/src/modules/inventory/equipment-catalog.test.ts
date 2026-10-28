@@ -87,6 +87,10 @@ describe('hybrid equipment identity', () => {
       sheets,
     );
     const result = await service.getEquipment({ search: 'gps' });
+    expect(findMany).toHaveBeenCalledWith({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
     expect(result).toMatchObject({
       registrationAllowed: false,
       sheetsAvailable: false,

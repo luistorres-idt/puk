@@ -166,6 +166,11 @@ export {
   RegisterEquipmentSchema,
   initialEquipmentState,
   type RegisterEquipment,
+  UpdateInventoryEquipmentSchema,
+  DeleteInventoryEquipmentSchema,
+  type InventoryEquipment,
+  type UpdateInventoryEquipment,
+  type DeleteInventoryEquipment,
 } from './inventory.js';
 
 export {
