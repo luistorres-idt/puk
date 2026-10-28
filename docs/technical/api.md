@@ -49,6 +49,16 @@ El access token se envía como `Authorization: Bearer <token>`. El refresh token
 | GET      | `/api/v1/external/equipment`              | Autenticado   |
 | GET      | `/api/v1/external/equipment/:externalKey` | Autenticado   |
 | POST     | `/api/v1/external/refresh`                | Administrador |
+| GET/POST | `/api/v1/inventory/equipment`             | Administrador |
+| PATCH    | `/api/v1/inventory/equipment/:id`         | Administrador |
+| DELETE   | `/api/v1/inventory/equipment/:id`         | Administrador |
+
+`/api/v1/inventory/equipment` permite administrar el inventario persistido localmente (`orders:manage`):
+
+- `GET`: Lista equipos locales con cálculo de `canDelete` y `version`. Funciona sin dependencia de Google Sheets y omite equipos archivados (`deletedAt` no nulo).
+- `POST`: Da de alta un nuevo equipo directamente en base de datos.
+- `PATCH`: Modifica marca, modelo e IMEI aplicando control de concurrencia optimista (`version`). Si el IMEI cambia, valida unicidad local y contra Sheets en tiempo real (`503 INVENTORY_IMEI_VERIFICATION_PAUSED` si Sheets no está disponible). No modifica snapshots históricos en órdenes existentes.
+- `DELETE`: Realiza retiro/archivado lógico (`deletedAt`) únicamente si el equipo está en estado `AVAILABLE` y sin orden reservada (`reservedOrderId === null`). Si estaba asignado en órdenes `DRAFT`, se desvincula de las mismas (`EQUIPMENT_REMOVED`) y se audita `INVENTORY_EQUIPMENT_DELETED`.
 
 `/api/v1/users` requiere `users:manage` en cada operación. Las actualizaciones permiten editar
 nombre/correo, cambiar contraseña y activar/desactivar; el servicio registra auditoría y revoca
@@ -56,12 +66,12 @@ sesiones al desactivar. No se permite que un administrador se desactive a sí mi
 degradar al último administrador activo (`ADMIN_SELF_LOCKOUT`, `LAST_ACTIVE_ADMIN`). La cuenta
 técnica compartida conserva sus restricciones de rol y designación.
 
-| Método | Ruta | Acceso / propósito |
-| ------ | ---- | ------------------ |
-| GET | `/api/v1/shared-technician-access` | Consultar configuración; administrador con `users:manage` |
-| PUT | `/api/v1/shared-technician-access/account` | Designar o retirar cuenta TECHNICIAN compartida; `users:manage` |
-| PUT | `/api/v1/shared-technician-access/order` | Habilitar o retirar una orden ejecutable; `orders:manage` |
-| GET | `/api/v1/me/order-access` | Consultar modo individual/compartido de la sesión autenticada |
+| Método | Ruta                                       | Acceso / propósito                                              |
+| ------ | ------------------------------------------ | --------------------------------------------------------------- |
+| GET    | `/api/v1/shared-technician-access`         | Consultar configuración; administrador con `users:manage`       |
+| PUT    | `/api/v1/shared-technician-access/account` | Designar o retirar cuenta TECHNICIAN compartida; `users:manage` |
+| PUT    | `/api/v1/shared-technician-access/order`   | Habilitar o retirar una orden ejecutable; `orders:manage`       |
+| GET    | `/api/v1/me/order-access`                  | Consultar modo individual/compartido de la sesión autenticada   |
 
 La cuenta de taller designada puede acceder a cualquier orden asignada en un estado ejecutable.
 La configuración conserva como máximo una referencia opcional de orden, pero no limita el acceso
@@ -82,21 +92,21 @@ su propio `serviceType`, por lo que una orden puede combinar instalación, revis
 sensor fuel y cambio de equipo. `FAILED_APPOINTMENT` es un resultado de ejecución y no un bloque
 configurable en el asistente. El listado acepta los seis valores del dominio como filtro.
 
-| Método       | Ruta                                                      | Acceso / propósito                               |
-| ------------ | --------------------------------------------------------- | ------------------------------------------------ |
-| GET/POST     | `/api/v1/orders`                                          | listar propias/todas; crear como administrador   |
-| GET/PATCH    | `/api/v1/orders/:id`                                      | detalle administrativo explícito; editar         |
-| GET          | `/api/v1/orders/:id/execution`                            | detalle operativo mínimo para ejecutar           |
-| POST         | `/api/v1/orders/:id/assign`                               | asignar y encolar sincronización inicial         |
-| POST         | `/api/v1/orders/:id/cancel`                               | cancelar                                         |
-| POST         | `/api/v1/orders/:id/reschedule`                           | reprogramar una cita fallida como nuevo borrador |
-| GET          | `/api/v1/orders/:id/audit`                                | auditoría administrativa                         |
-| POST         | `/api/v1/orders/:id/units`                                | agregar unidad                                   |
-| PATCH/DELETE | `/api/v1/orders/:id/units/:unitId`                        | modificar/eliminar unidad                        |
-| POST         | `/api/v1/orders/:id/units/:unitId/equipment`              | asignar equipo                                   |
-| GET          | `/api/v1/orders/:id/sync`                                 | estado de sincronización                         |
-| POST         | `/api/v1/orders/:id/sync/retry`                           | reintento administrativo                         |
-| PATCH        | `/api/v1/orders/:id/pricing`                              | configurar o ajustar tarifas pactadas (admin)    |
+| Método       | Ruta                                         | Acceso / propósito                                                                              |
+| ------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| GET/POST     | `/api/v1/orders`                             | listar propias/todas; crear como administrador                                                  |
+| GET/PATCH    | `/api/v1/orders/:id`                         | detalle administrativo explícito; editar                                                        |
+| GET          | `/api/v1/orders/:id/execution`               | detalle operativo mínimo para ejecutar                                                          |
+| POST         | `/api/v1/orders/:id/assign`                  | asignar y encolar sincronización inicial (exige al menos un equipo en la orden, `NO_EQUIPMENT`) |
+| POST         | `/api/v1/orders/:id/cancel`                  | cancelar                                                                                        |
+| POST         | `/api/v1/orders/:id/reschedule`              | reprogramar una cita fallida como nuevo borrador                                                |
+| GET          | `/api/v1/orders/:id/audit`                   | auditoría administrativa                                                                        |
+| POST         | `/api/v1/orders/:id/units`                   | agregar unidad                                                                                  |
+| PATCH/DELETE | `/api/v1/orders/:id/units/:unitId`           | modificar/eliminar unidad                                                                       |
+| POST         | `/api/v1/orders/:id/units/:unitId/equipment` | asignar equipo                                                                                  |
+| GET          | `/api/v1/orders/:id/sync`                    | estado de sincronización                                                                        |
+| POST         | `/api/v1/orders/:id/sync/retry`              | reintento administrativo                                                                        |
+| PATCH        | `/api/v1/orders/:id/pricing`                 | configurar o ajustar tarifas pactadas (admin)                                                   |
 
 `PATCH /api/v1/orders/:id/pricing` requiere permiso `orders:manage`. Admite `rates` (tarifas por servicio), `travelExpenses` (viáticos) y `reason` opcional. En órdenes no concluidas (`DRAFT`, `ASSIGNED`, `IN_PROGRESS`) almacena `pricingOverrides` y audita `ORDER_PRICING_CONFIGURED`. En órdenes finalizadas (`COMPLETED`, `FAILED_APPOINTMENT`) recalcula importes y desglose, incrementa `pricingVersion`, reemplaza la operación pendiente del reporte técnico en el outbox (`SUPERSEDED`), encola la nueva sincronización hacia Google Sheets y audita `ORDER_PRICING_ADJUSTED`.
 
@@ -107,23 +117,23 @@ omite datos fiscales y de contacto del técnico, tarifas, creador, auditoría y 
 sincronización. `GET /api/v1/orders/:id` queda reservado al administrador y también usa una
 proyección de respuesta explícita.
 
-| Método | Ruta                                                                    | Propósito                 |
-| ------ | ----------------------------------------------------------------------- | ------------------------- |
-| GET    | `/api/v1/orders/:id/execution`                                          | cargar detalle operativo  |
-| POST   | `/api/v1/orders/:id/start`                                              | iniciar trabajo           |
-| POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/verify`        | verificar equipo          |
-| POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/discrepancy`   | reportar diferencia       |
-| PUT    | `/api/v1/orders/:id/units/:unitId/checklist`                            | guardar checklist         |
-| POST   | `/api/v1/orders/:id/units/:unitId/evidence/file`                         | subir evidencia (Drive)   |
-| GET    | `/api/v1/evidence/:id/file`                                              | descargar evidencia privada |
-| DELETE | `/api/v1/evidence/:id`                                                  | eliminar lógicamente foto |
-| PUT    | `/api/v1/orders/:id/signature/file`                                     | subir firma PNG (Drive)   |
-| GET    | `/api/v1/orders/:id/signature/file`                                     | descargar firma privada (Drive) |
-| GET    | `/api/v1/orders/:id/completeness`                                       | requisitos pendientes     |
-| PATCH  | `/api/v1/orders/:id/execution-notes`                                   | guardar nota general de ejecución |
-| POST   | `/api/v1/orders/:id/complete`                                           | completar orden           |
-| POST   | `/api/v1/orders/:id/fail-appointment`                                   | registrar cita fallida    |
-| POST   | `/api/v1/orders/:id/require-correction`                                 | solicitar corrección      |
+| Método | Ruta                                                                  | Propósito                         |
+| ------ | --------------------------------------------------------------------- | --------------------------------- |
+| GET    | `/api/v1/orders/:id/execution`                                        | cargar detalle operativo          |
+| POST   | `/api/v1/orders/:id/start`                                            | iniciar trabajo                   |
+| POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/verify`      | verificar equipo                  |
+| POST   | `/api/v1/orders/:id/units/:unitId/equipment/:equipmentId/discrepancy` | reportar diferencia               |
+| PUT    | `/api/v1/orders/:id/units/:unitId/checklist`                          | guardar checklist                 |
+| POST   | `/api/v1/orders/:id/units/:unitId/evidence/file`                      | subir evidencia (Drive)           |
+| GET    | `/api/v1/evidence/:id/file`                                           | descargar evidencia privada       |
+| DELETE | `/api/v1/evidence/:id`                                                | eliminar lógicamente foto         |
+| PUT    | `/api/v1/orders/:id/signature/file`                                   | subir firma PNG (Drive)           |
+| GET    | `/api/v1/orders/:id/signature/file`                                   | descargar firma privada (Drive)   |
+| GET    | `/api/v1/orders/:id/completeness`                                     | requisitos pendientes             |
+| PATCH  | `/api/v1/orders/:id/execution-notes`                                  | guardar nota general de ejecución |
+| POST   | `/api/v1/orders/:id/complete`                                         | completar orden                   |
+| POST   | `/api/v1/orders/:id/fail-appointment`                                 | registrar cita fallida            |
+| POST   | `/api/v1/orders/:id/require-correction`                               | solicitar corrección              |
 
 La nota de ejecución pertenece a la orden completa, no a una unidad individual. El endpoint permite
 guardarla durante `IN_PROGRESS`; la vista también la guarda automáticamente antes de solicitar el
@@ -135,13 +145,13 @@ remotas son idempotentes y no revierten el cierre si Google Sheets está tempora
 
 ### Reportes
 
-| Método | Ruta                                 | Acceso / propósito                    |
-| ------ | ------------------------------------ | ------------------------------------- |
-| GET    | `/api/v1/orders/:id/report`                 | metadatos de versión vigente          |
-| GET    | `/api/v1/orders/:id/reports`                | historial de versiones                |
-| POST   | `/api/v1/orders/:id/report/generate`        | generar/reintentar como administrador |
-| GET    | `/api/v1/orders/:id/report/file`            | descargar PDF privado                 |
-| GET    | `/api/v1/orders/:id/reports/:version/file`  | descargar versión privada             |
+| Método | Ruta                                       | Acceso / propósito                    |
+| ------ | ------------------------------------------ | ------------------------------------- |
+| GET    | `/api/v1/orders/:id/report`                | metadatos de versión vigente          |
+| GET    | `/api/v1/orders/:id/reports`               | historial de versiones                |
+| POST   | `/api/v1/orders/:id/report/generate`       | generar/reintentar como administrador |
+| GET    | `/api/v1/orders/:id/report/file`           | descargar PDF privado                 |
+| GET    | `/api/v1/orders/:id/reports/:version/file` | descargar versión privada             |
 
 ### Monitoreo de sincronización
 

@@ -31,6 +31,9 @@ erDiagram
     USER ||--o{ ORDER : "resuelve cita fallida"
     USER ||--o| SHARED_TECHNICIAN_ACCESS : "cuenta compartida designada"
     ORDER o|--o| ORDER : "reprograma como"
+    USER ||--o{ EQUIPMENT : registra
+    ORDER ||--o| EQUIPMENT : "reserva como"
+    EQUIPMENT ||--o{ ORDER_EQUIPMENT : "snapshots"
 
     CLIENT {
         uuid id PK
@@ -108,12 +111,34 @@ erDiagram
     ORDER_EQUIPMENT {
         uuid id PK
         uuid orderUnitId FK
+        uuid inventoryEquipmentId FK
         string externalKey
         string externalId
         string imei
         json rawSnapshot
         boolean activeAssignment
         EquipmentVerificationStatus verificationStatus
+    }
+    EQUIPMENT {
+        uuid id PK
+        string imei UK
+        string brand
+        string model
+        InventoryEquipmentState state
+        string currentClientSheetId
+        string currentClientName
+        string unitLabel
+        string unitMakeModel
+        string unitSerialNumber
+        int unitYear
+        uuid registrationKey UK
+        string registrationHash
+        uuid createdById FK
+        uuid reservedOrderId FK
+        timestamp deletedAt
+        int version
+        timestamp createdAt
+        timestamp updatedAt
     }
     CHECKLIST {
         uuid id PK
@@ -257,6 +282,7 @@ el par `(clientId, email)` es único y las direcciones se eliminan en cascada co
 | -------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Orden                      | `DRAFT`, `ASSIGNED`, `IN_PROGRESS`, `REQUIRES_CORRECTION`, `COMPLETED`, `FAILED_APPOINTMENT`, `CANCELLED` |
 | Unidad                     | `PENDING`, `IN_PROGRESS`, `COMPLETED`                                                                     |
+| Equipo (inventario local)  | `AVAILABLE`, `INSTALLED`, `DEFECTIVE`                                                                     |
 | Verificación               | `PENDING`, `MATCHED`, `DISCREPANCY_REPORTED`                                                              |
 | Evidencia                  | `PENDING`, `COMPLETED`, `REJECTED`, `DELETED`                                                             |
 | Sincronización             | `PENDING`, `PROCESSING`, `SYNCED`, `FAILED`                                                               |
@@ -285,3 +311,5 @@ el par `(clientId, email)` es único y las direcciones se eliminan en cascada co
 ## Eliminación y retención
 
 Unidades, checklist, items, evidencias, firmas y reportes usan cascada al eliminar su padre. Usuarios y técnicos usan restricciones o `SET NULL` para conservar trazabilidad. La aplicación normalmente cancela órdenes o elimina lógicamente evidencias; no expone eliminación física de órdenes como operación habitual. `DriveFolder` persiste IDs de carpetas para resolver claves lógicas de forma idempotente; no representa una ruta física local ni almacena el contenido de archivos.
+
+`Equipment` implementa archivado lógico mediante `deletedAt`. La eliminación solo se permite en equipos en estado `AVAILABLE` sin orden reservada; la misma transacción desvincula y elimina asignaciones asociadas en órdenes `DRAFT` (auditando `EQUIPMENT_REMOVED`), protegiendo la inmutabilidad de los snapshots históricos ya congelados en órdenes ejecutadas.
