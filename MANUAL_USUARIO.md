@@ -112,6 +112,17 @@ Actualizado: 19 de octubre de 2026. Describe la versión del código revisada; l
 
 ---
 
+### Administrar equipos registrados
+
+En **Administración > Equipos**, busca por IMEI, marca, modelo, cliente o unidad y filtra por estado. Esta sección muestra únicamente los equipos de la base de datos; no necesita acceso a Google Sheets.
+
+- Pulsa **Editar** para corregir IMEI, marca o modelo. El nuevo IMEI debe ser único en la base de datos y Google Sheets; si Sheets no está disponible, conserva los cambios y reintenta. El estado, cliente y unidad se gestionan mediante las órdenes.
+- **Eliminar** solo aparece para equipos disponibles y sin reserva. El equipo se archiva para conservar su historial; si estaba asignado a una orden en borrador, se quita de esa orden y habrá que agregar otro equipo antes de asignarla.
+- Si otro usuario modifica el equipo, pulsa **Actualizar lista**, revisa los datos y vuelve a intentar el cambio.
+- Los equipos nuevos se siguen registrando desde la selección de equipos al preparar una orden.
+
+---
+
 ## 6. Administración: fecha, técnico y borrador
 
 1. En **Programación**, indica la fecha y la hora. Si el trabajo será a domicilio, completa la dirección.

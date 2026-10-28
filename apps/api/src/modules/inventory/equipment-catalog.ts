@@ -130,9 +130,12 @@ export class HybridEquipmentCatalog implements CatalogServicePort {
     this.sheets.invalidateCache();
   }
   public async getEquipment(options: { forceFresh?: boolean; search?: string } = {}) {
-    const db = (await this.prisma.equipment.findMany({ orderBy: { createdAt: 'asc' } })).map(
-      toCatalogEquipment,
-    );
+    const db = (
+      await this.prisma.equipment.findMany({
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+      })
+    ).map(toCatalogEquipment);
     let sheets: readonly ExternalEquipment[] = [];
     let sheetsAvailable = true;
     let fetchedAt = new Date().toISOString();

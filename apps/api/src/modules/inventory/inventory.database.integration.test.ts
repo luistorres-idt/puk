@@ -154,6 +154,162 @@ describe.runIf(isolatedLocalDatabase(databaseUrl))('isolated PostgreSQL inventor
       reservedOrderId: null,
     });
   });
+  it('administers local metadata during Sheets outage without rewriting order snapshots', async () => {
+    const actor = { id: userId, role: 'ADMIN' as const };
+    const registered = await inventory.register(actor, input());
+    const id = registered.inventoryEquipmentId!;
+    await createOrder([assignment(registered)]);
+    const snapshotBefore = await prisma.orderEquipment.findFirstOrThrow({
+      where: { inventoryEquipmentId: id },
+    });
+    sheetsOffline = true;
+    try {
+      const listed = (await inventory.list(actor)).find((equipment) => equipment.id === id)!;
+      expect(listed).toMatchObject({ canDelete: false, version: 1 });
+      const updated = await inventory.update(actor, id, {
+        imei: registered.imei!,
+        brand: 'Corrected',
+        model: 'Updated',
+        version: listed.version,
+      });
+      expect(updated).toMatchObject({
+        brand: 'Corrected',
+        model: 'Updated',
+        version: 2,
+        imei: registered.imei,
+      });
+      expect(
+        await prisma.orderEquipment.findUniqueOrThrow({ where: { id: snapshotBefore.id } }),
+      ).toEqual(snapshotBefore);
+      await expect(
+        inventory.update(actor, id, {
+          imei: registered.imei!,
+          brand: 'Stale',
+          model: 'Stale',
+          version: 1,
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(inventory.remove(actor, id, { version: 2 })).rejects.toMatchObject({
+        code: 'INVENTORY_EQUIPMENT_IN_USE',
+      });
+    } finally {
+      sheetsOffline = false;
+    }
+  });
+  it('changes an IMEI only when unique in DB and Sheets and preserves historical snapshots', async () => {
+    const actor = { id: userId, role: 'ADMIN' as const };
+    const registered = await inventory.register(actor, input());
+    const id = registered.inventoryEquipmentId!;
+    await createOrder([assignment(registered)]);
+    const snapshot = await prisma.orderEquipment.findFirstOrThrow({
+      where: { inventoryEquipmentId: id },
+    });
+    const changedImei = input().imei;
+
+    await expect(
+      inventory.update(actor, id, {
+        imei: changedImei,
+        brand: registered.brand!,
+        model: registered.model!,
+        version: 1,
+      }),
+    ).resolves.toMatchObject({ imei: changedImei, version: 2 });
+    expect(await prisma.equipment.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      id,
+      imei: changedImei,
+      version: 2,
+    });
+    expect(await prisma.orderEquipment.findUniqueOrThrow({ where: { id: snapshot.id } })).toEqual(
+      snapshot,
+    );
+  });
+  it('archives available equipment with terminal order history and rejects installed equipment', async () => {
+    const actor = { id: userId, role: 'ADMIN' as const };
+    const available = await inventory.register(actor, input());
+    const installed = await inventory.register(actor, input('REVIEW'));
+    const availableId = available.inventoryEquipmentId!;
+    const order = await createOrder([assignment(available)]);
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'COMPLETED' } });
+    await expect(
+      inventory.remove(actor, installed.inventoryEquipmentId!, { version: 1 }),
+    ).rejects.toMatchObject({ code: 'INVENTORY_EQUIPMENT_IN_USE' });
+    await expect(inventory.remove(actor, availableId, { version: 1 })).resolves.toEqual({
+      deleted: true,
+    });
+    expect(await prisma.equipment.findUnique({ where: { id: availableId } })).toMatchObject({
+      id: availableId,
+      deletedAt: expect.any(Date),
+    });
+    const historicalSnapshot = await prisma.orderEquipment.findFirstOrThrow({
+      where: { inventoryEquipmentId: availableId },
+    });
+    expect(historicalSnapshot).toMatchObject({
+      inventoryEquipmentId: availableId,
+      externalKey: `DB:${availableId}`,
+      imei: available.imei,
+    });
+    const catalog = new HybridEquipmentCatalog(prisma, sheets);
+    expect((await catalog.getEquipment()).data).not.toContainEqual(
+      expect.objectContaining({ externalKey: `DB:${availableId}` }),
+    );
+    expect((await inventory.list(actor)).some((item) => item.id === availableId)).toBe(false);
+    expect(
+      await prisma.auditLog.count({
+        where: { entityId: availableId, action: 'INVENTORY_EQUIPMENT_DELETED' },
+      }),
+    ).toBe(1);
+  });
+  it('allows only one concurrent metadata change for a displayed version', async () => {
+    const actor = { id: userId, role: 'ADMIN' as const };
+    const equipment = await inventory.register(actor, input());
+    const results = await Promise.allSettled(
+      ['First', 'Second'].map((brand) =>
+        inventory.update(actor, equipment.inventoryEquipmentId!, {
+          imei: equipment.imei!,
+          brand,
+          model: 'Model',
+          version: 1,
+        }),
+      ),
+    );
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'INVENTORY_EQUIPMENT_CONFLICT' },
+    });
+  });
+  it('enforces unique IMEI when two existing records are edited concurrently', async () => {
+    const actor = { id: userId, role: 'ADMIN' as const };
+    const first = await inventory.register(actor, input());
+    const second = await inventory.register(actor, input());
+    const sharedImei = input().imei;
+    let checked = 0;
+    let release!: () => void;
+    const bothPreflightChecks = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const getEquipment = vi.spyOn(sheets, 'getEquipment').mockImplementation(async () => {
+      checked += 1;
+      if (checked === 2) release();
+      await bothPreflightChecks;
+      return { data: [], fetchedAt: new Date().toISOString() };
+    });
+    const results = await Promise.allSettled(
+      [first, second].map((equipment) =>
+        inventory.update(actor, equipment.inventoryEquipmentId!, {
+          imei: sharedImei,
+          brand: equipment.brand!,
+          model: equipment.model!,
+          version: 1,
+        }),
+      ),
+    );
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'DUPLICATE_IMEI', status: 409 },
+    });
+    expect(await prisma.equipment.count({ where: { imei: sharedImei } })).toBe(1);
+    getEquipment.mockRestore();
+  });
   it('enforces actual unique IMEI under simultaneous independent registrations', async () => {
     const first = input();
     const second = { ...first, registrationKey: randomUUID() };

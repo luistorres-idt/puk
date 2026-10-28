@@ -123,7 +123,7 @@ export class InventoryAssignmentPreparer {
       inputs.map(async (input) => {
         if (!isDatabaseEquipment(input)) return input;
         const id = validateInventoryReference(input);
-        const equipment = await this.prisma.equipment.findUnique({ where: { id } });
+        const equipment = await this.prisma.equipment.findFirst({ where: { id, deletedAt: null } });
         if (!equipment)
           throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'Equipo registrado no encontrado.');
         const fresh =
@@ -196,7 +196,7 @@ export class InventoryAssignmentPreparer {
       if (isDatabaseEquipment(item)) {
         const id = validateInventoryReference(item);
         await this.prepare([item], item.serviceType, client, orderId);
-        const current = await this.prisma.equipment.findUnique({ where: { id } });
+        const current = await this.prisma.equipment.findFirst({ where: { id, deletedAt: null } });
         if (!current)
           throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'Equipo registrado no encontrado.');
         assertInventoryCompatibility(
@@ -337,6 +337,7 @@ export async function reserveInventory(
     where: {
       id: equipmentId,
       version,
+      deletedAt: null,
       OR: [{ reservedOrderId: null }, { reservedOrderId: orderId }],
     },
     data: { reservedOrderId: orderId, version: { increment: 1 } },
@@ -548,7 +549,7 @@ export async function completeInventoryEquipment(
   },
 ) {
   const current = await tx.equipment.findUnique({ where: { id: input.equipmentId } });
-  if (!current)
+  if (!current || current.deletedAt !== null)
     throw new AppError(404, 'EQUIPMENT_NOT_FOUND', 'El equipo registrado ya no existe.');
   await reserveInventory(tx, current.id, input.orderId, current.version);
   const installed =

@@ -6,6 +6,7 @@ import { orderRoutes } from '@/modules/orders';
 import { serviceExecutionRoutes } from '@/modules/service-execution';
 import { technicianRoutes } from '@/modules/technicians';
 import { syncRoutes } from '@/modules/sync';
+import { inventoryRoutes } from '@/modules/inventory';
 import { clientRoutes } from '@/modules/clients';
 import { adminUserRoutes } from '@/modules/admin-users';
 import { useSessionStore } from '@/stores/session';
@@ -19,6 +20,7 @@ export const router = createRouter({
     ...technicianRoutes,
     ...adminUserRoutes,
     ...clientRoutes,
+    ...inventoryRoutes,
     ...syncRoutes,
     ...orderRoutes,
     ...serviceExecutionRoutes,

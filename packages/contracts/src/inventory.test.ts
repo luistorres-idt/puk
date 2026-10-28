@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import * as v from 'valibot';
-import { RegisterEquipmentSchema, initialEquipmentState } from './inventory.js';
+import {
+  RegisterEquipmentSchema,
+  initialEquipmentState,
+  UpdateInventoryEquipmentSchema,
+  DeleteInventoryEquipmentSchema,
+} from './inventory.js';
 import { AssignEquipmentSchema } from './orders.js';
 const input = {
   registrationKey: '11111111-1111-4111-8111-111111111111',
@@ -55,4 +60,69 @@ describe('new inventory registration', () => {
     expect(
       v.safeParse(AssignEquipmentSchema, { externalKey: 'legacy', imei: 'legacy-IMEI' }).success,
     ).toBe(true));
+});
+
+describe('equipment management contracts', () => {
+  it('trims editable metadata and requires a positive integer version', () => {
+    expect(
+      v.parse(UpdateInventoryEquipmentSchema, {
+        imei: ' 012345678901234 ',
+        brand: ' GPS ',
+        model: ' Model ',
+        version: 2,
+      }),
+    ).toEqual({ imei: '012345678901234', brand: 'GPS', model: 'Model', version: 2 });
+  });
+  it.each([0, -1, 1.5, '1', undefined])('rejects invalid mutation version %s', (version) => {
+    expect(
+      v.safeParse(UpdateInventoryEquipmentSchema, {
+        imei: '012345678901234',
+        brand: 'A',
+        model: 'B',
+        version,
+      }).success,
+    ).toBe(false);
+    expect(v.safeParse(DeleteInventoryEquipmentSchema, { version }).success).toBe(false);
+  });
+  it.each([' ', 'x'.repeat(201)])('rejects invalid descriptions', (value) => {
+    expect(
+      v.safeParse(UpdateInventoryEquipmentSchema, {
+        imei: '012345678901234',
+        brand: value,
+        model: 'B',
+        version: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(UpdateInventoryEquipmentSchema, {
+        imei: '012345678901234',
+        brand: 'A',
+        model: value,
+        version: 1,
+      }).success,
+    ).toBe(false);
+  });
+  it.each(['state', 'currentClientSheetId', 'unitLabel'])('rejects immutable field %s', (key) => {
+    expect(
+      v.safeParse(UpdateInventoryEquipmentSchema, {
+        brand: 'A',
+        model: 'B',
+        imei: '012345678901234',
+        version: 1,
+        [key]: 'changed',
+      }).success,
+    ).toBe(false);
+  });
+  it.each(['1234', '01234567890123x', '0123456789012345', '0123456 8901234'])(
+    'rejects invalid edited IMEI %s',
+    (imei) =>
+      expect(
+        v.safeParse(UpdateInventoryEquipmentSchema, {
+          imei,
+          brand: 'GPS',
+          model: 'Model',
+          version: 1,
+        }).success,
+      ).toBe(false),
+  );
 });
