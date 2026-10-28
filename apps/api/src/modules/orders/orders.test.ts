@@ -631,6 +631,31 @@ describe('OrdersService & SyncService', () => {
     expect(result.status).toBe(OrderStatus.ASSIGNED);
   });
 
+  it('does not allow assigning a draft order after its only equipment was removed', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.DRAFT,
+      serviceType: 'INSTALLATION',
+      technicianId: 'tech-1',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      version: 1,
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Unidad 01',
+          makeModel: 'Freightliner',
+          year: 2023,
+          serialNumber: 'SN-001',
+          equipment: [],
+        },
+      ],
+    });
+
+    await expect(ordersService.assignAndSyncOrder('user-admin-1', 'order-1')).rejects.toMatchObject({
+      code: 'NO_EQUIPMENT',
+    });
+  });
+
   it('allows assignment when equipment already belongs to the same client with casing/suffix variation', async () => {
     // Mock Sheets to return equipment with client variation
     vi.spyOn(sheetsPort, 'listEquipment').mockResolvedValueOnce([

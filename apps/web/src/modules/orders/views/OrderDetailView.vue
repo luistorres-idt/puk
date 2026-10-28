@@ -61,9 +61,13 @@ const order = computed(() => orderQuery.data.value);
 const isAdmin = computed(() => session.user?.role === 'ADMIN');
 const isFailedAppointment = computed(() => order.value?.status === 'FAILED_APPOINTMENT');
 const canAddItems = computed(() => isAdmin.value && !!order.value && canAddOrderItems(order.value));
+const hasAssignedEquipment = computed(() =>
+  order.value?.units.some((unit) => (unit.equipment?.length ?? 0) > 0) ?? false,
+);
 const canAssignOrder = computed(
   () =>
     isAdmin.value &&
+    hasAssignedEquipment.value &&
     (order.value?.status === 'DRAFT' || order.value?.status === 'REQUIRES_CORRECTION'),
 );
 const canRequestCorrection = computed(() => isAdmin.value && order.value?.status === 'COMPLETED');
