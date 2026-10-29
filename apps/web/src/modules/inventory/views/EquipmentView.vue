@@ -60,16 +60,21 @@ watch(selected, (item) => {
 watch(editModalOpen, (open) => {
   if (!open && !saving.value) selectedId.value = null;
 });
+/** Opens the metadata editor modal populated with the selected equipment row. */
 function edit(item: InventoryEquipment): void {
   selectedId.value = item.id;
   formError.value = null;
   editModalOpen.value = true;
 }
+
+/** Closes the editor modal and clears selection unless a save request is in flight. */
 function closeEditor(): void {
   if (saving.value) return;
   editModalOpen.value = false;
   selectedId.value = null;
 }
+
+/** Submits the edited IMEI, brand, and model, keeping the modal open on recoverable conflicts. */
 async function save(): Promise<void> {
   if (selected.value && (await update(selected.value, imei.value, brand.value, model.value))) {
     message.success('Equipo actualizado.');
@@ -77,6 +82,8 @@ async function save(): Promise<void> {
     selectedId.value = null;
   }
 }
+
+/** Archives an available equipment record and notifies the user on completion. */
 async function deleteEquipment(item: InventoryEquipment): Promise<void> {
   if (await remove(item)) message.success('Equipo eliminado.');
 }
@@ -198,11 +205,12 @@ onMounted(() => {
                               >Eliminar</n-button
                             ></template
                           >
-                          ¿Retirar del inventario el equipo {{ item.imei }}? Se conservarán su ficha y
-                          los registros históricos de las órdenes.
+                          ¿Retirar del inventario el equipo {{ item.imei }}? Se conservarán su ficha
+                          y los registros históricos de las órdenes.
                         </n-popconfirm>
                         <span v-else class="text-xs text-slate-500"
-                          >Eliminación bloqueada: instalado, reservado o ligado a una orden activa.</span
+                          >Eliminación bloqueada: instalado, reservado o ligado a una orden
+                          activa.</span
                         >
                       </div>
                     </td>

@@ -37,22 +37,35 @@ const managementSelection = {
 
 type ManagedEquipmentRow = Prisma.EquipmentGetPayload<{ select: typeof managementSelection }>;
 type InventoryActor = { id: string; role: 'ADMIN' | 'TECHNICIAN' };
+
+/**
+ * Enforces that the caller holds the `ADMIN` role before executing any inventory
+ * administration operation.
+ */
 function requireAdmin(actor: InventoryActor): void {
   if (actor.role !== 'ADMIN')
     throw new AppError(403, 'FORBIDDEN', 'Solo un administrador puede administrar equipos.');
 }
+
+/**
+ * Maps a selected Prisma `Equipment` record to the public `InventoryEquipment` DTO,
+ * omitting internal soft-delete timestamps and computing `canDelete` (true only when
+ * active, `AVAILABLE`, and not reserved by an active order).
+ */
 function toManagementEquipment(row: ManagedEquipmentRow): InventoryEquipment {
   const { createdAt, updatedAt, deletedAt, ...equipment } = row;
   return {
     ...equipment,
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
-    canDelete:
-      deletedAt === null &&
-      row.state === 'AVAILABLE' &&
-      row.reservedOrderId === null,
+    canDelete: deletedAt === null && row.state === 'AVAILABLE' && row.reservedOrderId === null,
   };
 }
+
+/**
+ * Creates a 409 conflict error when an optimistic lock check (`version`) detects a
+ * concurrent modification or state transition.
+ */
 function equipmentConflict(): AppError {
   return new AppError(
     409,
@@ -61,12 +74,20 @@ function equipmentConflict(): AppError {
   );
 }
 
+/**
+ * Manages the lifecycle of database-backed equipment records, including registration,
+ * offline-capable listing, optimistic-locked metadata edits, and soft-delete archiving.
+ */
 export class InventoryService {
   public constructor(
     private readonly prisma: PrismaClient,
     private readonly sheets: EquipmentCatalogPort,
   ) {}
 
+  /**
+   * Lists all non-archived local equipment records ordered newest-first.
+   * Queries only PostgreSQL so administrators can inspect inventory during Google Sheets outages.
+   */
   public async list(actor: InventoryActor): Promise<InventoryEquipment[]> {
     requireAdmin(actor);
     const equipment = await this.prisma.equipment.findMany({
@@ -77,6 +98,12 @@ export class InventoryService {
     return equipment.map(toManagementEquipment);
   }
 
+  /**
+   * Updates mutable equipment metadata (`imei`, `brand`, `model`) using compare-and-swap
+   * on `version`. If the IMEI changes, verifies uniqueness against both local records and
+   * a fresh Google Sheets read before opening the write transaction. Historical snapshots
+   * in `OrderEquipment` are intentionally preserved unchanged.
+   */
   public async update(
     actor: InventoryActor,
     id: string,
@@ -163,6 +190,12 @@ export class InventoryService {
     }
   }
 
+  /**
+   * Soft-deletes (`deletedAt`) an equipment record if it is currently `AVAILABLE` and
+   * has no active order reservation, verifying the expected `version` atomically.
+   * Any pending assignments on `DRAFT` orders are automatically detached and audited
+   * within the same transaction while preserving completed order history.
+   */
   public async remove(
     actor: InventoryActor,
     id: string,
@@ -172,62 +205,65 @@ export class InventoryService {
     const parsed = v.safeParse(DeleteInventoryEquipmentSchema, request);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Versión de equipo inválida.');
     return domainTransaction(this.prisma, async (tx, effects) => {
-        const before = await this.requireEquipment(tx, id);
-        if (before.version !== parsed.output.version) throw equipmentConflict();
-        if (!toManagementEquipment(before).canDelete)
-          throw new AppError(
-            409,
-            'INVENTORY_EQUIPMENT_IN_USE',
-            'Solo se pueden retirar equipos disponibles y sin reservas.',
-          );
-        // Keep availability and reservation preconditions in the write: both can race this request.
-        const result = await tx.equipment.updateMany({
-          where: {
-            id,
-            version: parsed.output.version,
-            state: 'AVAILABLE',
-            reservedOrderId: null,
-            deletedAt: null,
-          },
-          data: { deletedAt: new Date(), version: { increment: 1 } },
-        });
-        if (result.count !== 1) throw equipmentConflict();
+      const before = await this.requireEquipment(tx, id);
+      if (before.version !== parsed.output.version) throw equipmentConflict();
+      if (!toManagementEquipment(before).canDelete)
+        throw new AppError(
+          409,
+          'INVENTORY_EQUIPMENT_IN_USE',
+          'Solo se pueden retirar equipos disponibles y sin reservas.',
+        );
+      // Keep availability and reservation preconditions in the write: both can race this request.
+      const result = await tx.equipment.updateMany({
+        where: {
+          id,
+          version: parsed.output.version,
+          state: 'AVAILABLE',
+          reservedOrderId: null,
+          deletedAt: null,
+        },
+        data: { deletedAt: new Date(), version: { increment: 1 } },
+      });
+      if (result.count !== 1) throw equipmentConflict();
 
-        const draftAssignments = await tx.orderEquipment.findMany({
+      const draftAssignments = await tx.orderEquipment.findMany({
+        where: {
+          inventoryEquipmentId: id,
+          orderUnit: { order: { status: 'DRAFT' } },
+        },
+      });
+      if (draftAssignments.length > 0) {
+        await tx.orderEquipment.deleteMany({
           where: {
-            inventoryEquipmentId: id,
+            id: { in: draftAssignments.map(({ id: assignmentId }) => assignmentId) },
             orderUnit: { order: { status: 'DRAFT' } },
           },
         });
-        if (draftAssignments.length > 0) {
-          await tx.orderEquipment.deleteMany({
-            where: {
-              id: { in: draftAssignments.map(({ id: assignmentId }) => assignmentId) },
-              orderUnit: { order: { status: 'DRAFT' } },
-            },
+        for (const assignment of draftAssignments) {
+          effects.audit({
+            action: 'EQUIPMENT_REMOVED',
+            actorUserId: actor.id,
+            entityType: 'OrderEquipment',
+            entityId: assignment.id,
+            before: assignment as unknown as Prisma.InputJsonValue,
           });
-          for (const assignment of draftAssignments) {
-            effects.audit({
-              action: 'EQUIPMENT_REMOVED',
-              actorUserId: actor.id,
-              entityType: 'OrderEquipment',
-              entityId: assignment.id,
-              before: assignment as unknown as Prisma.InputJsonValue,
-            });
-          }
         }
+      }
 
-        effects.audit({
-          action: 'INVENTORY_EQUIPMENT_DELETED',
-          actorUserId: actor.id,
-          entityType: 'Equipment',
-          entityId: id,
-          before: toManagementEquipment(before) as unknown as Prisma.InputJsonValue,
-        });
-        return { deleted: true as const };
+      effects.audit({
+        action: 'INVENTORY_EQUIPMENT_DELETED',
+        actorUserId: actor.id,
+        entityType: 'Equipment',
+        entityId: id,
+        before: toManagementEquipment(before) as unknown as Prisma.InputJsonValue,
       });
+      return { deleted: true as const };
+    });
   }
 
+  /**
+   * Loads an active (non-deleted) equipment row within a transaction or throws 404.
+   */
   private async requireEquipment(
     tx: Prisma.TransactionClient,
     id: string,
@@ -238,6 +274,11 @@ export class InventoryService {
     return equipment;
   }
 
+  /**
+   * Registers a new equipment record in PostgreSQL with idempotent retry support via
+   * `registrationKey` and a SHA-256 request hash. Validates IMEI uniqueness against
+   * both local inventory and a fresh Google Sheets read before persisting.
+   */
   public async register(
     actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
     request: RegisterEquipment,

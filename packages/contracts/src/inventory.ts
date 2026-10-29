@@ -2,6 +2,12 @@ import * as v from 'valibot';
 import { OrderServiceTypeSchema, type OrderServiceType } from './orders.js';
 
 const RequiredText = v.pipe(v.string(), v.trim(), v.nonEmpty());
+
+/**
+ * Determines the initial lifecycle state for newly registered equipment based on the
+ * service context. Review, uninstallation, and outgoing replacement units must already
+ * be installed on a client unit, whereas installations and incoming replacements start available.
+ */
 export function initialEquipmentState(
   serviceType: OrderServiceType,
   replacementRole?: 'OLD' | 'NEW',
@@ -61,6 +67,10 @@ const EquipmentDescriptionSchema = v.pipe(
   v.maxLength(200, 'Usa un máximo de 200 caracteres.'),
 );
 
+/**
+ * Payload contract for updating mutable equipment metadata (`imei`, `brand`, `model`)
+ * guarded by optimistic concurrency (`version`).
+ */
 export const UpdateInventoryEquipmentSchema = v.strictObject({
   imei: v.pipe(
     v.string(),
@@ -73,9 +83,16 @@ export const UpdateInventoryEquipmentSchema = v.strictObject({
 });
 export type UpdateInventoryEquipment = v.InferOutput<typeof UpdateInventoryEquipmentSchema>;
 
+/**
+ * Payload contract for archiving an available equipment record at a known optimistic `version`.
+ */
 export const DeleteInventoryEquipmentSchema = v.strictObject({ version: EquipmentVersionSchema });
 export type DeleteInventoryEquipment = v.InferOutput<typeof DeleteInventoryEquipmentSchema>;
 
+/**
+ * Administrative projection of a database-managed equipment record, including
+ * its optimistic concurrency `version` and whether it can currently be archived (`canDelete`).
+ */
 export interface InventoryEquipment {
   id: string;
   imei: string;

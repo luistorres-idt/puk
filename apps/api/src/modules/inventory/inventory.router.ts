@@ -10,6 +10,10 @@ import { validate } from '../../middleware/validate.js';
 import { sendSuccess } from '../../shared/http.js';
 import type { InventoryService } from './inventory.service.js';
 
+/**
+ * Builds the Express router for `/api/v1/inventory`, exposing administrative endpoints
+ * to list, register, edit (`PATCH`), and archive (`DELETE`) local equipment records.
+ */
 export function createInventoryRouter(
   service: InventoryService,
   requireAccess: RequestHandler,
