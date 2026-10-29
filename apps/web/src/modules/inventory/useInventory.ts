@@ -4,6 +4,11 @@ import { UpdateInventoryEquipmentSchema, type InventoryEquipment } from '@puk/co
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import * as inventoryApi from './api.js';
 
+/**
+ * Reactive state and actions for the administrative equipment inventory view.
+ * Manages local in-memory search/filtering, active row selection, and serialized
+ * optimistic-locked mutations (`update`, `remove`).
+ */
 export function useInventory() {
   const equipment = ref<InventoryEquipment[]>([]);
   const search = ref('');
@@ -31,6 +36,10 @@ export function useInventory() {
   const error = ref<string | null>(null);
   const formError = ref<string | null>(null);
 
+  /**
+   * Reloads the equipment list from the API and clears stale selection if the selected record
+   * was archived or removed by another administrator.
+   */
   async function load(): Promise<void> {
     if (loading.value || saving.value) return;
     loading.value = true;
@@ -45,6 +54,11 @@ export function useInventory() {
       loading.value = false;
     }
   }
+
+  /**
+   * Serializes a write operation while preventing concurrent loads/saves and mapping API
+   * failures into `formError`.
+   */
   async function mutate(work: () => Promise<void>): Promise<boolean> {
     if (saving.value || loading.value) return false;
     saving.value = true;
@@ -62,6 +76,11 @@ export function useInventory() {
       saving.value = false;
     }
   }
+
+  /**
+   * Validates and submits an optimistic-locked metadata edit, replacing the updated record
+   * in the local list on success.
+   */
   async function update(
     item: InventoryEquipment,
     imei: string,
@@ -85,6 +104,10 @@ export function useInventory() {
       if (index >= 0) equipment.value[index] = saved;
     });
   }
+
+  /**
+   * Archives an eligible (`canDelete`) equipment record and removes it from the local table.
+   */
   async function remove(item: InventoryEquipment): Promise<boolean> {
     if (!item.canDelete) return false;
     return mutate(async () => {

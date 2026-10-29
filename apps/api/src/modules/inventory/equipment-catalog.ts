@@ -8,10 +8,17 @@ import type { Equipment } from '../../generated/prisma/client.js';
 import type { CatalogServicePort } from '../../integrations/ports.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 
+/**
+ * Builds the canonical external key prefix (`DB:<id>`) for database-backed equipment.
+ */
 export function inventoryKey(id: string): string {
   return `DB:${id}`;
 }
 
+/**
+ * Projects a database `Equipment` entity into the unified `ExternalEquipment` catalog
+ * shape consumed by order creation and assignment workflows.
+ */
 export function toCatalogEquipment(equipment: Equipment): ExternalEquipment {
   return {
     source: 'DB',
@@ -40,6 +47,10 @@ export function toCatalogEquipment(equipment: Equipment): ExternalEquipment {
   };
 }
 
+/**
+ * Checks whether two catalog entries (typically one from PostgreSQL and one from Google Sheets)
+ * describe the same physical installation state, client ownership, and unit serial number.
+ */
 function samePhysicalContext(a: ExternalEquipment, b: ExternalEquipment): boolean {
   const installed = (e: ExternalEquipment) =>
     ['instalado', 'instalada'].includes(normalizeString(e.serviceStatus));
@@ -57,6 +68,11 @@ function samePhysicalContext(a: ExternalEquipment, b: ExternalEquipment): boolea
   );
 }
 
+/**
+ * Merges database-backed and Google Sheets equipment lists by IMEI.
+ * If a single DB record and a single Sheets row share the same IMEI and physical context,
+ * the canonical DB record is selected; otherwise duplicate IMEIs are flagged as conflicts.
+ */
 export function combineEquipment(
   db: readonly ExternalEquipment[],
   sheets: readonly ExternalEquipment[],
@@ -92,11 +108,20 @@ export function combineEquipment(
   return { data, conflicts };
 }
 
+/**
+ * Unified catalog adapter that combines PostgreSQL records with legacy Google Sheets rows,
+ * degrading gracefully to local database records when Google Sheets is unreachable.
+ */
 export class HybridEquipmentCatalog implements CatalogServicePort {
   public constructor(
     private readonly prisma: PrismaClient,
     private readonly sheets: CatalogServicePort,
   ) {}
+
+  /**
+   * Returns the merged client directory (PostgreSQL overrides + Google Sheets fallback)
+   * filtered by optional search term and sorted alphabetically.
+   */
   public async getClients(options: { forceFresh?: boolean; search?: string } = {}) {
     const stored = await this.prisma.client.findMany({
       select: { clientSheetId: true, name: true },
@@ -129,6 +154,10 @@ export class HybridEquipmentCatalog implements CatalogServicePort {
   public invalidateCache() {
     this.sheets.invalidateCache();
   }
+  /**
+   * Returns the combined equipment catalog from active DB records (`deletedAt: null`) and
+   * Google Sheets, attaching availability warnings and disabling new registrations if Sheets fails.
+   */
   public async getEquipment(options: { forceFresh?: boolean; search?: string } = {}) {
     const db = (
       await this.prisma.equipment.findMany({
@@ -168,6 +197,9 @@ export class HybridEquipmentCatalog implements CatalogServicePort {
       );
     return { data, fetchedAt, sheetsAvailable, registrationAllowed: sheetsAvailable, warnings };
   }
+  /**
+   * Looks up a single equipment record by its `externalKey` (`DB:<uuid>` or Sheets row key).
+   */
   public async findEquipmentByKey(externalKey: string, options: { forceFresh?: boolean } = {}) {
     const result = await this.getEquipment(options);
     return {

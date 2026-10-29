@@ -120,11 +120,30 @@ flowchart TD
 │   ├── cdk/                 # Stacks AWS de staging
 │   ├── docker/              # Imágenes y configuración local/ECS
 │   └── scripts/             # Operación, smoke tests y E2E
+├── scripts/                 # Generación de documentación y diagramas en PDF
 ├── docker-compose.yml
 ├── pnpm-workspace.yaml
 ├── ROADMAP.md
 └── SPECS.md
 ```
+
+## Subdirectory Blueprints & Contracts (EGM)
+
+| Subdirectorio                       | Tipo                   | Descripción                                                                                 | Verificación                        |
+| ----------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------- |
+| [`apps/`](./apps/README.md)         | Blueprint              | Aplicaciones del monorepo: API REST Express (`apps/api`) y PWA Vue 3 (`apps/web`).          | `pnpm test`                         |
+| [`packages/`](./packages/README.md) | Blueprint              | Paquetes compartidos: contratos y esquemas Valibot (`@puk/contracts`), ESLint y TypeScript. | `pnpm --filter @puk/contracts test` |
+| [`prisma/`](./prisma/README.md)     | Blueprint / Componente | Esquema de base de datos PostgreSQL, migraciones Prisma y script de seed.                   | `pnpm prisma:validate`              |
+| [`infra/`](./infra/README.md)       | Blueprint              | Infraestructura como código con AWS CDK v2, Dockerfiles y scripts operacionales.            | `pnpm infra:test`                   |
+| [`scripts/`](./scripts/README.md)   | Componente (Peanut)    | Pipeline automatizado de renderizado de documentación y diagramas Mermaid a PDF.            | `pnpm docs:pdf`                     |
+
+## Local Interface & Invariants
+
+### Configuración Raíz
+
+- **`prisma.config.ts`**: Configuración de Prisma ORM v7 mediante `defineConfig`. Resuelve la URL de PostgreSQL en orden de precedencia (`DIRECT_URL` -> `DATABASE_URL` -> `PUK_DATABASE_*`). Enlaza a `prisma/migrations`, `prisma/schema.prisma` y comando de seed `tsx prisma/seed.ts`. Lanza excepción inmediata si no existe una URL de base de datos válida.
+- **`eslint.config.js`**: Reexporta la configuración flat unificada de `@puk/eslint-config`.
+- **`pnpm-workspace.yaml`**: Define los paquetes gestionados en el monorepo (`apps/*`, `packages/*`, `infra/cdk`).
 
 Los módulos siguen slicing vertical. Cada dominio contiene sus rutas, controladores, servicios, persistencia, contratos y pruebas. Google Sheets y Google Drive se consumen a través de integraciones dedicadas.
 
