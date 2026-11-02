@@ -69,6 +69,23 @@ describe('Gmail MIME delivery', () => {
       expect(encoded.length).toBeLessThanOrEqual(75);
     expect(mime).not.toMatch(/(?<!\r)\n/);
   });
+  it('supports custom attachments with custom contentType', () => {
+    const raw = buildReportMime(config.senderEmail, {
+      recipient: 'admin@example.invalid',
+      subject: 'Reporte Excel Técnico',
+      text: 'Adjuntamos desglose Excel',
+      attachment: {
+        fileName: 'reporte-tecnico.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        content: Uint8Array.from([80, 75, 3, 4]),
+      },
+    });
+    const mime = Buffer.from(raw, 'base64url').toString('utf8');
+    expect(mime).toContain(
+      'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; name="reporte-tecnico.xlsx"',
+    );
+    expect(mime).toContain('Content-Disposition: attachment; filename="reporte-tecnico.xlsx"');
+  });
   it('uses only gmail.send and impersonates the dedicated mailbox', async () => {
     const client = new GmailClient(config);
     await expect(client.send(input)).resolves.toEqual({ messageId: 'gmail-message-1' });

@@ -16,6 +16,7 @@ import { sendSuccess } from '../../shared/http.js';
 import { TechniciansService } from '../technicians/index.js';
 import { UsersService } from '../users/index.js';
 import type { SyncService, TechnicalReportSyncScheduleService } from '../orders/index.js';
+import type { TechnicianReportEmailService } from '../reports/index.js';
 
 export interface AdministrationRouterOptions {
   minimumPasswordLength?: number;
@@ -25,6 +26,7 @@ export interface AdministrationRouterOptions {
   techniciansService?: TechniciansService;
   syncService?: SyncService;
   technicalReportSyncSchedule?: TechnicalReportSyncScheduleService;
+  technicianReportEmailService?: TechnicianReportEmailService;
 }
 
 export function createAdministrationRouter(options: AdministrationRouterOptions): Router {
@@ -122,6 +124,19 @@ export function createAdministrationRouter(options: AdministrationRouterOptions)
         const operation = await options.syncService!.retryOperation(String(request.params.id));
         options.syncService!.processPendingOperations().catch(() => {});
         sendSuccess(response, operation);
+      },
+    );
+  }
+
+  if (options.technicianReportEmailService) {
+    router.post(
+      '/sync/technician-reports/dispatch',
+      authorize('sync:retry'),
+      async (request, response) => {
+        const outcome = await options.technicianReportEmailService!.dispatchWeeklyReports(
+          request.auth!.userId,
+        );
+        sendSuccess(response, outcome);
       },
     );
   }

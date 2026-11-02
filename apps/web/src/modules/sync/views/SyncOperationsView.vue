@@ -19,6 +19,7 @@ import type { SyncStatus, UpdateTechnicalReportSyncSchedule } from '@puk/contrac
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import {
+  dispatchTechnicianReports,
   fetchSyncOperations,
   fetchSyncSchedule,
   retrySyncOperation,
@@ -38,7 +39,10 @@ const filters = reactive({
 watch(debouncedSearch, (val) => {
   filters.search = val;
 });
-const scheduleForm = reactive<UpdateTechnicalReportSyncSchedule>({
+const scheduleForm = reactive<
+  UpdateTechnicalReportSyncSchedule & { adminRecipientEmail: string | null }
+>({
+  adminRecipientEmail: null,
   cutoffWeekday: 2,
   syncTime: '17:00',
   syncWeekday: 3,
@@ -93,6 +97,7 @@ watch(
   (schedule) => {
     if (!schedule) return;
     Object.assign(scheduleForm, {
+      adminRecipientEmail: schedule.adminRecipientEmail ?? null,
       cutoffWeekday: schedule.cutoffWeekday,
       syncTime: schedule.syncTime,
       syncWeekday: schedule.syncWeekday,
@@ -126,6 +131,22 @@ const retryOperation = useMutation({
     message.success('La operación se envió a sincronización inmediata.');
   },
   onError: (error) => message.error(extractApiErrorMessage(error, 'No se pudo reintentar')),
+});
+const dispatchReports = useMutation({
+  mutationFn: dispatchTechnicianReports,
+  onSuccess: (data) => {
+    if (data.status === 'NO_ORDERS') {
+      message.info('No hay órdenes completadas en la ventana de corte para enviar.');
+    } else if (data.status === 'SKIPPED') {
+      message.warning('Envío omitido: verifica que el correo de administración esté configurado.');
+    } else if (data.status === 'SUCCESS') {
+      message.success(`Se enviaron ${data.sentCount} reporte(s) por correo a ${data.recipient}.`);
+    } else {
+      message.warning(`Enviados: ${data.sentCount}, fallidos: ${data.failedCount}.`);
+    }
+  },
+  onError: (error) =>
+    message.error(extractApiErrorMessage(error, 'Ocurrió un error al despachar los reportes')),
 });
 
 const result = computed(() => operationsQuery.data.value);
@@ -202,7 +223,7 @@ function formatDate(value: string | null | undefined): string {
         <div v-if="scheduleQuery.isPending.value" class="grid min-h-24 place-items-center">
           <n-spin />
         </div>
-        <div v-else class="grid gap-4 md:grid-cols-5">
+        <div v-else class="grid gap-4 md:grid-cols-6">
           <div>
             <label class="mb-1 block text-xs text-slate-500">Día de corte</label
             ><n-select v-model:value="scheduleForm.cutoffWeekday" :options="weekdays" />
@@ -230,7 +251,15 @@ function formatDate(value: string | null | undefined): string {
               filterable
             />
           </div>
-          <div class="flex items-end">
+          <div>
+            <label class="mb-1 block text-xs text-slate-500">Correo de administración</label
+            ><n-input
+              v-model:value="scheduleForm.adminRecipientEmail"
+              placeholder="admin@empresa.com"
+              clearable
+            />
+          </div>
+          <div class="flex flex-wrap items-end gap-2">
             <n-button
               type="primary"
               class="w-full md:w-auto"
@@ -238,6 +267,15 @@ function formatDate(value: string | null | undefined): string {
               @click="saveSchedule.mutate()"
             >
               Guardar horario
+            </n-button>
+            <n-button
+              secondary
+              type="info"
+              class="w-full md:w-auto"
+              :loading="dispatchReports.isPending.value"
+              @click="dispatchReports.mutate()"
+            >
+              Enviar reportes ahora
             </n-button>
           </div>
         </div>

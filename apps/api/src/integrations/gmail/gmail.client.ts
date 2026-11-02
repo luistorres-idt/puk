@@ -3,12 +3,18 @@ import { google } from 'googleapis';
 import * as v from 'valibot';
 
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+export interface MailAttachment {
+  fileName: string;
+  contentType: string;
+  content: Uint8Array;
+}
 export interface ReportMailInput {
   recipient: string;
   subject: string;
   text: string;
-  fileName: string;
-  pdf: Uint8Array;
+  fileName?: string;
+  pdf?: Uint8Array;
+  attachment?: MailAttachment;
 }
 export interface ReportMailPort {
   send(input: ReportMailInput): Promise<{ messageId: string }>;
@@ -50,8 +56,13 @@ export function buildReportMime(sender: string, input: ReportMailInput): string 
   assertMailbox(sender);
   assertMailbox(input.recipient);
   const boundary = `puk-${randomUUID()}`;
+  const attachment = input.attachment ?? {
+    fileName: input.fileName ?? 'service-order.pdf',
+    contentType: 'application/pdf',
+    content: input.pdf ?? new Uint8Array(),
+  };
   const fileName =
-    input.fileName.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 150) || 'service-order.pdf';
+    attachment.fileName.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 150) || 'attachment.dat';
   const mime = [
     `From: ${sender}`,
     `To: ${input.recipient}`,
@@ -65,11 +76,11 @@ export function buildReportMime(sender: string, input: ReportMailInput): string 
     '',
     base64Lines(Buffer.from(input.text, 'utf8')),
     `--${boundary}`,
-    `Content-Type: application/pdf; name="${fileName}"`,
+    `Content-Type: ${attachment.contentType}; name="${fileName}"`,
     'Content-Transfer-Encoding: base64',
     `Content-Disposition: attachment; filename="${fileName}"`,
     '',
-    base64Lines(input.pdf),
+    base64Lines(attachment.content),
     `--${boundary}--`,
     '',
   ].join('\r\n');

@@ -64,3 +64,18 @@ export async function updateSyncSchedule(
 export async function retrySyncOperation(id: string): Promise<void> {
   await api.post(`/sync/${id}/retry`);
 }
+
+export interface DispatchTechnicianReportsResult {
+  status: 'SUCCESS' | 'PARTIAL_FAILURE' | 'FAILURE' | 'NO_ORDERS' | 'SKIPPED';
+  reason?: string;
+  sentCount: number;
+  failedCount: number;
+  recipient?: string;
+}
+
+export async function dispatchTechnicianReports(): Promise<DispatchTechnicianReportsResult> {
+  const response = await api.post<ApiResponse<DispatchTechnicianReportsResult>>(
+    '/sync/technician-reports/dispatch',
+  );
+  return response.data.data;
+}

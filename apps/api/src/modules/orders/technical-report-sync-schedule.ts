@@ -7,6 +7,7 @@ import { AppError } from '../../shared/errors.js';
 const SCHEDULE_ID = 'technical-report';
 
 export interface TechnicalReportSyncScheduleConfig {
+  adminRecipientEmail?: string | null;
   cutoffWeekday: number;
   syncTime: string;
   syncWeekday: number;
@@ -148,6 +149,31 @@ export function calculateTechnicalReportSyncAt(
   return scheduledAt;
 }
 
+export function calculateCurrentCutoffWindow(
+  reference: Date,
+  config: TechnicalReportSyncScheduleConfig,
+): { start: Date; end: Date } {
+  assertValidTimeZone(config.timeZone);
+  const local = zonedParts(reference, config.timeZone);
+  const diff = (local.weekday - config.cutoffWeekday + 7) % 7;
+  let cutoffDate = addCalendarDays(local, -diff);
+  let cutoffEnd = localDateTimeToUtc(
+    { ...cutoffDate, hour: 23, minute: 59, second: 59, millisecond: 999 },
+    config.timeZone,
+  );
+
+  if (reference.getTime() < cutoffEnd.getTime()) {
+    cutoffDate = addCalendarDays(cutoffDate, -7);
+    cutoffEnd = localDateTimeToUtc(
+      { ...cutoffDate, hour: 23, minute: 59, second: 59, millisecond: 999 },
+      config.timeZone,
+    );
+  }
+
+  const cutoffStart = new Date(cutoffEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return { start: cutoffStart, end: cutoffEnd };
+}
+
 export class TechnicalReportSyncScheduleService {
   public constructor(
     private readonly prisma: PrismaClient,
@@ -160,6 +186,8 @@ export class TechnicalReportSyncScheduleService {
     });
     const config: TechnicalReportSyncScheduleConfig = stored
       ? {
+          adminRecipientEmail:
+            stored.adminRecipientEmail ?? this.defaults.adminRecipientEmail ?? null,
           cutoffWeekday: stored.cutoffWeekday,
           syncTime: stored.syncTime,
           syncWeekday: stored.syncWeekday,
@@ -202,7 +230,14 @@ export class TechnicalReportSyncScheduleService {
 
   public async updateConfig(actorUserId: string, input: UpdateTechnicalReportSyncSchedule) {
     assertValidTimeZone(input.timeZone);
-    calculateTechnicalReportSyncAt(new Date(), input);
+    const normalizedInput: TechnicalReportSyncScheduleConfig = {
+      adminRecipientEmail: input.adminRecipientEmail ?? null,
+      cutoffWeekday: input.cutoffWeekday,
+      syncTime: input.syncTime,
+      syncWeekday: input.syncWeekday,
+      timeZone: input.timeZone,
+    };
+    calculateTechnicalReportSyncAt(new Date(), normalizedInput);
 
     await this.prisma.$transaction(async (tx) => {
       const before = await tx.technicalReportSyncSchedule.findUnique({
@@ -210,8 +245,8 @@ export class TechnicalReportSyncScheduleService {
       });
       const updated = await tx.technicalReportSyncSchedule.upsert({
         where: { id: SCHEDULE_ID },
-        create: { id: SCHEDULE_ID, ...input },
-        update: input,
+        create: { id: SCHEDULE_ID, ...normalizedInput },
+        update: normalizedInput,
       });
       const pending = await tx.sheetSyncOperation.findMany({
         where: {
@@ -222,7 +257,7 @@ export class TechnicalReportSyncScheduleService {
         select: { createdAt: true, id: true },
       });
       for (const operation of pending) {
-        const scheduledFor = calculateTechnicalReportSyncAt(operation.createdAt, input);
+        const scheduledFor = calculateTechnicalReportSyncAt(operation.createdAt, normalizedInput);
         await tx.sheetSyncOperation.update({
           where: { id: operation.id },
           data: { nextAttemptAt: scheduledFor, scheduledFor },
