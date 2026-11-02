@@ -48,34 +48,22 @@ describe('TechnicianExcelReportGenerator', () => {
     units: [],
   };
 
-  it('breaks down multi-unit orders into granular rows and assigns viáticos to the first unit', () => {
+  it('formats multi-unit orders with line breaks inside the cells and keeps one row per order', () => {
     const rows = buildTechnicianReportRows([sampleOrder1]);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(1);
 
     expect(rows[0]).toMatchObject({
       folio: 'ORD-001',
       cliente: 'Transportes del Norte',
-      economico: 'ECO-101',
-      serie: 'SN-001',
-      imeiId: '123456789012345',
-      servicio: 'Instalación',
-      costo: 500,
+      economico: 'ECO-101\nECO-102',
+      serie: 'SN-001\nSN-002',
+      imeiId: '123456789012345\n987654321098765',
+      servicio: 'Instalación\nInstalación',
       viaticos: 300,
-      total: 800,
+      total: 1800,
       notas: 'Instalación completada sin contratiempos',
     });
-
-    expect(rows[1]).toMatchObject({
-      folio: 'ORD-001',
-      economico: 'ECO-102',
-      serie: 'SN-002',
-      imeiId: '987654321098765',
-      servicio: 'Instalación',
-      costo: 500,
-      viaticos: 0,
-      total: 500,
-      notas: '',
-    });
+    expect(rows[0]?.costo).toBe('500.00\n500.00');
   });
 
   it('formats failed appointment notes and preserves order when units are empty', () => {
@@ -92,7 +80,7 @@ describe('TechnicianExcelReportGenerator', () => {
     });
   });
 
-  it('generates a readable and valid Excel buffer with styled worksheets', async () => {
+  it('generates a readable and valid Excel buffer with styled worksheets and wrapText enabled', async () => {
     const bytes = await generateTechnicianExcelReport(
       { name: 'Carlos Mendoza', externalKey: 'TECH-001' },
       [sampleOrder1, sampleOrder2],
@@ -107,7 +95,7 @@ describe('TechnicianExcelReportGenerator', () => {
 
     const sheet = workbook.getWorksheet('Carlos Mendoza');
     expect(sheet).toBeDefined();
-    expect(sheet?.rowCount).toBe(4); // 1 header + 2 units (order 1) + 1 order (order 2)
+    expect(sheet?.rowCount).toBe(3); // 1 header + 1 row for order1 + 1 row for order2
 
     const header = sheet?.getRow(1);
     expect(header?.getCell(1).value).toBe('Semana');
@@ -117,10 +105,13 @@ describe('TechnicianExcelReportGenerator', () => {
 
     const row2 = sheet?.getRow(2);
     expect(row2?.getCell(2).value).toBe('ORD-001');
-    expect(row2?.getCell(5).value).toBe('ECO-101');
+    expect(row2?.getCell(5).value).toBe('ECO-101\nECO-102');
+    expect(row2?.getCell(11).value).toBe(1800);
+    expect(row2?.alignment?.wrapText).toBe(true);
 
-    const row4 = sheet?.getRow(4);
-    expect(row4?.getCell(2).value).toBe('ORD-002');
-    expect(row4?.getCell(8).value).toBe('Cita Fallida');
+    const row3 = sheet?.getRow(3);
+    expect(row3?.getCell(2).value).toBe('ORD-002');
+    expect(row3?.getCell(8).value).toBe('Cita Fallida');
+    expect(row3?.getCell(11).value).toBe(500);
   });
 });
