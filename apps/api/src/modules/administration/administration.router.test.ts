@@ -7,6 +7,7 @@ import type { TokenService } from '../../auth/tokens.js';
 import type { TechniciansService } from '../technicians/index.js';
 import type { UsersService } from '../users/index.js';
 import type { SyncService, TechnicalReportSyncScheduleService } from '../orders/index.js';
+import type { TechnicianReportEmailService } from '../reports/index.js';
 import { createAdministrationRouter } from './administration.router.js';
 
 describe('createAdministrationRouter', () => {
@@ -61,6 +62,7 @@ describe('createAdministrationRouter', () => {
   };
   const mockSchedule = {
     getConfig: vi.fn().mockResolvedValue({
+      adminRecipientEmail: 'admin@example.com',
       cutoffWeekday: 2,
       nextSyncAt: new Date('2026-09-17T00:00:00.000Z'),
       syncTime: '17:00',
@@ -69,6 +71,15 @@ describe('createAdministrationRouter', () => {
       updatedAt: null,
     }),
     updateConfig: vi.fn().mockImplementation(async (_actor, input) => input),
+  };
+  const mockTechnicianReportEmailService = {
+    dispatchWeeklyReports: vi.fn().mockResolvedValue({
+      status: 'SUCCESS',
+      sentCount: 2,
+      failedCount: 0,
+      recipient: 'admin@example.com',
+      results: [],
+    }),
   };
 
   function createTestApp(role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
@@ -84,6 +95,8 @@ describe('createAdministrationRouter', () => {
         techniciansService: mockTechniciansService as unknown as TechniciansService,
         syncService: mockSyncService as unknown as SyncService,
         technicalReportSyncSchedule: mockSchedule as unknown as TechnicalReportSyncScheduleService,
+        technicianReportEmailService:
+          mockTechnicianReportEmailService as unknown as TechnicianReportEmailService,
       }),
     );
     return app;
@@ -163,8 +176,9 @@ describe('createAdministrationRouter', () => {
     );
   });
 
-  it('updates the configurable weekly schedule', async () => {
+  it('updates the configurable weekly schedule including adminRecipientEmail', async () => {
     const schedule = {
+      adminRecipientEmail: 'admin.ops@company.com',
       cutoffWeekday: 2,
       syncTime: '17:00',
       syncWeekday: 3,
@@ -176,5 +190,16 @@ describe('createAdministrationRouter', () => {
       .send(schedule);
     expect(response.status).toBe(200);
     expect(mockSchedule.updateConfig).toHaveBeenCalledWith('admin-user-id', schedule);
+  });
+
+  it('dispatches technician weekly reports via admin endpoint', async () => {
+    const response = await request(createTestApp())
+      .post('/admin/sync/technician-reports/dispatch')
+      .set('Authorization', 'Bearer valid-token');
+    expect(response.status).toBe(200);
+    expect(response.body.data.status).toBe('SUCCESS');
+    expect(mockTechnicianReportEmailService.dispatchWeeklyReports).toHaveBeenCalledWith(
+      'admin-user-id',
+    );
   });
 });

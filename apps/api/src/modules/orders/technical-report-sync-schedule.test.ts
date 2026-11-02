@@ -8,6 +8,7 @@ import {
 } from './technical-report-sync-schedule.js';
 
 const defaults = {
+  adminRecipientEmail: null,
   cutoffWeekday: 2,
   syncTime: '17:00',
   syncWeekday: 3,
@@ -117,6 +118,7 @@ describe('TechnicalReportSyncScheduleService', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-08T18:00:00.000Z'));
     const input = {
+      adminRecipientEmail: null,
       cutoffWeekday: 5,
       syncTime: '08:30',
       syncWeekday: 1,

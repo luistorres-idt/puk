@@ -17,13 +17,14 @@ import { ExecutionService } from './modules/execution/index.js';
 import { GoogleDriveClient } from './integrations/google-drive/google-drive.client.js';
 import { DriveFolderResolver } from './integrations/google-drive/drive-folder-resolver.js';
 import { GmailClient } from './integrations/gmail/gmail.client.js';
-import { ReportsService, ReportEmailService } from './modules/reports/index.js';
+import {
+  ReportsService,
+  ReportEmailService,
+  TechnicianReportEmailService,
+} from './modules/reports/index.js';
 import { SharedTechnicianAccessService } from './modules/shared-technician-access/index.js';
 import { TechniciansService } from './modules/technicians/index.js';
-import {
-  CircuitBreaker,
-  CircuitBreakerSheetsPort,
-} from './resilience/index.js';
+import { CircuitBreaker, CircuitBreakerSheetsPort } from './resilience/index.js';
 import { logger } from './observability/logger.js';
 
 const environment = loadEnvironment();
@@ -141,6 +142,11 @@ const gmailSender =
       })
     : undefined;
 const reportEmailService = new ReportEmailService(prisma, reportsService, gmailSender);
+const technicianReportEmailService = new TechnicianReportEmailService(
+  prisma,
+  technicalReportSyncSchedule,
+  gmailSender,
+);
 const sharedTechnicianAccessService = new SharedTechnicianAccessService(prisma);
 
 const reportsInterval = setInterval(() => {
@@ -164,6 +170,7 @@ const server = createApp({
     techniciansService,
     syncService,
     technicalReportSyncSchedule,
+    technicianReportEmailService,
     minimumPasswordLength: environment.MIN_PASSWORD_LENGTH,
   },
   allowedOrigins: [environment.APP_ORIGIN],

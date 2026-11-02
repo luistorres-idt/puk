@@ -513,13 +513,14 @@ model SheetSyncOperation {
 }
 
 model TechnicalReportSyncSchedule {
-  id            String   @id
-  syncWeekday   Int      @default(3)
-  syncTime      String   @default("17:00")
-  cutoffWeekday Int      @default(2)
-  timeZone      String   @default("America/Hermosillo")
-  createdAt     DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  id                  String   @id
+  syncWeekday         Int      @default(3)
+  syncTime            String   @default("17:00")
+  cutoffWeekday       Int      @default(2)
+  timeZone            String   @default("America/Hermosillo")
+  adminRecipientEmail String?
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
 }
 
 model Client {

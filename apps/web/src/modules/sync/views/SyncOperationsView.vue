@@ -38,7 +38,10 @@ const filters = reactive({
 watch(debouncedSearch, (val) => {
   filters.search = val;
 });
-const scheduleForm = reactive<UpdateTechnicalReportSyncSchedule>({
+const scheduleForm = reactive<
+  UpdateTechnicalReportSyncSchedule & { adminRecipientEmail: string | null }
+>({
+  adminRecipientEmail: null,
   cutoffWeekday: 2,
   syncTime: '17:00',
   syncWeekday: 3,
@@ -93,6 +96,7 @@ watch(
   (schedule) => {
     if (!schedule) return;
     Object.assign(scheduleForm, {
+      adminRecipientEmail: schedule.adminRecipientEmail ?? null,
       cutoffWeekday: schedule.cutoffWeekday,
       syncTime: schedule.syncTime,
       syncWeekday: schedule.syncWeekday,
@@ -202,7 +206,7 @@ function formatDate(value: string | null | undefined): string {
         <div v-if="scheduleQuery.isPending.value" class="grid min-h-24 place-items-center">
           <n-spin />
         </div>
-        <div v-else class="grid gap-4 md:grid-cols-5">
+        <div v-else class="grid gap-4 md:grid-cols-6">
           <div>
             <label class="mb-1 block text-xs text-slate-500">Día de corte</label
             ><n-select v-model:value="scheduleForm.cutoffWeekday" :options="weekdays" />
@@ -228,6 +232,14 @@ function formatDate(value: string | null | undefined): string {
               v-model:value="scheduleForm.timeZone"
               :options="timeZoneOptions"
               filterable
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs text-slate-500">Correo de administración</label
+            ><n-input
+              v-model:value="scheduleForm.adminRecipientEmail"
+              placeholder="admin@empresa.com"
+              clearable
             />
           </div>
           <div class="flex items-end">
