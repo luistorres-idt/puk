@@ -4,6 +4,7 @@ import {
   normalizeString,
   isMatchingClient,
   isInstalledEquipment,
+  isUnavailableForInstallation,
   filterEquipmentByServiceType,
   extractUnitFromEquipment,
 } from './equipment-filter.js';
@@ -119,6 +120,42 @@ describe('isInstalledEquipment', () => {
   });
 });
 
+describe('isUnavailableForInstallation', () => {
+  it('identifies unavailable installation statuses (installed, lost, sent)', () => {
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'INSTALADO' }))).toBe(
+      true,
+    );
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'instalada' }))).toBe(
+      true,
+    );
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'PERDIDO' }))).toBe(
+      true,
+    );
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'perdida' }))).toBe(
+      true,
+    );
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'ENVIADO' }))).toBe(
+      true,
+    );
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'enviada' }))).toBe(
+      true,
+    );
+  });
+
+  it('allows available, stock, uninstalled, or null statuses', () => {
+    expect(
+      isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'STOCK TECNICO' })),
+    ).toBe(false);
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'DISPONIBLE' }))).toBe(
+      false,
+    );
+    expect(
+      isUnavailableForInstallation(createMockEquipment({ serviceStatus: 'DESINSTALADO' })),
+    ).toBe(false);
+    expect(isUnavailableForInstallation(createMockEquipment({ serviceStatus: null }))).toBe(false);
+  });
+});
+
 describe('filterEquipmentByServiceType', () => {
   const stockEq1 = createMockEquipment({
     externalKey: 'STOCK-1',
@@ -131,6 +168,27 @@ describe('filterEquipmentByServiceType', () => {
     externalKey: 'STOCK-2',
     id: 'STOCK-2',
     serviceStatus: 'DISPONIBLE',
+    currentClient: null,
+  });
+
+  const stockWithOtherClient = createMockEquipment({
+    externalKey: 'STOCK-OTHER',
+    id: 'STOCK-OTHER',
+    serviceStatus: 'DISPONIBLE',
+    currentClient: 'Cliente Anterior S.A.',
+  });
+
+  const lostEq = createMockEquipment({
+    externalKey: 'LOST-1',
+    id: 'LOST-1',
+    serviceStatus: 'PERDIDO',
+    currentClient: null,
+  });
+
+  const sentEq = createMockEquipment({
+    externalKey: 'SENT-1',
+    id: 'SENT-1',
+    serviceStatus: 'ENVIADO',
     currentClient: null,
   });
 
@@ -173,6 +231,16 @@ describe('filterEquipmentByServiceType', () => {
     });
 
     expect(result.map((equipment) => equipment.externalKey)).toEqual(['STOCK-1', 'STOCK-2']);
+  });
+
+  it('allows equipment with other client text in Sheets and excludes lost or sent for INSTALLATION', () => {
+    const mixedItems = [...allItems, stockWithOtherClient, lostEq, sentEq];
+    const result = filterEquipmentByServiceType(mixedItems, {
+      serviceType: 'INSTALLATION',
+      clientName: 'Transportes Bull Dog S.A. de C.V.',
+    });
+
+    expect(result.map((e) => e.externalKey)).toEqual(['STOCK-1', 'STOCK-2', 'STOCK-OTHER']);
   });
 
   it('filters only installed equipment for the specified client for REVIEW', () => {

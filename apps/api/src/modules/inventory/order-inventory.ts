@@ -181,14 +181,37 @@ export class InventoryAssignmentPreparer {
             `El equipo ${item.externalKey} ya no es válido o no existe en Sheets`,
           );
 
-        const matchesClientName = isMatchingClient(fresh.currentClient, client.name);
-        const matchesClientId = normalizeString(fresh.currentClient) === normalizeString(client.id);
-        if (fresh.currentClient && !matchesClientName && !matchesClientId)
+        const isInstallation =
+          item.serviceType === 'INSTALLATION' || item.serviceType === 'FUEL_SENSOR';
+        const status = normalizeString(fresh.serviceStatus);
+        const unavailableStatuses = [
+          'instalado',
+          'instalada',
+          'perdido',
+          'perdida',
+          'enviado',
+          'enviada',
+        ];
+
+        if (isInstallation && unavailableStatuses.includes(status)) {
           throw new AppError(
             409,
             'SHEET_ROW_CONFLICT',
-            `Conflicto en Sheets: el equipo ${item.externalKey} pertenece al cliente ${fresh.currentClient}`,
+            `El equipo ${item.externalKey} no está disponible para instalación (estado: ${fresh.serviceStatus})`,
           );
+        }
+
+        if (!isInstallation) {
+          const matchesClientName = isMatchingClient(fresh.currentClient, client.name);
+          const matchesClientId =
+            normalizeString(fresh.currentClient) === normalizeString(client.id);
+          if (fresh.currentClient && !matchesClientName && !matchesClientId)
+            throw new AppError(
+              409,
+              'SHEET_ROW_CONFLICT',
+              `Conflicto en Sheets: el equipo ${item.externalKey} pertenece al cliente ${fresh.currentClient}`,
+            );
+        }
       }
     }
 
