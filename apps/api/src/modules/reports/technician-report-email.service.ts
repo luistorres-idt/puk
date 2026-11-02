@@ -130,10 +130,12 @@ export class TechnicianReportEmailService {
 
     const results: TechnicianEmailResult[] = [];
     const attemptBatchId = randomUUID();
-    const sem = getIsoWeek(window.end, config.timeZone);
     const cutoffDateStr = formatReportDate(window.end, config.timeZone);
 
     for (const [technicianId, group] of groups) {
+      const sem = group.orders[0]
+        ? getIsoWeek(group.orders[0].scheduledAt, config.timeZone)
+        : getIsoWeek(window.end, config.timeZone);
       const attemptId = randomUUID();
       const auditPayload = {
         attemptBatchId,

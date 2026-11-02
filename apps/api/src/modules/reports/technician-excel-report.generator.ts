@@ -76,8 +76,8 @@ export async function generateTechnicianExcelReport(
     { header: 'Serie', key: 'serie', width: 20 },
     { header: 'IMEI / ID', key: 'imeiId', width: 22 },
     { header: 'Servicio', key: 'servicio', width: 25 },
-    { header: 'Costo', key: 'costo', width: 16, style: { numFmt: '$#,##0.00' } },
-    { header: 'Viáticos', key: 'viaticos', width: 14, style: { numFmt: '$#,##0.00' } },
+    { header: 'Costo', key: 'costo', width: 16, style: { numFmt: '#,##0.00' } },
+    { header: 'Viáticos', key: 'viaticos', width: 14, style: { numFmt: '#,##0.00' } },
     { header: 'Total', key: 'total', width: 14, style: { numFmt: '$#,##0.00' } },
     { header: 'Notas', key: 'notas', width: 35 },
   ];

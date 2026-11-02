@@ -103,6 +103,13 @@ describe('TechnicianExcelReportGenerator', () => {
     expect(header?.getCell(4).value).toBe('Cliente');
     expect(header?.getCell(8).value).toBe('Servicio');
 
+    const colCosto = sheet?.getColumn(9);
+    const colViaticos = sheet?.getColumn(10);
+    const colTotal = sheet?.getColumn(11);
+    expect(colCosto?.numFmt).toBe('#,##0.00');
+    expect(colViaticos?.numFmt).toBe('#,##0.00');
+    expect(colTotal?.numFmt).toBe('$#,##0.00');
+
     const row2 = sheet?.getRow(2);
     expect(row2?.getCell(2).value).toBe('ORD-001');
     expect(row2?.getCell(5).value).toBe('ECO-101\nECO-102');
