@@ -19,6 +19,7 @@ import type { SyncStatus, UpdateTechnicalReportSyncSchedule } from '@puk/contrac
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import {
+  dispatchTechnicianReports,
   fetchSyncOperations,
   fetchSyncSchedule,
   retrySyncOperation,
@@ -131,6 +132,22 @@ const retryOperation = useMutation({
   },
   onError: (error) => message.error(extractApiErrorMessage(error, 'No se pudo reintentar')),
 });
+const dispatchReports = useMutation({
+  mutationFn: dispatchTechnicianReports,
+  onSuccess: (data) => {
+    if (data.status === 'NO_ORDERS') {
+      message.info('No hay órdenes completadas en la ventana de corte para enviar.');
+    } else if (data.status === 'SKIPPED') {
+      message.warning('Envío omitido: verifica que el correo de administración esté configurado.');
+    } else if (data.status === 'SUCCESS') {
+      message.success(`Se enviaron ${data.sentCount} reporte(s) por correo a ${data.recipient}.`);
+    } else {
+      message.warning(`Enviados: ${data.sentCount}, fallidos: ${data.failedCount}.`);
+    }
+  },
+  onError: (error) =>
+    message.error(extractApiErrorMessage(error, 'Ocurrió un error al despachar los reportes')),
+});
 
 const result = computed(() => operationsQuery.data.value);
 const schedule = computed(() => scheduleQuery.data.value);
@@ -242,7 +259,7 @@ function formatDate(value: string | null | undefined): string {
               clearable
             />
           </div>
-          <div class="flex items-end">
+          <div class="flex flex-wrap items-end gap-2">
             <n-button
               type="primary"
               class="w-full md:w-auto"
@@ -250,6 +267,15 @@ function formatDate(value: string | null | undefined): string {
               @click="saveSchedule.mutate()"
             >
               Guardar horario
+            </n-button>
+            <n-button
+              secondary
+              type="info"
+              class="w-full md:w-auto"
+              :loading="dispatchReports.isPending.value"
+              @click="dispatchReports.mutate()"
+            >
+              Enviar reportes ahora
             </n-button>
           </div>
         </div>
