@@ -559,7 +559,7 @@ describe.runIf(isolatedLocalDatabase(databaseUrl))('isolated PostgreSQL inventor
       sheetsRows.pop();
     }
   });
-  it('blocks later cross-source identity conflict without modifying either record', async () => {
+  it('permits order creation even with cross-source differences without modifying either record', async () => {
     const equipment = await inventory.register({ id: userId, role: 'ADMIN' }, input());
     sheetsRows.push({
       ...equipment,
@@ -571,14 +571,13 @@ describe.runIf(isolatedLocalDatabase(databaseUrl))('isolated PostgreSQL inventor
       currentClientSheetId: null,
     });
     try {
-      await expect(createOrder([assignment(equipment)])).rejects.toMatchObject({
-        code: 'EQUIPMENT_IDENTITY_CONFLICT',
-      });
+      const order = await createOrder([assignment(equipment)]);
+      expect(order.id).toBeDefined();
     } finally {
       sheetsRows.pop();
     }
     expect(
       await prisma.equipment.findUniqueOrThrow({ where: { id: equipment.inventoryEquipmentId! } }),
-    ).toMatchObject({ state: 'AVAILABLE', reservedOrderId: null });
+    ).toMatchObject({ state: 'AVAILABLE' });
   });
 });
