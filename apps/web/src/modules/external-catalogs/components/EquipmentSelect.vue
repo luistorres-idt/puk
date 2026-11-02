@@ -32,6 +32,7 @@ const equipmentList = ref<ExternalEquipment[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const fetchedAt = ref<string | null>(null);
+const showAll = ref(false);
 
 const filteredEquipment = computed(() => {
   let effectiveExcludeKeys = props.excludeKeys;
@@ -47,6 +48,18 @@ const filteredEquipment = computed(() => {
         effectiveExcludeKeys = props.excludeKeys.filter((k) => k !== props.modelValue);
       }
     }
+  }
+
+  if (showAll.value) {
+    let list = equipmentList.value.filter((e) => !e.reservedOrderId);
+    if (effectiveExcludeKeys) {
+      const excludeSet =
+        effectiveExcludeKeys instanceof Set ? effectiveExcludeKeys : new Set(effectiveExcludeKeys);
+      if (excludeSet.size > 0) {
+        list = list.filter((eq) => !excludeSet.has(eq.externalKey));
+      }
+    }
+    return list;
   }
 
   return filterEquipmentByServiceType(equipmentList.value, {
@@ -160,21 +173,38 @@ onMounted(() => {
 <template>
   <div class="space-y-2">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-      <label class="text-sm font-medium text-slate-700">
-        Equipo (BD / Google Sheets)
-        <span
-          v-if="props.serviceType === 'INSTALLATION'"
-          class="text-xs text-slate-500 font-normal"
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-sm font-medium text-slate-700">
+          Equipo (BD / Google Sheets)
+          <span
+            v-if="!showAll && props.serviceType === 'INSTALLATION'"
+            class="text-xs text-slate-500 font-normal"
+          >
+            (solo disponibles)
+          </span>
+          <span
+            v-else-if="
+              !showAll && (props.serviceType === 'REVIEW' || props.serviceType === 'UNINSTALLATION')
+            "
+            class="text-xs text-slate-500 font-normal"
+          >
+            (solo instalados del cliente)
+          </span>
+          <span v-else-if="showAll" class="text-xs text-amber-600 font-medium"> (sin filtro) </span>
+        </label>
+        <button
+          type="button"
+          class="inline-flex items-center text-xs font-medium cursor-pointer transition-colors"
+          :class="
+            showAll
+              ? 'text-amber-700 underline font-semibold'
+              : 'text-slate-500 hover:text-slate-700 underline'
+          "
+          @click="showAll = !showAll"
         >
-          (solo disponibles)
-        </span>
-        <span
-          v-else-if="props.serviceType === 'REVIEW' || props.serviceType === 'UNINSTALLATION'"
-          class="text-xs text-slate-500 font-normal"
-        >
-          (solo instalados del cliente)
-        </span>
-      </label>
+          {{ showAll ? 'Restablecer filtros' : 'Mostrar todos sin filtro' }}
+        </button>
+      </div>
       <div v-if="fetchedAt" class="text-xs text-slate-500">
         Obtenido: {{ new Date(fetchedAt).toLocaleTimeString() }}
         <button
@@ -231,11 +261,13 @@ onMounted(() => {
 
     <p v-if="!loading && filteredEquipment.length === 0" class="text-xs text-amber-600">
       {{
-        props.serviceType === 'INSTALLATION'
-          ? 'No se encontraron equipos disponibles en stock en el catálogo disponible.'
-          : props.serviceType === 'REVIEW' || props.serviceType === 'UNINSTALLATION'
-            ? 'No se encontraron equipos instalados para este cliente en el catálogo disponible.'
-            : 'No se encontraron equipos en el catálogo disponible.'
+        showAll
+          ? 'No se encontraron equipos en el catálogo disponible.'
+          : props.serviceType === 'INSTALLATION'
+            ? 'No se encontraron equipos disponibles en stock en el catálogo disponible.'
+            : props.serviceType === 'REVIEW' || props.serviceType === 'UNINSTALLATION'
+              ? 'No se encontraron equipos instalados para este cliente en el catálogo disponible.'
+              : 'No se encontraron equipos en el catálogo disponible.'
       }}
     </p>
 

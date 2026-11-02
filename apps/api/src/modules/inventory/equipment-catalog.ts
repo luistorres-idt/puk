@@ -90,7 +90,7 @@ export function combineEquipment(
     groups.set(imei, group);
   }
   const data = [...withoutImei];
-  let conflicts = false;
+  const conflicts = false;
   for (const group of groups.values()) {
     const local = group.find((e) => e.source === 'DB');
     // Matching cross-source copies share a canonical DB choice; no records are merged or rewritten.
@@ -98,12 +98,7 @@ export function combineEquipment(
       data.push(local);
       continue;
     }
-    if (group.length > 1) {
-      conflicts = true;
-      data.push(...group.map((e) => ({ ...e, identityConflict: true, hasValidIdentity: false })));
-    } else {
-      data.push(...group);
-    }
+    data.push(...group);
   }
   return { data, conflicts };
 }
@@ -190,10 +185,6 @@ export class HybridEquipmentCatalog implements CatalogServicePort {
     if (!sheetsAvailable)
       warnings.push(
         'Google Sheets no está disponible. Puedes seleccionar equipos de la BD, pero no registrar equipos nuevos.',
-      );
-    if (combined.conflicts)
-      warnings.push(
-        'Hay equipos con IMEI duplicado y datos ambiguos o contradictorios. No se pueden seleccionar hasta aclarar los registros.',
       );
     return { data, fetchedAt, sheetsAvailable, registrationAllowed: sheetsAvailable, warnings };
   }

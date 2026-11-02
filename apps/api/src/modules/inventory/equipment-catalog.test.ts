@@ -51,17 +51,21 @@ describe('hybrid equipment identity', () => {
   it.each([
     { serviceStatus: 'INSTALADO', currentClient: 'Another client' },
     { currentClient: 'Another client' },
-  ])('blocks contradictory later copies %o', (patch) => {
+  ])('keeps contradictory copies selectable without failing closed %o', (patch) => {
     const result = combineEquipment([equipment('DB')], [equipment('SHEETS', patch)]);
-    expect(result.conflicts).toBe(true);
+    expect(result.conflicts).toBe(false);
     expect(result.data).toHaveLength(2);
-    expect(result.data.every((e) => e.identityConflict && !e.hasValidIdentity)).toBe(true);
+    expect(result.data.every((e) => e.hasValidIdentity && !e.identityConflict)).toBe(true);
   });
-  it('fails closed for ambiguous multiple legacy IMEI rows', () =>
-    expect(
-      combineEquipment([], [equipment('SHEETS'), equipment('SHEETS', { externalKey: 'EQ-2' })])
-        .conflicts,
-    ).toBe(true));
+  it('keeps ambiguous multiple legacy IMEI rows selectable without conflicts', () => {
+    const result = combineEquipment(
+      [],
+      [equipment('SHEETS'), equipment('SHEETS', { externalKey: 'EQ-2' })],
+    );
+    expect(result.conflicts).toBe(false);
+    expect(result.data).toHaveLength(2);
+    expect(result.data.every((e) => e.hasValidIdentity && !e.identityConflict)).toBe(true);
+  });
   it('serves uncached DB inventory when Sheets is unavailable and pauses new registration', async () => {
     const db = {
       id: 'local',
@@ -119,7 +123,8 @@ it('does not collapse matching names with conflicting stable client IDs', () => 
       }),
     ],
   );
-  expect(result.conflicts).toBe(true);
+  expect(result.data).toHaveLength(2);
+  expect(result.conflicts).toBe(false);
 });
 
 describe('hybrid client catalog', () => {
