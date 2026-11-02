@@ -45,8 +45,22 @@ describe('completeInventoryAssignments', () => {
           serialNumber: 'VIN-1',
           year: 2024,
           equipment: [
-            { id: 'assignment-sheet-1', source: 'SHEETS', inventoryEquipmentId: null, externalKey: 'sheet:1', serviceStatusSnapshot: null, sheetRowHint: 5 },
-            { id: 'assignment-db-1', source: 'DB', inventoryEquipmentId: 'db-1', externalKey: 'DB:db-1', serviceStatusSnapshot: null, sheetRowHint: null },
+            {
+              id: 'assignment-sheet-1',
+              source: 'SHEETS',
+              inventoryEquipmentId: null,
+              externalKey: 'sheet:1',
+              serviceStatusSnapshot: null,
+              sheetRowHint: 5,
+            },
+            {
+              id: 'assignment-db-1',
+              source: 'DB',
+              inventoryEquipmentId: 'db-1',
+              externalKey: 'DB:db-1',
+              serviceStatusSnapshot: null,
+              sheetRowHint: null,
+            },
           ],
         },
         {
@@ -56,8 +70,22 @@ describe('completeInventoryAssignments', () => {
           serialNumber: 'VIN-2',
           year: null,
           equipment: [
-            { id: 'assignment-db-2', source: 'DB', inventoryEquipmentId: 'db-2', externalKey: 'DB:db-2', serviceStatusSnapshot: ' INSTALADO ', sheetRowHint: null },
-            { id: 'assignment-sheet-2', source: 'SHEETS', inventoryEquipmentId: null, externalKey: 'sheet:2', serviceStatusSnapshot: null, sheetRowHint: 9 },
+            {
+              id: 'assignment-db-2',
+              source: 'DB',
+              inventoryEquipmentId: 'db-2',
+              externalKey: 'DB:db-2',
+              serviceStatusSnapshot: ' INSTALADO ',
+              sheetRowHint: null,
+            },
+            {
+              id: 'assignment-sheet-2',
+              source: 'SHEETS',
+              inventoryEquipmentId: null,
+              externalKey: 'sheet:2',
+              serviceStatusSnapshot: null,
+              sheetRowHint: 9,
+            },
           ],
         },
       ],
@@ -65,8 +93,12 @@ describe('completeInventoryAssignments', () => {
 
     expect(events).toEqual([
       'enqueue:sheet:1',
-      'read:db-1', 'reserve:db-1', 'complete:db-1',
-      'read:db-2', 'reserve:db-2', 'complete:db-2',
+      'read:db-1',
+      'reserve:db-1',
+      'complete:db-1',
+      'read:db-2',
+      'reserve:db-2',
+      'complete:db-2',
       'enqueue:sheet:2',
     ]);
   });
@@ -75,12 +107,31 @@ describe('completeInventoryAssignments', () => {
     const tx = {} as Prisma.TransactionClient;
     await expect(
       completeInventoryAssignments(tx, {
-        orderId: 'order-1', service: 'INSTALLATION', clientId: 'client-1', clientName: 'Client', pricingVersion: 1,
+        orderId: 'order-1',
+        service: 'INSTALLATION',
+        clientId: 'client-1',
+        clientName: 'Client',
+        pricingVersion: 1,
         enqueue: vi.fn(),
-        units: [{
-          serviceType: null, label: 'Unit', makeModel: 'Make Model', serialNumber: 'VIN', year: null,
-          equipment: [{ id: 'assignment-1', source: 'DB', inventoryEquipmentId: null, externalKey: 'DB:missing', serviceStatusSnapshot: null, sheetRowHint: null }],
-        }],
+        units: [
+          {
+            serviceType: null,
+            label: 'Unit',
+            makeModel: 'Make Model',
+            serialNumber: 'VIN',
+            year: null,
+            equipment: [
+              {
+                id: 'assignment-1',
+                source: 'DB',
+                inventoryEquipmentId: null,
+                externalKey: 'DB:missing',
+                serviceStatusSnapshot: null,
+                sheetRowHint: null,
+              },
+            ],
+          },
+        ],
       }),
     ).rejects.toMatchObject({ code: 'INVALID_INVENTORY_REFERENCE', status: 409 });
   });
@@ -178,10 +229,17 @@ describe('confirmOrderInventoryAssignment', () => {
   it('reserves first, then activates and enqueues Sheets equipment in source order', async () => {
     const events: string[] = [];
     const tx = {
-      equipment: { updateMany: vi.fn(async () => { events.push('reserve'); return { count: 1 }; }) },
+      equipment: {
+        updateMany: vi.fn(async () => {
+          events.push('reserve');
+          return { count: 1 };
+        }),
+      },
       orderEquipment: {
         findFirst: vi.fn(async () => null),
-        update: vi.fn(async ({ where }: { where: { id: string } }) => { events.push(`active:${where.id}`); }),
+        update: vi.fn(async ({ where }: { where: { id: string } }) => {
+          events.push(`active:${where.id}`);
+        }),
       },
     } as unknown as Prisma.TransactionClient;
     const enqueue = vi.fn((entry) => events.push(`enqueue:${entry.payload.externalKey}`));
@@ -191,19 +249,53 @@ describe('confirmOrderInventoryAssignment', () => {
       'order-1',
       [{ id: 'db-1', version: 2, imei: 'imei-1' }],
       [
-        { id: 'sheet-1', source: 'SHEETS', inventoryEquipmentId: null, externalKey: 'sheet:1', serviceStatusSnapshot: null, sheetRowHint: 7, unit: { serviceType: 'INSTALLATION', label: 'Unit', makeModel: 'Make', serialNumber: 'VIN', year: 2024 } },
-        { id: 'db-assignment', source: 'DB', inventoryEquipmentId: 'db-1', externalKey: 'DB:db-1', serviceStatusSnapshot: null, sheetRowHint: null, unit: { serviceType: 'INSTALLATION', label: 'Unit', makeModel: 'Make', serialNumber: 'VIN', year: 2024 } },
+        {
+          id: 'sheet-1',
+          source: 'SHEETS',
+          inventoryEquipmentId: null,
+          externalKey: 'sheet:1',
+          serviceStatusSnapshot: null,
+          sheetRowHint: 7,
+          unit: {
+            serviceType: 'INSTALLATION',
+            label: 'Unit',
+            makeModel: 'Make',
+            serialNumber: 'VIN',
+            year: 2024,
+          },
+        },
+        {
+          id: 'db-assignment',
+          source: 'DB',
+          inventoryEquipmentId: 'db-1',
+          externalKey: 'DB:db-1',
+          serviceStatusSnapshot: null,
+          sheetRowHint: null,
+          unit: {
+            serviceType: 'INSTALLATION',
+            label: 'Unit',
+            makeModel: 'Make',
+            serialNumber: 'VIN',
+            year: 2024,
+          },
+        },
       ],
       { clientName: 'Client', serviceType: 'INSTALLATION', orderVersion: 5, enqueue },
     );
 
-    expect(events).toEqual(['reserve', 'active:sheet-1', 'enqueue:sheet:1', 'active:db-assignment']);
+    expect(events).toEqual([
+      'reserve',
+      'active:sheet-1',
+      'enqueue:sheet:1',
+      'active:db-assignment',
+    ]);
     expect(enqueue).toHaveBeenCalledWith({
       idempotencyKey: 'ASSIGN:order-1:sheet-1:5',
       operationType: 'SHEET_EQUIPMENT_ASSIGNMENT',
       orderId: 'order-1',
       payload: {
-        externalKey: 'sheet:1', row: 7,
+        externalKey: 'sheet:1',
+        row: 7,
         values: { J: 'Client', K: 'INSTALADO', L: 'Unit', M: 'Make', N: '2024', O: 'VIN' },
       },
     });
@@ -227,7 +319,11 @@ describe('releaseOrderInventory', () => {
     const tx = { equipment: { updateMany } } as unknown as Prisma.TransactionClient;
 
     await releaseOrderInventory(tx, 'order-1', [
-      { equipment: [{ source: 'DB', inventoryEquipmentId: 'equipment-1', externalKey: 'DB:equipment-1' }] },
+      {
+        equipment: [
+          { source: 'DB', inventoryEquipmentId: 'equipment-1', externalKey: 'DB:equipment-1' },
+        ],
+      },
     ]);
 
     expect(updateMany).toHaveBeenCalledWith({
@@ -246,7 +342,12 @@ describe('InventoryAssignmentPreparer', () => {
     );
 
     await preparer.assertEquipmentAvailable(null, [
-      { source: 'DB', inventoryEquipmentId: 'inventory-1', externalKey: 'DB:inventory-1', imei: '123456789012345' },
+      {
+        source: 'DB',
+        inventoryEquipmentId: 'inventory-1',
+        externalKey: 'DB:inventory-1',
+        imei: '123456789012345',
+      },
       { source: 'SHEETS', externalKey: 'sheet:2', imei: '987654321098765' },
     ]);
 
@@ -273,9 +374,16 @@ describe('InventoryAssignmentPreparer', () => {
   });
 
   it('preserves duplicate-in-order precedence and active conflict errors from the batch result', async () => {
-    const findMany = vi.fn().mockResolvedValue([
-      { externalKey: 'sheet:existing', imei: null, activeAssignment: false, orderUnit: { orderId: 'order-1' } },
-    ]);
+    const findMany = vi
+      .fn()
+      .mockResolvedValue([
+        {
+          externalKey: 'sheet:existing',
+          imei: null,
+          activeAssignment: false,
+          orderUnit: { orderId: 'order-1' },
+        },
+      ]);
     const preparer = new InventoryAssignmentPreparer(
       { orderEquipment: { findMany } } as never,
       undefined,
@@ -291,28 +399,39 @@ describe('InventoryAssignmentPreparer', () => {
 
   it.each([
     {
-      input: { source: 'DB' as const, inventoryEquipmentId: 'equipment-1', externalKey: 'DB:equipment-1', imei: 'imei-1' },
-      where: { OR: [{ externalKey: 'DB:equipment-1' }, { imei: 'imei-1' }], activeAssignment: true },
+      input: {
+        source: 'DB' as const,
+        inventoryEquipmentId: 'equipment-1',
+        externalKey: 'DB:equipment-1',
+        imei: 'imei-1',
+      },
+      where: {
+        OR: [{ externalKey: 'DB:equipment-1' }, { imei: 'imei-1' }],
+        activeAssignment: true,
+      },
     },
     {
       input: { source: 'SHEETS' as const, externalKey: 'sheet:1', imei: 'imei-1' },
       where: { externalKey: 'sheet:1', activeAssignment: true },
     },
-  ])('uses Inventory active-conflict query for $input.source assignments', async ({ input, where }) => {
-    const findFirst = vi.fn().mockResolvedValue({ id: 'conflicting-assignment' });
-    const preparer = new InventoryAssignmentPreparer(
-      { orderEquipment: { findFirst } } as never,
-      undefined,
-    );
+  ])(
+    'uses Inventory active-conflict query for $input.source assignments',
+    async ({ input, where }) => {
+      const findFirst = vi.fn().mockResolvedValue({ id: 'conflicting-assignment' });
+      const preparer = new InventoryAssignmentPreparer(
+        { orderEquipment: { findFirst } } as never,
+        undefined,
+      );
 
-    await expect(preparer.assertNoActiveAssignmentConflict(input)).rejects.toMatchObject({
-      status: 409,
-      code: 'EQUIPMENT_ALREADY_ASSIGNED',
-      message: 'El equipo ya se encuentra asignado a otra orden activa',
-    });
-    expect(findFirst).toHaveBeenCalledTimes(1);
-    expect(findFirst).toHaveBeenCalledWith({ where });
-  });
+      await expect(preparer.assertNoActiveAssignmentConflict(input)).rejects.toMatchObject({
+        status: 409,
+        code: 'EQUIPMENT_ALREADY_ASSIGNED',
+        message: 'El equipo ya se encuentra asignado a otra orden activa',
+      });
+      expect(findFirst).toHaveBeenCalledTimes(1);
+      expect(findFirst).toHaveBeenCalledWith({ where });
+    },
+  );
 
   it.each([
     {
@@ -334,33 +453,116 @@ describe('InventoryAssignmentPreparer', () => {
       message: 'El equipo sheet:1 ya no es válido o no existe en Sheets',
     },
     {
-      name: 'client ownership conflict',
-      result: { data: [{ externalKey: 'sheet:1', hasValidIdentity: true, currentClient: 'Other client' }] },
+      name: 'client ownership conflict for non-installation',
+      serviceType: 'REVIEW' as const,
+      result: {
+        data: [{ externalKey: 'sheet:1', hasValidIdentity: true, currentClient: 'Other client' }],
+      },
       code: 'SHEET_ROW_CONFLICT',
       message: 'Conflicto en Sheets: el equipo sheet:1 pertenece al cliente Other client',
     },
-  ])('validates $name before touching DB equipment', async ({ result, code, message }) => {
-    const findUnique = vi.fn();
-    const getEquipment = vi.fn().mockResolvedValue({ ...result, fetchedAt: 'now' });
+    {
+      name: 'unavailable installation status (PERDIDO)',
+      serviceType: 'INSTALLATION' as const,
+      result: {
+        data: [{ externalKey: 'sheet:1', hasValidIdentity: true, serviceStatus: 'PERDIDO' }],
+      },
+      code: 'SHEET_ROW_CONFLICT',
+      message: 'El equipo sheet:1 no está disponible para instalación (estado: PERDIDO)',
+    },
+    {
+      name: 'unavailable installation status (ENVIADO)',
+      serviceType: 'INSTALLATION' as const,
+      result: {
+        data: [{ externalKey: 'sheet:1', hasValidIdentity: true, serviceStatus: 'ENVIADO' }],
+      },
+      code: 'SHEET_ROW_CONFLICT',
+      message: 'El equipo sheet:1 no está disponible para instalación (estado: ENVIADO)',
+    },
+    {
+      name: 'unavailable installation status (INSTALADO)',
+      serviceType: 'INSTALLATION' as const,
+      result: {
+        data: [{ externalKey: 'sheet:1', hasValidIdentity: true, serviceStatus: 'INSTALADO' }],
+      },
+      code: 'SHEET_ROW_CONFLICT',
+      message: 'El equipo sheet:1 no está disponible para instalación (estado: INSTALADO)',
+    },
+  ])(
+    'validates $name before touching DB equipment',
+    async ({ serviceType, result, code, message }) => {
+      const findUnique = vi.fn();
+      const getEquipment = vi.fn().mockResolvedValue({ ...result, fetchedAt: 'now' });
+      const preparer = new InventoryAssignmentPreparer(
+        { equipment: { findUnique }, orderEquipment: { findFirst: vi.fn() } } as never,
+        { getEquipment } as never,
+      );
+
+      await expect(
+        preparer.prepareOrderAssignment(
+          [
+            {
+              id: 'db-assignment',
+              source: 'DB',
+              inventoryEquipmentId: 'db-1',
+              externalKey: 'DB:db-1',
+              imei: 'imei-1',
+              serviceType: serviceType ?? 'INSTALLATION',
+            },
+            {
+              id: 'sheet-assignment',
+              source: 'SHEETS',
+              inventoryEquipmentId: null,
+              externalKey: 'sheet:1',
+              imei: null,
+              serviceType: serviceType ?? 'INSTALLATION',
+            },
+          ],
+          { id: 'client-1', name: 'Client' },
+          'order-1',
+          { forceFresh: false },
+        ),
+      ).rejects.toMatchObject({ code, message });
+
+      expect(getEquipment).toHaveBeenCalledWith({ forceFresh: false });
+      expect(findUnique).not.toHaveBeenCalled();
+    },
+  );
+
+  it('permits installation of Sheets equipment even if it has another client assigned when available', async () => {
+    const getEquipment = vi.fn().mockResolvedValue({
+      data: [
+        {
+          externalKey: 'sheet:1',
+          hasValidIdentity: true,
+          currentClient: 'Previous Client',
+          serviceStatus: 'DISPONIBLE',
+        },
+      ],
+      fetchedAt: 'now',
+    });
     const preparer = new InventoryAssignmentPreparer(
-      { equipment: { findUnique }, orderEquipment: { findFirst: vi.fn() } } as never,
+      { orderEquipment: { findFirst: vi.fn().mockResolvedValue(null) } } as never,
       { getEquipment } as never,
     );
 
-    await expect(
-      preparer.prepareOrderAssignment(
-        [
-          { id: 'db-assignment', source: 'DB', inventoryEquipmentId: 'db-1', externalKey: 'DB:db-1', imei: 'imei-1', serviceType: 'INSTALLATION' },
-          { id: 'sheet-assignment', source: 'SHEETS', inventoryEquipmentId: null, externalKey: 'sheet:1', imei: null, serviceType: 'INSTALLATION' },
-        ],
-        { id: 'client-1', name: 'Client' },
-        'order-1',
-        { forceFresh: false },
-      ),
-    ).rejects.toMatchObject({ code, message });
+    const versions = await preparer.prepareOrderAssignment(
+      [
+        {
+          id: 'sheet-assignment',
+          source: 'SHEETS',
+          inventoryEquipmentId: null,
+          externalKey: 'sheet:1',
+          imei: null,
+          serviceType: 'INSTALLATION',
+        },
+      ],
+      { id: 'client-1', name: 'New Client' },
+      'order-1',
+    );
 
-    expect(getEquipment).toHaveBeenCalledWith({ forceFresh: false });
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(versions.size).toBe(0);
+    expect(getEquipment).toHaveBeenCalled();
   });
 
   it('rejects duplicate input before querying existing assignments', async () => {
@@ -371,7 +573,9 @@ describe('InventoryAssignmentPreparer', () => {
     );
     const duplicate = { source: 'SHEETS' as const, externalKey: 'sheet:1' };
 
-    await expect(preparer.assertEquipmentAvailable('order-1', [duplicate, duplicate])).rejects.toMatchObject({
+    await expect(
+      preparer.assertEquipmentAvailable('order-1', [duplicate, duplicate]),
+    ).rejects.toMatchObject({
       code: 'DUPLICATE_EQUIPMENT',
       message: 'El equipo sheet:1 está duplicado en la orden',
     });
@@ -379,9 +583,16 @@ describe('InventoryAssignmentPreparer', () => {
   });
 
   it('reports an existing assignment in this order before checking active conflicts', async () => {
-    const findMany = vi.fn().mockResolvedValueOnce([
-      { externalKey: 'sheet:1', imei: null, activeAssignment: false, orderUnit: { orderId: 'order-1' } },
-    ]);
+    const findMany = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          externalKey: 'sheet:1',
+          imei: null,
+          activeAssignment: false,
+          orderUnit: { orderId: 'order-1' },
+        },
+      ]);
     const preparer = new InventoryAssignmentPreparer(
       { orderEquipment: { findMany } } as never,
       undefined,
@@ -403,9 +614,16 @@ describe('InventoryAssignmentPreparer', () => {
   });
 
   it('checks active DB aliases by external key or IMEI', async () => {
-    const findMany = vi.fn().mockResolvedValue([
-      { externalKey: 'DB:other', imei: 'imei-1', activeAssignment: true, orderUnit: { orderId: 'other-order' } },
-    ]);
+    const findMany = vi
+      .fn()
+      .mockResolvedValue([
+        {
+          externalKey: 'DB:other',
+          imei: 'imei-1',
+          activeAssignment: true,
+          orderUnit: { orderId: 'other-order' },
+        },
+      ]);
     const preparer = new InventoryAssignmentPreparer(
       { orderEquipment: { findMany } } as never,
       undefined,
@@ -413,7 +631,12 @@ describe('InventoryAssignmentPreparer', () => {
 
     await expect(
       preparer.assertEquipmentAvailable(null, [
-        { source: 'DB', inventoryEquipmentId: 'equipment-1', externalKey: 'DB:equipment-1', imei: 'imei-1' },
+        {
+          source: 'DB',
+          inventoryEquipmentId: 'equipment-1',
+          externalKey: 'DB:equipment-1',
+          imei: 'imei-1',
+        },
       ]),
     ).rejects.toMatchObject({
       code: 'EQUIPMENT_ALREADY_ASSIGNED',
@@ -421,14 +644,26 @@ describe('InventoryAssignmentPreparer', () => {
     });
     expect(findMany).toHaveBeenCalledTimes(1);
     expect(findMany.mock.calls[0]?.[0].where).toMatchObject({
-      OR: [{ activeAssignment: true, OR: [{ OR: [{ externalKey: 'DB:equipment-1' }, { imei: 'imei-1' }] }] }],
+      OR: [
+        {
+          activeAssignment: true,
+          OR: [{ OR: [{ externalKey: 'DB:equipment-1' }, { imei: 'imei-1' }] }],
+        },
+      ],
     });
   });
 
   it('checks non-DB conflicts by external key only', async () => {
-    const findMany = vi.fn().mockResolvedValue([
-      { externalKey: 'sheet:1', imei: 'imei-1', activeAssignment: true, orderUnit: { orderId: 'other-order' } },
-    ]);
+    const findMany = vi
+      .fn()
+      .mockResolvedValue([
+        {
+          externalKey: 'sheet:1',
+          imei: 'imei-1',
+          activeAssignment: true,
+          orderUnit: { orderId: 'other-order' },
+        },
+      ]);
     const preparer = new InventoryAssignmentPreparer(
       { orderEquipment: { findMany } } as never,
       undefined,
@@ -452,37 +687,78 @@ describe('InventoryAssignmentPreparer', () => {
         findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
           events.push(`db:${where.id}`);
           return {
-            id: where.id, imei: where.id, brand: 'Brand', model: 'Model', state: 'AVAILABLE',
-            currentClientSheetId: null, currentClientName: null, reservedOrderId: null,
+            id: where.id,
+            imei: where.id,
+            brand: 'Brand',
+            model: 'Model',
+            state: 'AVAILABLE',
+            currentClientSheetId: null,
+            currentClientName: null,
+            reservedOrderId: null,
             version: where.id === 'equipment-1' ? 2 : 3,
             deletedAt: null,
           };
         }),
       },
       orderEquipment: {
-        findFirst: vi.fn(async ({ where }: { where: { externalKey?: string; OR?: { externalKey: string }[] } }) => {
-          events.push(`active:${where.externalKey ?? where.OR?.[0]?.externalKey}`);
-          return null;
-        }),
+        findFirst: vi.fn(
+          async ({
+            where,
+          }: {
+            where: { externalKey?: string; OR?: { externalKey: string }[] };
+          }) => {
+            events.push(`active:${where.externalKey ?? where.OR?.[0]?.externalKey}`);
+            return null;
+          },
+        ),
       },
     } as never;
     const preparer = new InventoryAssignmentPreparer(tx, undefined);
 
     const versions = await preparer.prepareOrderAssignment(
       [
-        { id: 'assign-1', source: 'DB', inventoryEquipmentId: 'equipment-1', externalKey: 'DB:equipment-1', imei: 'equipment-1', serviceType: 'INSTALLATION' },
-        { id: 'assign-2', source: 'DB', inventoryEquipmentId: 'equipment-2', externalKey: 'DB:equipment-2', imei: 'equipment-2', serviceType: 'INSTALLATION' },
-        { id: 'assign-3', source: 'SHEETS', inventoryEquipmentId: null, externalKey: 'sheet:3', imei: null, serviceType: 'INSTALLATION' },
+        {
+          id: 'assign-1',
+          source: 'DB',
+          inventoryEquipmentId: 'equipment-1',
+          externalKey: 'DB:equipment-1',
+          imei: 'equipment-1',
+          serviceType: 'INSTALLATION',
+        },
+        {
+          id: 'assign-2',
+          source: 'DB',
+          inventoryEquipmentId: 'equipment-2',
+          externalKey: 'DB:equipment-2',
+          imei: 'equipment-2',
+          serviceType: 'INSTALLATION',
+        },
+        {
+          id: 'assign-3',
+          source: 'SHEETS',
+          inventoryEquipmentId: null,
+          externalKey: 'sheet:3',
+          imei: null,
+          serviceType: 'INSTALLATION',
+        },
       ],
       { id: 'client-1', name: 'Client' },
       'order-1',
     );
 
     expect(events).toEqual([
-      'db:equipment-1', 'db:equipment-1', 'db:equipment-2', 'db:equipment-2',
-      'active:DB:equipment-1', 'active:DB:equipment-2', 'active:sheet:3',
+      'db:equipment-1',
+      'db:equipment-1',
+      'db:equipment-2',
+      'db:equipment-2',
+      'active:DB:equipment-1',
+      'active:DB:equipment-2',
+      'active:sheet:3',
     ]);
-    expect([...versions]).toEqual([['equipment-1', 2], ['equipment-2', 3]]);
+    expect([...versions]).toEqual([
+      ['equipment-1', 2],
+      ['equipment-2', 3],
+    ]);
   });
 
   it('uses fresh catalog identity policy while returning snapshots from the DB record', async () => {

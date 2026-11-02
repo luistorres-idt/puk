@@ -3,12 +3,30 @@ import { normalizeString, isMatchingClient } from '@puk/contracts';
 
 export { normalizeString, isMatchingClient };
 
+const UNAVAILABLE_INSTALLATION_STATUSES = new Set([
+  'instalado',
+  'instalada',
+  'perdido',
+  'perdida',
+  'enviado',
+  'enviada',
+]);
+
 /**
  * Checks whether an equipment is considered installed based on its service status.
  */
 export function isInstalledEquipment(equipment: ExternalEquipment): boolean {
   const status = normalizeString(equipment.serviceStatus);
   return status === 'instalado' || status === 'instalada';
+}
+
+/**
+ * Checks whether an equipment is unavailable for installation based on its service status
+ * (installed, lost, or sent).
+ */
+export function isUnavailableForInstallation(equipment: ExternalEquipment): boolean {
+  const status = normalizeString(equipment.serviceStatus);
+  return UNAVAILABLE_INSTALLATION_STATUSES.has(status);
 }
 
 export interface EquipmentFilterOptions {
@@ -21,7 +39,7 @@ export interface EquipmentFilterOptions {
 /**
  * Filters equipment according to the order's service type and client:
  * - Exclude any equipment whose externalKey is in options.excludeKeys.
- * - INSTALLATION: Only available / in-stock equipment (not installed, not assigned to another client).
+ * - INSTALLATION: Available equipment (not installed, lost, or sent).
  * - REVIEW / UNINSTALLATION: Only installed equipment that belongs to the order's client.
  * - Other/Undefined: All equipment.
  */
@@ -48,16 +66,9 @@ export function filterEquipmentByServiceType(
 
   if (normalizedServiceType === 'installation' || normalizedServiceType === 'fuel_sensor') {
     return filtered.filter((eq) => {
-      // Must not be currently installed
-      if (isInstalledEquipment(eq)) {
+      // Must not be currently installed, lost, or sent
+      if (isUnavailableForInstallation(eq)) {
         return false;
-      }
-
-      // If already assigned to a different client in Sheets, exclude to prevent conflict
-      if (eq.currentClient && clientName) {
-        if (!isMatchingClient(eq.currentClient, clientName)) {
-          return false;
-        }
       }
 
       return true;

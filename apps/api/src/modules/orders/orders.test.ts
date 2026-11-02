@@ -651,9 +651,11 @@ describe('OrdersService & SyncService', () => {
       ],
     });
 
-    await expect(ordersService.assignAndSyncOrder('user-admin-1', 'order-1')).rejects.toMatchObject({
-      code: 'NO_EQUIPMENT',
-    });
+    await expect(ordersService.assignAndSyncOrder('user-admin-1', 'order-1')).rejects.toMatchObject(
+      {
+        code: 'NO_EQUIPMENT',
+      },
+    );
   });
 
   it('allows assignment when equipment already belongs to the same client with casing/suffix variation', async () => {
@@ -689,7 +691,7 @@ describe('OrdersService & SyncService', () => {
       status: OrderStatus.DRAFT,
       technicianId: 'tech-1',
       clientSheetId: 'CLI-1',
-      serviceType: 'INSTALLATION',
+      serviceType: 'REVIEW',
       clientNameSnapshot: 'Transportes Bull Dog',
       version: 1,
       units: [
@@ -752,7 +754,7 @@ describe('OrdersService & SyncService', () => {
       status: OrderStatus.DRAFT,
       technicianId: 'tech-1',
       clientSheetId: 'CLI-1',
-      serviceType: 'INSTALLATION',
+      serviceType: 'REVIEW',
       clientNameSnapshot: 'Transportes Bull Dog',
       version: 1,
       units: [
@@ -782,6 +784,69 @@ describe('OrdersService & SyncService', () => {
     ).rejects.toMatchObject({
       code: 'SHEET_ROW_CONFLICT',
     });
+  });
+
+  it('allows assignment for INSTALLATION when equipment has another client text in Sheets but is DISPONIBLE', async () => {
+    vi.spyOn(sheetsPort, 'listEquipment').mockResolvedValueOnce([
+      {
+        externalId: 'EQ-001',
+        imei: '861234567890123',
+        row: 2,
+        values: {
+          A: '2026-01-01',
+          B: 'Teltonika',
+          C: 'FMB920',
+          D: 'EQ-001',
+          E: '861234567890123',
+          F: '',
+          G: '',
+          H: 'Telcel',
+          I: 'USADO',
+          J: 'Flotillas Azteca',
+          K: 'DISPONIBLE',
+          L: '',
+          M: '',
+          N: '',
+          O: '',
+          P: '',
+        },
+      },
+    ]);
+
+    const orderData = {
+      id: 'order-1',
+      status: OrderStatus.DRAFT,
+      technicianId: 'tech-1',
+      clientSheetId: 'CLI-1',
+      serviceType: 'INSTALLATION',
+      clientNameSnapshot: 'Transportes Bull Dog',
+      version: 1,
+      units: [
+        {
+          id: 'unit-1',
+          label: 'Unidad 01',
+          makeModel: 'Freightliner',
+          year: 2023,
+          serialNumber: 'SN-001',
+          equipment: [
+            {
+              id: 'eq-1',
+              externalKey: 'EQ-001',
+              sheetRowHint: 2,
+              activeAssignment: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    mockPrisma.order.findUnique.mockResolvedValue(orderData);
+    mockPrisma.orderEquipment.findFirst.mockResolvedValue(null);
+
+    const result = await ordersService.assignAndSyncOrder('user-admin-1', 'order-1', {
+      forceFresh: true,
+    });
+    expect(result.status).toBe(OrderStatus.ASSIGNED);
   });
 
   it('processes pending sync operations and updates Sheets via SyncService', async () => {
