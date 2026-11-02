@@ -147,6 +147,13 @@ const technicianReportEmailService = new TechnicianReportEmailService(
   technicalReportSyncSchedule,
   gmailSender,
 );
+const technicianReportEmailInterval = setInterval(() => {
+  technicianReportEmailService.processScheduledDispatch().catch((error) => {
+    logger.error('Falló el despacho automático de reportes semanales a administración', { error });
+  });
+}, environment.OUTBOX_POLL_INTERVAL_MS);
+technicianReportEmailInterval.unref();
+
 const sharedTechnicianAccessService = new SharedTechnicianAccessService(prisma);
 
 const reportsInterval = setInterval(() => {
@@ -216,6 +223,7 @@ server.on('error', (error) => {
 function stopServer(): void {
   clearInterval(reportsInterval);
   clearInterval(syncInterval);
+  clearInterval(technicianReportEmailInterval);
   const forceExitTimeout = setTimeout(() => process.exit(1), 10_000);
   forceExitTimeout.unref();
 

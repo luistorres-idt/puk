@@ -7,7 +7,7 @@ import { TechnicianReportEmailService } from './technician-report-email.service.
 describe('TechnicianReportEmailService', () => {
   let mockPrisma: {
     order: { findMany: ReturnType<typeof vi.fn> };
-    auditLog: { create: ReturnType<typeof vi.fn> };
+    auditLog: { create: ReturnType<typeof vi.fn>; findFirst: ReturnType<typeof vi.fn> };
   };
   let mockSchedule: {
     getConfig: ReturnType<typeof vi.fn>;
@@ -29,6 +29,7 @@ describe('TechnicianReportEmailService', () => {
       },
       auditLog: {
         create: vi.fn().mockResolvedValue({ id: 'audit-1' }),
+        findFirst: vi.fn().mockResolvedValue(null),
       },
     };
 
@@ -233,6 +234,102 @@ describe('TechnicianReportEmailService', () => {
       technicianId: 'tech-2',
       status: 'SENT',
       messageId: 'msg-success-2',
+    });
+  });
+
+  describe('processScheduledDispatch', () => {
+    it('returns null if sender is undefined', async () => {
+      const service = new TechnicianReportEmailService(
+        mockPrisma as unknown as PrismaClient,
+        mockSchedule as unknown as TechnicalReportSyncScheduleService,
+        undefined,
+      );
+
+      const result = await service.processScheduledDispatch();
+      expect(result).toBeNull();
+    });
+
+    it('returns null if adminRecipientEmail is not configured', async () => {
+      mockSchedule.getConfig.mockResolvedValueOnce({
+        ...validConfig,
+        adminRecipientEmail: null,
+      });
+
+      const service = new TechnicianReportEmailService(
+        mockPrisma as unknown as PrismaClient,
+        mockSchedule as unknown as TechnicalReportSyncScheduleService,
+        mockSender,
+      );
+
+      const result = await service.processScheduledDispatch();
+      expect(result).toBeNull();
+    });
+
+    it('returns null if reference time is before the scheduled sync time', async () => {
+      const service = new TechnicianReportEmailService(
+        mockPrisma as unknown as PrismaClient,
+        mockSchedule as unknown as TechnicalReportSyncScheduleService,
+        mockSender,
+      );
+
+      // Wednesday at 10:00 (cutoff ended Tuesday 23:59:59, next sync is Wednesday 17:00)
+      const earlyReference = new Date('2026-10-28T10:00:00-07:00');
+      const result = await service.processScheduledDispatch(earlyReference);
+      expect(result).toBeNull();
+      expect(mockPrisma.order.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns null if batch has already been processed for this cutoff window', async () => {
+      mockPrisma.auditLog.findFirst.mockResolvedValueOnce({ id: 'existing-batch-audit' });
+
+      const service = new TechnicianReportEmailService(
+        mockPrisma as unknown as PrismaClient,
+        mockSchedule as unknown as TechnicalReportSyncScheduleService,
+        mockSender,
+      );
+
+      // Wednesday at 17:30 (past sync time)
+      const syncTimeReference = new Date('2026-10-28T17:30:00-07:00');
+      const result = await service.processScheduledDispatch(syncTimeReference);
+      expect(result).toBeNull();
+      expect(mockPrisma.auditLog.findFirst).toHaveBeenCalledWith({
+        where: {
+          action: 'TECHNICIAN_REPORT_EMAIL_BATCH_PROCESSED',
+          entityType: 'TechnicalReportSyncSchedule',
+          entityId: expect.stringMatching(/^batch-/),
+        },
+      });
+      expect(mockPrisma.order.findMany).not.toHaveBeenCalled();
+    });
+
+    it('claims batch and dispatches reports when sync time is reached and batch is pending', async () => {
+      mockPrisma.order.findMany.mockResolvedValueOnce([]);
+
+      const service = new TechnicianReportEmailService(
+        mockPrisma as unknown as PrismaClient,
+        mockSchedule as unknown as TechnicalReportSyncScheduleService,
+        mockSender,
+      );
+
+      // Wednesday at 17:30 (past sync time)
+      const syncTimeReference = new Date('2026-10-28T17:30:00-07:00');
+      const result = await service.processScheduledDispatch(syncTimeReference);
+
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          action: 'TECHNICIAN_REPORT_EMAIL_BATCH_PROCESSED',
+          entityType: 'TechnicalReportSyncSchedule',
+          entityId: expect.stringMatching(/^batch-/),
+          after: expect.objectContaining({
+            adminRecipient: 'admin.ops@company.com',
+          }),
+        },
+      });
+      expect(result).toMatchObject({
+        status: 'NO_ORDERS',
+        sentCount: 0,
+        failedCount: 0,
+      });
     });
   });
 });

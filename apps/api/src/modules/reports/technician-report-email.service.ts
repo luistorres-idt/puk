@@ -3,6 +3,7 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { ReportMailPort } from '../../integrations/gmail/gmail.client.js';
 import {
   calculateCurrentCutoffWindow,
+  calculateTechnicalReportSyncAt,
   type TechnicalReportSyncScheduleService,
 } from '../orders/index.js';
 import { formatReportDate, getIsoWeek } from './technical-report-formatter.js';
@@ -239,5 +240,57 @@ export class TechnicianReportEmailService {
       recipient: config.adminRecipientEmail,
       results,
     };
+  }
+
+  public async processScheduledDispatch(
+    reference = new Date(),
+  ): Promise<DispatchTechnicianReportsOutcome | null> {
+    if (!this.sender) {
+      return null;
+    }
+
+    const config = await this.scheduleService.getConfig(reference);
+    if (!config.adminRecipientEmail) {
+      return null;
+    }
+
+    const window = calculateCurrentCutoffWindow(reference, config);
+    const syncAt = calculateTechnicalReportSyncAt(window.end, config);
+
+    // If we have not reached the scheduled sync time for this cutoff window yet, skip
+    if (reference.getTime() < syncAt.getTime()) {
+      return null;
+    }
+
+    // Idempotency check: has this cutoff window already been processed?
+    const batchKey = `batch-${window.end.toISOString()}`;
+    const alreadyProcessed = await this.prisma.auditLog.findFirst({
+      where: {
+        action: 'TECHNICIAN_REPORT_EMAIL_BATCH_PROCESSED',
+        entityType: 'TechnicalReportSyncSchedule',
+        entityId: batchKey,
+      },
+    });
+
+    if (alreadyProcessed) {
+      return null;
+    }
+
+    // Claim the batch so concurrent ticks do not double-dispatch
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'TECHNICIAN_REPORT_EMAIL_BATCH_PROCESSED',
+        entityType: 'TechnicalReportSyncSchedule',
+        entityId: batchKey,
+        after: {
+          cutoffEnd: window.end.toISOString(),
+          scheduledSyncAt: syncAt.toISOString(),
+          dispatchedAt: reference.toISOString(),
+          adminRecipient: config.adminRecipientEmail,
+        },
+      },
+    });
+
+    return await this.dispatchWeeklyReports(undefined, { forceDateWindow: window });
   }
 }
