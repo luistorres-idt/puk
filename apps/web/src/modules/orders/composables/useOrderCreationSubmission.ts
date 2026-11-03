@@ -40,6 +40,7 @@ interface OrderCreationSubmissionState {
 interface OrderCreationSubmissionDependencies {
   createOrder: (payload: CreateOrder, idempotencyKey: string) => Promise<{ id: string }>;
   navigate: (path: string) => void | Promise<unknown>;
+  onSuccess?: () => void;
 }
 
 const PENDING_ORDER_CREATION_STORAGE_KEY = 'puk:orders:create:pending';
@@ -197,6 +198,8 @@ export function useOrderCreationSubmission(
         pendingCreation = null;
         writePendingOrderCreation(null);
       }
+
+      dependencies?.onSuccess?.();
 
       navigate(`/orders/${created.id}`);
     } catch (err: unknown) {

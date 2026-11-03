@@ -30,6 +30,7 @@ import { useExistingEquipmentUnitConfiguration } from '../composables/useExistin
 import { useManualUnitConfiguration } from '../composables/useManualUnitConfiguration.js';
 import { useOrderServiceBlocks } from '../composables/useOrderServiceBlocks.js';
 import { useOrderCreationSubmission } from '../composables/useOrderCreationSubmission.js';
+import { useOrderWizardDraft } from '../composables/useOrderWizardDraft.js';
 
 const router = useRouter();
 const currentStep = ref(1);
@@ -100,11 +101,10 @@ function handleTechnicianSelect(technician: TechnicianOption | null) {
   selectedTechnician.value = technician;
 }
 
-const { handleFinish, hasValidTechnician, loading } = useOrderCreationSubmission({
+const { clearDraft, hasRestoredDraft } = useOrderWizardDraft({
   activeServiceType,
   configuredUnits,
   currentStep,
-  error,
   generalNotes,
   isHomeService,
   scheduledAtTimestamp,
@@ -114,6 +114,47 @@ const { handleFinish, hasValidTechnician, loading } = useOrderCreationSubmission
   serviceAddress,
   technicianId,
 });
+
+function handleDiscardDraft() {
+  clearDraft();
+  currentStep.value = 1;
+  selectedClientId.value = null;
+  selectedClient.value = null;
+  clearConfiguredUnits();
+  scheduledAtTimestamp.value = Date.now() + 86400000;
+  isHomeService.value = false;
+  serviceAddress.value = '';
+  generalNotes.value = '';
+  technicianId.value = null;
+  selectedTechnician.value = null;
+  activeServiceType.value = 'INSTALLATION';
+  error.value = null;
+}
+
+function handleCancel() {
+  clearDraft();
+  router.push('/orders');
+}
+
+const { handleFinish, hasValidTechnician, loading } = useOrderCreationSubmission(
+  {
+    activeServiceType,
+    configuredUnits,
+    currentStep,
+    error,
+    generalNotes,
+    isHomeService,
+    scheduledAtTimestamp,
+    selectedClient,
+    selectedClientId,
+    selectedTechnician,
+    serviceAddress,
+    technicianId,
+  },
+  {
+    onSuccess: clearDraft,
+  },
+);
 
 function canProceed(): boolean {
   if (currentStep.value === 1) {
@@ -142,7 +183,7 @@ function canProceed(): boolean {
     <div data-tour-page="wizard" :data-tour-step="currentStep" class="max-w-3xl mx-auto space-y-6">
       <div class="flex items-center justify-between gap-3">
         <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Nueva Orden de Servicio</h1>
-        <NButton secondary size="small" @click="router.push('/orders')">Cancelar</NButton>
+        <NButton secondary size="small" @click="handleCancel">Cancelar</NButton>
       </div>
 
       <!-- Desktop Steps Indicator (md and above) -->
@@ -187,6 +228,21 @@ function canProceed(): boolean {
           />
         </div>
       </div>
+
+      <NAlert
+        v-if="hasRestoredDraft"
+        type="info"
+        closable
+        class="mb-4"
+        @close="hasRestoredDraft = false"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <span>Se restauró el borrador guardado de una orden en progreso.</span>
+          <NButton size="tiny" secondary type="warning" @click="handleDiscardDraft">
+            Descartar borrador
+          </NButton>
+        </div>
+      </NAlert>
 
       <NAlert v-if="error" type="error" closable class="mb-4" @close="error = null">
         {{ error }}

@@ -82,10 +82,15 @@ export const useSessionStore = defineStore('session', () => {
         lastIdentityValidationAt = Date.now();
         return currentUser;
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (!isUnauthorizedHttpError(error)) throw error;
-        if (accessToken.value === token) clearSession();
-        return null;
+        try {
+          await refreshSession();
+          return user.value;
+        } catch {
+          if (accessToken.value === token) clearSession();
+          return null;
+        }
       })
       .finally(() => {
         if (identityValidation === validation) identityValidation = undefined;

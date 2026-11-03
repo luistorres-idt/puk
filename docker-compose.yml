@@ -46,7 +46,7 @@ services:
       GOOGLE_TECHNICIAN_REPORT_SHEET_NAME: ${GOOGLE_TECHNICIAN_REPORT_SHEET_NAME:-2026}
       JWT_ACCESS_PRIVATE_KEY: ${JWT_ACCESS_PRIVATE_KEY:-development-only-replace-with-access-private-key}
       JWT_ACCESS_PUBLIC_KEY: ${JWT_ACCESS_PUBLIC_KEY:-development-only-replace-with-access-public-key}
-      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-2h}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-puk-web}
       JWT_ISSUER: ${JWT_ISSUER:-puk-api}
       JWT_REFRESH_PRIVATE_KEY: ${JWT_REFRESH_PRIVATE_KEY:-development-only-replace-with-refresh-private-key}
