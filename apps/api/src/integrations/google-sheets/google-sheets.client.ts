@@ -21,6 +21,11 @@ export interface GoogleSheetsClientConfig {
   timeoutMs?: number;
 }
 
+interface ReportSheetMetadata {
+  sheetId: number;
+  rowCount: number;
+}
+
 export class GoogleSheetsClient implements SheetsPort {
   private readonly sheets: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
@@ -29,7 +34,7 @@ export class GoogleSheetsClient implements SheetsPort {
   private readonly equipmentSheetName: string;
   private readonly techniciansSheetName: string;
   private readonly reportsSheetName: string;
-  private readonly reportsSheetIds = new Map<string, number>();
+  private readonly reportsSheetMetas = new Map<string, ReportSheetMetadata>();
 
   public constructor(config: GoogleSheetsClientConfig) {
     this.spreadsheetId = config.spreadsheetId;
@@ -38,9 +43,6 @@ export class GoogleSheetsClient implements SheetsPort {
     this.equipmentSheetName = config.equipmentSheetName;
     this.techniciansSheetName = config.techniciansSheetName ?? 'DIRECTORIO TECNICO';
     this.reportsSheetName = config.reportsSheetName ?? '2026';
-    if (config.reportsSheetId !== undefined) {
-      this.reportsSheetIds.set(this.reportsSheetName, config.reportsSheetId);
-    }
 
     const auth = new google.auth.JWT({
       email: config.clientEmail,
@@ -168,7 +170,7 @@ export class GoogleSheetsClient implements SheetsPort {
     input: TechnicalReportRowInput,
   ): Promise<{ row: number; created: boolean }> {
     const sheetName = this.resolveReportSheetName(input.fecha);
-    await this.getReportsSheetId(sheetName);
+    const sheetMeta = await this.getReportsSheetMeta(sheetName);
 
     const range = `'${sheetName}'!A1:P`;
     const response = await this.sheets.spreadsheets.values.get({
@@ -222,6 +224,23 @@ export class GoogleSheetsClient implements SheetsPort {
       prevD = (prevRow[3] ?? '').toString();
       prevE = (prevRow[4] ?? '').toString();
       prevO = (prevRow[14] ?? '').toString();
+    } else if (targetRow > sheetMeta.rowCount) {
+      const rowsToAdd = targetRow - sheetMeta.rowCount;
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.techniciansSpreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              appendDimension: {
+                sheetId: sheetMeta.sheetId,
+                dimension: 'ROWS',
+                length: rowsToAdd,
+              },
+            },
+          ],
+        },
+      });
+      sheetMeta.rowCount += rowsToAdd;
     }
 
     // Write ONLY managed columns: A:C, F:N, P
@@ -298,15 +317,15 @@ export class GoogleSheetsClient implements SheetsPort {
     return this.reportsSheetName;
   }
 
-  private async getReportsSheetId(sheetName: string): Promise<number> {
-    const cached = this.reportsSheetIds.get(sheetName);
+  private async getReportsSheetMeta(sheetName: string): Promise<ReportSheetMetadata> {
+    const cached = this.reportsSheetMetas.get(sheetName);
     if (cached !== undefined) {
       return cached;
     }
 
     const metadata = await this.sheets.spreadsheets.get({
       spreadsheetId: this.techniciansSpreadsheetId,
-      fields: 'sheets(properties(sheetId,title))',
+      fields: 'sheets(properties(sheetId,title,gridProperties(rowCount)))',
     });
 
     const sheet = metadata.data.sheets?.find((s) => s.properties?.title === sheetName);
@@ -319,7 +338,11 @@ export class GoogleSheetsClient implements SheetsPort {
       );
     }
 
-    this.reportsSheetIds.set(sheetName, sheet.properties.sheetId);
-    return sheet.properties.sheetId;
+    const meta: ReportSheetMetadata = {
+      sheetId: sheet.properties.sheetId,
+      rowCount: sheet.properties.gridProperties?.rowCount ?? 0,
+    };
+    this.reportsSheetMetas.set(sheetName, meta);
+    return meta;
   }
 }

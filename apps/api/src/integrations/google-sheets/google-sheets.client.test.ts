@@ -76,7 +76,17 @@ describe('GoogleSheetsClient technical report', () => {
       })
       .mockResolvedValueOnce({ data: { values: [['37', 'OS-002']] } });
     googleApi.getSpreadsheet.mockResolvedValue({
-      data: { sheets: [{ properties: { sheetId: 456, title: '2026' } }] },
+      data: {
+        sheets: [
+          {
+            properties: {
+              sheetId: 456,
+              title: '2026',
+              gridProperties: { rowCount: 100 },
+            },
+          },
+        ],
+      },
     });
     googleApi.updateSpreadsheet.mockResolvedValue({});
     googleApi.updateValues.mockResolvedValue({});
@@ -98,7 +108,7 @@ describe('GoogleSheetsClient technical report', () => {
 
     expect(googleApi.getSpreadsheet).toHaveBeenCalledWith({
       spreadsheetId: 'technicians-workbook',
-      fields: 'sheets(properties(sheetId,title))',
+      fields: 'sheets(properties(sheetId,title,gridProperties(rowCount)))',
     });
     expect(googleApi.updateSpreadsheet).not.toHaveBeenCalled();
     expect(googleApi.updateValues).toHaveBeenCalledWith(
@@ -136,5 +146,64 @@ describe('GoogleSheetsClient technical report', () => {
         fecha: '2027-01-15',
       }),
     ).rejects.toThrow("No se encontró la pestaña '2027' en el libro de técnicos");
+  });
+
+  it('auto-expands grid with appendDimension when targetRow exceeds rowCount', async () => {
+    googleApi.getValues
+      .mockResolvedValueOnce({
+        data: {
+          values: [
+            ['sem', 'orden', 'tecnico', '', '', '', '', '', '', '', '', '', '', '', 'envio dhl', 'notas'],
+            ['36', 'OS-001'],
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { values: [['37', 'OS-002']] } });
+
+    googleApi.getSpreadsheet.mockResolvedValue({
+      data: {
+        sheets: [
+          {
+            properties: {
+              sheetId: 456,
+              title: '2026',
+              gridProperties: { rowCount: 2 },
+            },
+          },
+        ],
+      },
+    });
+    googleApi.updateSpreadsheet.mockResolvedValue({});
+    googleApi.updateValues.mockResolvedValue({});
+
+    const client = new GoogleSheetsClient({
+      spreadsheetId: 'catalog-workbook',
+      techniciansSpreadsheetId: 'technicians-workbook',
+      clientsSheetName: 'Clientes',
+      equipmentSheetName: 'SALIDAS',
+      reportsSheetName: '2026',
+      clientEmail: 'service-account@example.invalid',
+      privateKey: 'private-key',
+    });
+
+    await expect(client.syncTechnicalReportRow(reportRow)).resolves.toEqual({
+      row: 3,
+      created: true,
+    });
+
+    expect(googleApi.updateSpreadsheet).toHaveBeenCalledWith({
+      spreadsheetId: 'technicians-workbook',
+      requestBody: {
+        requests: [
+          {
+            appendDimension: {
+              sheetId: 456,
+              dimension: 'ROWS',
+              length: 1,
+            },
+          },
+        ],
+      },
+    });
   });
 });
