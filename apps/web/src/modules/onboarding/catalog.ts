@@ -164,7 +164,85 @@ export function buildTour(user: SessionUser, context: TourContext): Tour {
         ),
       );
     }
-  } else {
+  } else if (context.page === 'sync' && admin) {
+    tour.title = 'Sincronización de reportes';
+    tour.description =
+      'Configura el corte y envío semanal de reportes a administración y supervisa el outbox.';
+    tour.steps.push(
+      step(
+        'sync-schedule',
+        'Horario y envío de reportes',
+        'Configura el día y hora del corte y envío automático, o envía los reportes técnicos en este momento.',
+      ),
+      step(
+        'sync-summary',
+        'Estado del outbox',
+        'Revisa el total de operaciones pendientes, en proceso, completadas o fallidas.',
+      ),
+      step(
+        'sync-filters',
+        'Filtro de operaciones',
+        'Busca operaciones por folio, cliente o estado para reintentar sincronizaciones pendientes.',
+      ),
+    );
+  } else if (context.page === 'inventory' && admin) {
+    tour.title = 'Administración de equipos';
+    tour.description = 'Consulta y busca equipos registrados en el inventario propio.';
+    tour.steps.push(
+      step(
+        'inventory-filters',
+        'Busca equipos',
+        'Filtra por IMEI, marca, modelo, cliente, unidad o estado de disponibilidad.',
+      ),
+      step(
+        'inventory-list',
+        'Listado de equipos',
+        'Visualiza los equipos registrados en la base de datos y edita sus metadatos.',
+      ),
+    );
+  } else if (context.page === 'clients' && admin) {
+    tour.title = 'Clientes y destinatarios';
+    tour.description =
+      'Registra nuevos clientes y gestiona sus correos autorizados para recibir reportes.';
+    tour.steps.push(
+      step(
+        'clients-create',
+        'Registra un cliente nuevo',
+        'Ingresa el nombre de la empresa o cliente para darlo de alta en el sistema.',
+      ),
+      step(
+        'clients-manage',
+        'Gestiona clientes y correos',
+        'Selecciona un cliente para editar su nombre o administrar los correos de envío.',
+      ),
+    );
+  } else if (context.page === 'technicians' && admin) {
+    tour.title = 'Directorio de técnicos';
+    tour.description = 'Consulta el personal técnico activo y sus datos de contacto y taller.';
+    tour.steps.push(
+      step(
+        'technicians-directory',
+        'Lista de técnicos',
+        'Revisa el estado activo/inactivo, taller, ciudad y teléfono de cada técnico.',
+      ),
+    );
+  } else if (context.page === 'users' && admin) {
+    tour.title = 'Gestión de administradores';
+    tour.description =
+      'Administra las cuentas con acceso al panel de control y crea nuevos administradores.';
+    tour.steps.push(
+      step(
+        'users-create',
+        'Crea administradores',
+        'Da de alta una cuenta administrativa ingresando su nombre, correo y contraseña.',
+      ),
+      step(
+        'users-list',
+        'Cuentas administradoras',
+        'Consulta las cuentas registradas, actualiza sus datos o restablece contraseñas.',
+      ),
+    );
+  } else if (context.page === 'orders' || context.page === 'shared') {
     tour.steps.push(
       step(
         'order-filters',
@@ -190,6 +268,8 @@ export function buildTour(user: SessionUser, context: TourContext): Tour {
           : 'Consulta las órdenes y abre la que necesitas. Los técnicos solo trabajan con las órdenes a las que tienen acceso.',
       ),
     );
+  } else {
+    // General fallback: only navigation and help steps
   }
   tour.steps.push(
     step(

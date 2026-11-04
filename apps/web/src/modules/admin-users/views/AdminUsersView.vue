@@ -158,7 +158,7 @@ onMounted(() => {
 
 <template>
   <app-layout>
-    <section class="space-y-5">
+    <section data-tour-page="users" class="space-y-5">
       <header class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 class="text-2xl font-bold text-slate-900">Administradores</h1>
@@ -166,7 +166,7 @@ onMounted(() => {
         </div>
         <div class="flex gap-2">
           <n-button secondary size="small" :loading="loading" @click="load">Actualizar</n-button>
-          <n-button type="primary" size="small" @click="openCreate">Nuevo administrador</n-button>
+          <n-button data-tour="users-create" type="primary" size="small" @click="openCreate">Nuevo administrador</n-button>
         </div>
       </header>
 
@@ -177,7 +177,7 @@ onMounted(() => {
         </div>
       </n-alert>
 
-      <n-card class="shadow-sm">
+      <n-card data-tour="users-list" class="shadow-sm">
         <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <h2 class="font-semibold">Cuentas administradoras ({{ filteredAdmins.length }})</h2>
           <n-input

@@ -80,7 +80,7 @@ onMounted(() => {
 
 <template>
   <app-layout>
-    <section class="space-y-5">
+    <section data-tour-page="clients" class="space-y-5">
       <header>
         <h1 class="text-2xl font-bold">Clientes y correos</h1>
         <p class="text-sm text-slate-600">
@@ -91,7 +91,7 @@ onMounted(() => {
         >{{ error }} <n-button size="small" @click="load">Reintentar</n-button></n-alert
       >
       <n-alert v-if="formError" type="error">{{ formError }}</n-alert>
-      <n-card title="Registrar cliente">
+      <n-card data-tour="clients-create" title="Registrar cliente">
         <n-form @submit.prevent="create">
           <n-form-item label="Nombre en el sistema">
             <n-input
@@ -111,7 +111,7 @@ onMounted(() => {
         </n-form>
       </n-card>
       <n-spin :show="loading">
-        <n-card title="Clientes registrados">
+        <n-card data-tour="clients-manage" title="Clientes registrados">
           <n-empty v-if="!clients.length && !loading" description="No hay clientes registrados." />
           <template v-else>
             <n-select

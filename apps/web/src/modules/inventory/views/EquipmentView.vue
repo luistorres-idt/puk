@@ -94,7 +94,7 @@ onMounted(() => {
 
 <template>
   <app-layout>
-    <section class="space-y-5">
+    <section data-tour-page="inventory" class="space-y-5">
       <header class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 class="text-2xl font-bold">Equipos</h1>
@@ -111,8 +111,8 @@ onMounted(() => {
         Sheets no se administran aquí.</n-alert
       >
       <n-alert v-if="error" type="error">{{ error }}</n-alert>
-      <n-card title="Equipos registrados">
-        <div class="mb-4 flex flex-col gap-3 sm:flex-row">
+      <n-card data-tour="inventory-list" title="Equipos registrados">
+        <div data-tour="inventory-filters" class="mb-4 flex flex-col gap-3 sm:flex-row">
           <n-input
             v-model:value="search"
             clearable
