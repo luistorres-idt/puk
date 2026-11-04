@@ -214,7 +214,7 @@ export class GoogleSheetsClient implements SheetsPort {
     }
 
     const isUpdate = matchingRows.length === 1;
-    const targetRow = isUpdate ? matchingRows[0]! : rows.length + 1;
+    const targetRow = matchingRows[0] ?? 2;
     let prevD = '';
     let prevE = '';
     let prevO = '';
@@ -224,23 +224,25 @@ export class GoogleSheetsClient implements SheetsPort {
       prevD = (prevRow[3] ?? '').toString();
       prevE = (prevRow[4] ?? '').toString();
       prevO = (prevRow[14] ?? '').toString();
-    } else if (targetRow > sheetMeta.rowCount) {
-      const rowsToAdd = targetRow - sheetMeta.rowCount;
+    } else {
       await this.sheets.spreadsheets.batchUpdate({
         spreadsheetId: this.techniciansSpreadsheetId,
         requestBody: {
           requests: [
             {
-              appendDimension: {
-                sheetId: sheetMeta.sheetId,
-                dimension: 'ROWS',
-                length: rowsToAdd,
+              insertDimension: {
+                range: {
+                  sheetId: sheetMeta.sheetId,
+                  dimension: 'ROWS',
+                  startIndex: 1,
+                  endIndex: 2,
+                },
+                inheritFromBefore: false,
               },
             },
           ],
         },
       });
-      sheetMeta.rowCount += rowsToAdd;
     }
 
     // Write ONLY managed columns: A:C, F:N, P
