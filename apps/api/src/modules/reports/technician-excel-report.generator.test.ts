@@ -121,4 +121,18 @@ describe('TechnicianExcelReportGenerator', () => {
     expect(row3?.getCell(8).value).toBe('Cita Fallida');
     expect(row3?.getCell(11).value).toBe(500);
   });
+
+  it('sanitizes forbidden characters in worksheet names such as colons and slashes', async () => {
+    const bytes = await generateTechnicianExcelReport(
+      { name: 'TEC: Juan/Pedro* [1]' },
+      [sampleOrder1],
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as never);
+
+    const sheet = workbook.getWorksheet('TEC- Juan-Pedro- -1-');
+    expect(sheet).toBeDefined();
+    expect(sheet?.rowCount).toBe(2);
+  });
 });

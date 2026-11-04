@@ -137,7 +137,7 @@ const gmailSender =
   environment.GOOGLE_GMAIL_SENDER_EMAIL
     ? new GmailClient({
         clientEmail: environment.GOOGLE_GMAIL_CLIENT_EMAIL,
-        privateKey: environment.GOOGLE_GMAIL_PRIVATE_KEY,
+        privateKey: normalizePem(environment.GOOGLE_GMAIL_PRIVATE_KEY),
         senderEmail: environment.GOOGLE_GMAIL_SENDER_EMAIL,
       })
     : undefined;
