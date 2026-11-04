@@ -144,7 +144,7 @@ export class PukStagingApplicationStack extends Stack {
         COOKIE_SECURE: 'false',
         GOOGLE_CLIENTS_SHEET: 'Clientes',
         GOOGLE_EQUIPMENT_SHEET: 'SALIDAS',
-        JWT_ACCESS_TTL: '15m',
+        JWT_ACCESS_TTL: '2h',
         JWT_AUDIENCE: 'puk-web',
         JWT_ISSUER: 'puk-api',
         JWT_REFRESH_TTL: '30d',
