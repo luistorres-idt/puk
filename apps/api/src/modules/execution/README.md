@@ -12,7 +12,7 @@ Mobile-first technician field execution: equipment verification, discrepancies, 
 
 ## Invariants
 
-- **Completion Guard**: Normal completion strictly requires: all equipment verified, 5 checklist sections completed, >= 10 photos per unit, and valid customer signature.
+- **Completion Guard**: Normal completion strictly requires: all equipment verified, 5 checklist sections completed, >= 5 photos per unit, and valid customer signature.
 - **Failed Appointment Bypass**: Cita fallida (`FAILED_APPOINTMENT`) requires only a reason, bypassing checklist and photographic evidence requirements.
 
 ## Verification

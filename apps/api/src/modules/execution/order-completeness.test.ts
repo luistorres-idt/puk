@@ -109,7 +109,7 @@ describe('evaluateOrderCompleteness', () => {
     );
   });
 
-  it('fails when fewer than 10 photos are completed for a unit', () => {
+  it('fails when fewer than MIN_REQUIRED_EVIDENCE_PHOTOS photos are completed for a unit', () => {
     const order: OrderForCompletenessEvaluation = {
       ...completeOrder,
       units: [
