@@ -62,7 +62,8 @@ export async function generateTechnicianExcelReport(
   workbook.creator = 'PUK Technical Platform';
   workbook.created = new Date();
 
-  const sheetName = (technician.name || 'Técnico').slice(0, 31).replace(/[\\/?*[\]]/g, '-');
+  const rawSheetName = (technician.name || 'Técnico').slice(0, 31).replace(/[\\/?*:[\]]/g, '-').trim();
+  const sheetName = rawSheetName.length > 0 ? rawSheetName : 'Técnico';
   const worksheet = workbook.addWorksheet(sheetName, {
     views: [{ state: 'frozen', ySplit: 1 }],
   });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { ReportMailPort } from '../../integrations/gmail/gmail.client.js';
+import { logger } from '../../observability/logger.js';
 import {
   calculateCurrentCutoffWindow,
   calculateTechnicalReportSyncAt,
@@ -204,7 +205,13 @@ export class TechnicianReportEmailService {
           status: 'SENT',
           messageId: delivered.messageId,
         });
-      } catch {
+      } catch (error) {
+        logger.error('Falló el despacho de reporte técnico semanal por correo', {
+          technicianId,
+          technicianName: group.technician.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
         await this.prisma.auditLog.create({
           data: {
             action: 'TECHNICIAN_REPORT_EMAIL_FAILED',
@@ -215,6 +222,7 @@ export class TechnicianReportEmailService {
               ...auditPayload,
               status: 'FAILED',
               failureCode: 'DELIVERY_UNCONFIRMED',
+              errorMessage: error instanceof Error ? error.message : String(error),
             },
           },
         });
