@@ -92,7 +92,7 @@ describe('GoogleSheetsClient technical report', () => {
     });
 
     await expect(client.syncTechnicalReportRow(reportRow)).resolves.toEqual({
-      row: 2,
+      row: 3,
       created: true,
     });
 
@@ -100,35 +100,41 @@ describe('GoogleSheetsClient technical report', () => {
       spreadsheetId: 'technicians-workbook',
       fields: 'sheets(properties(sheetId,title))',
     });
-    expect(googleApi.updateSpreadsheet).toHaveBeenCalledWith({
-      spreadsheetId: 'technicians-workbook',
-      requestBody: {
-        requests: [
-          {
-            insertDimension: {
-              range: {
-                sheetId: 456,
-                dimension: 'ROWS',
-                startIndex: 1,
-                endIndex: 2,
-              },
-              inheritFromBefore: false,
-            },
-          },
-        ],
-      },
-    });
+    expect(googleApi.updateSpreadsheet).not.toHaveBeenCalled();
     expect(googleApi.updateValues).toHaveBeenCalledWith(
       expect.objectContaining({
         spreadsheetId: 'technicians-workbook',
         requestBody: expect.objectContaining({
           data: [
-            expect.objectContaining({ range: "'2026'!A2:C2" }),
-            expect.objectContaining({ range: "'2026'!F2:N2" }),
-            expect.objectContaining({ range: "'2026'!P2" }),
+            expect.objectContaining({ range: "'2026'!A3:C3" }),
+            expect.objectContaining({ range: "'2026'!F3:N3" }),
+            expect.objectContaining({ range: "'2026'!P3" }),
           ],
         }),
       }),
     );
+  });
+
+  it('resolves sheet tab dynamically by order year and throws if missing', async () => {
+    googleApi.getSpreadsheet.mockResolvedValue({
+      data: { sheets: [{ properties: { sheetId: 123, title: '2026' } }] },
+    });
+
+    const client = new GoogleSheetsClient({
+      spreadsheetId: 'catalog-workbook',
+      techniciansSpreadsheetId: 'technicians-workbook',
+      clientsSheetName: 'Clientes',
+      equipmentSheetName: 'SALIDAS',
+      reportsSheetName: '2026',
+      clientEmail: 'service-account@example.invalid',
+      privateKey: 'private-key',
+    });
+
+    await expect(
+      client.syncTechnicalReportRow({
+        ...reportRow,
+        fecha: '2027-01-15',
+      }),
+    ).rejects.toThrow("No se encontró la pestaña '2027' en el libro de técnicos");
   });
 });

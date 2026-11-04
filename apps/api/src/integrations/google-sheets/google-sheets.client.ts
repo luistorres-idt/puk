@@ -29,7 +29,7 @@ export class GoogleSheetsClient implements SheetsPort {
   private readonly equipmentSheetName: string;
   private readonly techniciansSheetName: string;
   private readonly reportsSheetName: string;
-  private reportsSheetId?: number | undefined;
+  private readonly reportsSheetIds = new Map<string, number>();
 
   public constructor(config: GoogleSheetsClientConfig) {
     this.spreadsheetId = config.spreadsheetId;
@@ -39,7 +39,7 @@ export class GoogleSheetsClient implements SheetsPort {
     this.techniciansSheetName = config.techniciansSheetName ?? 'DIRECTORIO TECNICO';
     this.reportsSheetName = config.reportsSheetName ?? '2026';
     if (config.reportsSheetId !== undefined) {
-      this.reportsSheetId = config.reportsSheetId;
+      this.reportsSheetIds.set(this.reportsSheetName, config.reportsSheetId);
     }
 
     const auth = new google.auth.JWT({
@@ -167,7 +167,10 @@ export class GoogleSheetsClient implements SheetsPort {
   public async syncTechnicalReportRow(
     input: TechnicalReportRowInput,
   ): Promise<{ row: number; created: boolean }> {
-    const range = `'${this.reportsSheetName}'!A1:P`;
+    const sheetName = this.resolveReportSheetName(input.fecha);
+    await this.getReportsSheetId(sheetName);
+
+    const range = `'${sheetName}'!A1:P`;
     const response = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.techniciansSpreadsheetId,
       range,
@@ -209,7 +212,7 @@ export class GoogleSheetsClient implements SheetsPort {
     }
 
     const isUpdate = matchingRows.length === 1;
-    const targetRow = matchingRows[0] ?? 2;
+    const targetRow = isUpdate ? matchingRows[0]! : rows.length + 1;
     let prevD = '';
     let prevE = '';
     let prevO = '';
@@ -219,36 +222,16 @@ export class GoogleSheetsClient implements SheetsPort {
       prevD = (prevRow[3] ?? '').toString();
       prevE = (prevRow[4] ?? '').toString();
       prevO = (prevRow[14] ?? '').toString();
-    } else {
-      const sheetId = await this.getReportsSheetId();
-      await this.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: this.techniciansSpreadsheetId,
-        requestBody: {
-          requests: [
-            {
-              insertDimension: {
-                range: {
-                  sheetId,
-                  dimension: 'ROWS',
-                  startIndex: 1,
-                  endIndex: 2,
-                },
-                inheritFromBefore: false,
-              },
-            },
-          ],
-        },
-      });
     }
 
     // Write ONLY managed columns: A:C, F:N, P
     const batchData = [
       {
-        range: `'${this.reportsSheetName}'!A${targetRow}:C${targetRow}`,
+        range: `'${sheetName}'!A${targetRow}:C${targetRow}`,
         values: [[input.sem, input.folio, input.tecnico]],
       },
       {
-        range: `'${this.reportsSheetName}'!F${targetRow}:N${targetRow}`,
+        range: `'${sheetName}'!F${targetRow}:N${targetRow}`,
         values: [
           [
             input.economico,
@@ -264,7 +247,7 @@ export class GoogleSheetsClient implements SheetsPort {
         ],
       },
       {
-        range: `'${this.reportsSheetName}'!P${targetRow}`,
+        range: `'${sheetName}'!P${targetRow}`,
         values: [[input.notas]],
       },
     ];
@@ -280,7 +263,7 @@ export class GoogleSheetsClient implements SheetsPort {
     // Re-read row after write to verify identity and confirm unmanaged cells remain intact
     const verifyRes = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.techniciansSpreadsheetId,
-      range: `'${this.reportsSheetName}'!A${targetRow}:P${targetRow}`,
+      range: `'${sheetName}'!A${targetRow}:P${targetRow}`,
     });
     const afterRow = verifyRes.data.values?.[0] ?? [];
     if ((afterRow[1] ?? '').toString().trim() !== input.folio) {
@@ -306,9 +289,19 @@ export class GoogleSheetsClient implements SheetsPort {
     return { row: targetRow, created: !isUpdate };
   }
 
-  private async getReportsSheetId(): Promise<number> {
-    if (this.reportsSheetId !== undefined) {
-      return this.reportsSheetId;
+  private resolveReportSheetName(fecha?: string): string {
+    const trimmed = (fecha ?? '').trim();
+    const match = trimmed.match(/^(\d{4})/);
+    if (match?.[1]) {
+      return match[1];
+    }
+    return this.reportsSheetName;
+  }
+
+  private async getReportsSheetId(sheetName: string): Promise<number> {
+    const cached = this.reportsSheetIds.get(sheetName);
+    if (cached !== undefined) {
+      return cached;
     }
 
     const metadata = await this.sheets.spreadsheets.get({
@@ -316,17 +309,17 @@ export class GoogleSheetsClient implements SheetsPort {
       fields: 'sheets(properties(sheetId,title))',
     });
 
-    const sheet = metadata.data.sheets?.find((s) => s.properties?.title === this.reportsSheetName);
+    const sheet = metadata.data.sheets?.find((s) => s.properties?.title === sheetName);
 
     if (sheet?.properties?.sheetId === undefined || sheet.properties.sheetId === null) {
       throw new AppError(
         404,
         'REPORT_SHEET_NOT_FOUND',
-        `No se encontró la pestaña '${this.reportsSheetName}' en el libro de técnicos`,
+        `No se encontró la pestaña '${sheetName}' en el libro de técnicos`,
       );
     }
 
-    this.reportsSheetId = sheet.properties.sheetId;
-    return this.reportsSheetId;
+    this.reportsSheetIds.set(sheetName, sheet.properties.sheetId);
+    return sheet.properties.sheetId;
   }
 }
