@@ -282,7 +282,7 @@ describe('DevMockSheetsClient Directory and Report Sync', () => {
     ).rejects.toThrow(AppError);
   });
 
-  it('inserts each new order at row 2 and shifts previous rows down', async () => {
+  it('inserts each new order at the end of the sheet without shifting previous rows', async () => {
     const { DevMockSheetsClient } = await import('./dev-mock-sheets.client.js');
     const client = new DevMockSheetsClient();
     const mockRows = (client as unknown as { reportRows: string[][] }).reportRows;
@@ -307,7 +307,7 @@ describe('DevMockSheetsClient Directory and Report Sync', () => {
     expect(res1.row).toBe(2);
     expect(mockRows[1]![1]).toBe('OS-FIRST');
 
-    // Second insert: must be inserted at row 2, pushing OS-FIRST to row 3
+    // Second insert: must be appended at the end (row 3), leaving OS-FIRST at row 2
     const res2 = await client.syncTechnicalReportRow({
       folio: 'OS-SECOND',
       sem: '37',
@@ -324,11 +324,11 @@ describe('DevMockSheetsClient Directory and Report Sync', () => {
       notas: 'Second order',
     });
     expect(res2.created).toBe(true);
-    expect(res2.row).toBe(2);
-    expect(mockRows[1]![1]).toBe('OS-SECOND'); // at row 2 (index 1)
-    expect(mockRows[2]![1]).toBe('OS-FIRST'); // shifted to row 3 (index 2)
+    expect(res2.row).toBe(3);
+    expect(mockRows[1]![1]).toBe('OS-FIRST'); // row 2 remains OS-FIRST
+    expect(mockRows[2]![1]).toBe('OS-SECOND'); // row 3 is OS-SECOND
 
-    // Updating OS-FIRST should update row 3 in-place, NOT row 2
+    // Updating OS-FIRST should update row 2 in-place
     const updateRes = await client.syncTechnicalReportRow({
       folio: 'OS-FIRST',
       sem: '37',
@@ -345,9 +345,9 @@ describe('DevMockSheetsClient Directory and Report Sync', () => {
       notas: 'First order updated',
     });
     expect(updateRes.created).toBe(false);
-    expect(updateRes.row).toBe(3);
-    expect(mockRows[2]![1]).toBe('OS-FIRST');
-    expect(mockRows[2]![5]).toBe('ECO-A-UPDATED');
-    expect(mockRows[1]![1]).toBe('OS-SECOND'); // row 2 remains OS-SECOND
+    expect(updateRes.row).toBe(2);
+    expect(mockRows[1]![1]).toBe('OS-FIRST');
+    expect(mockRows[1]![5]).toBe('ECO-A-UPDATED');
+    expect(mockRows[2]![1]).toBe('OS-SECOND'); // row 3 remains OS-SECOND
   });
 });
