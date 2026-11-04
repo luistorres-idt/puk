@@ -63,10 +63,13 @@ async function start(): Promise<void> {
     for (const item of tour.steps) {
       const element = visibleTarget(root, item.target);
       if (!element) {
-        throw new Error(`Tour target is not visible: ${item.target}`);
+        continue;
       }
       targets.push(element);
       steps.push({ element, popover: { title: item.title, description: item.description } });
+    }
+    if (targets.length === 0) {
+      throw new Error('No visible tour targets');
     }
     const initialContext = JSON.stringify(context);
     observation = new MutationObserver(() => {

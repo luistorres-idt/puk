@@ -210,7 +210,7 @@ function formatDate(value: string | null | undefined): string {
 
 <template>
   <app-layout>
-    <div class="space-y-6">
+    <div data-tour-page="sync" class="space-y-6">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">Sincronización</h1>
         <p class="mt-1 text-sm text-slate-600">
@@ -219,7 +219,7 @@ function formatDate(value: string | null | undefined): string {
         </p>
       </div>
 
-      <n-card title="Horario del reporte técnico" class="shadow-sm">
+      <n-card data-tour="sync-schedule" title="Horario del reporte técnico" class="shadow-sm">
         <div v-if="scheduleQuery.isPending.value" class="grid min-h-24 place-items-center">
           <n-spin />
         </div>
@@ -285,7 +285,7 @@ function formatDate(value: string | null | undefined): string {
         </n-alert>
       </n-card>
 
-      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div data-tour="sync-summary" class="grid grid-cols-2 gap-3 md:grid-cols-4">
         <n-card v-for="card in summaryCards" :key="card.label" size="small"
           ><p class="text-xs text-slate-500">{{ card.label }}</p>
           <p class="text-2xl font-bold" :class="card.color">{{ card.value }}</p></n-card
@@ -293,7 +293,7 @@ function formatDate(value: string | null | undefined): string {
       </div>
 
       <n-card class="shadow-sm">
-        <div class="mb-4 grid gap-3 md:grid-cols-3">
+        <div data-tour="sync-filters" class="mb-4 grid gap-3 md:grid-cols-3">
           <n-input
             v-model:value="searchInput"
             clearable

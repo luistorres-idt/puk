@@ -5,7 +5,7 @@ import {
   MAX_OBSERVED_SNAPSHOT_VALUE_LENGTH,
 } from './validation-limits.js';
 
-export const MIN_REQUIRED_EVIDENCE_PHOTOS = 10;
+export const MIN_REQUIRED_EVIDENCE_PHOTOS = 5;
 
 export const ChecklistCategorySchema = v.picklist([
   'DASHBOARD',

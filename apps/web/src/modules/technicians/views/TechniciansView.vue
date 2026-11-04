@@ -13,7 +13,7 @@ const technicians = useQuery({
 
 <template>
   <app-layout>
-    <div class="space-y-6">
+    <div data-tour-page="technicians" class="space-y-6">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">Técnicos</h1>
         <p class="mt-1 text-sm text-slate-600">Directorio del personal técnico.</p>
@@ -28,7 +28,7 @@ const technicians = useQuery({
         v-else-if="technicians.data.value?.length === 0"
         description="No hay técnicos registrados"
       />
-      <div v-else class="grid gap-4 sm:grid-cols-2">
+      <div v-else data-tour="technicians-directory" class="grid gap-4 sm:grid-cols-2">
         <n-card v-for="technician in technicians.data.value" :key="technician.id" size="small">
           <div class="flex items-start justify-between gap-3">
             <div>

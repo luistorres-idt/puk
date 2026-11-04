@@ -12,7 +12,7 @@ Mobile-first technician field portal for checklists, photo capture, customer sig
 
 ## Invariants
 
-- **Field Rules**: Validates >= 10 photos per unit and complete checklist items before enabling closure button.
+- **Field Rules**: Validates >= 5 photos per unit and complete checklist items before enabling closure button.
 
 ## Verification
 

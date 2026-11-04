@@ -87,6 +87,46 @@ describe('onboarding catalog and privacy', () => {
       status: 'IN_PROGRESS',
     });
     expect(incomplete.steps.map((item) => item.target)).not.toContain('order-report');
+
+    const syncTour = buildTour(admin, { ...context, page: 'sync' });
+    expect(syncTour.steps.map((item) => item.target)).toEqual([
+      'navigation',
+      'sync-schedule',
+      'sync-summary',
+      'sync-filters',
+      'help',
+    ]);
+
+    const inventoryTour = buildTour(admin, { ...context, page: 'inventory' });
+    expect(inventoryTour.steps.map((item) => item.target)).toEqual([
+      'navigation',
+      'inventory-filters',
+      'inventory-list',
+      'help',
+    ]);
+
+    const clientsTour = buildTour(admin, { ...context, page: 'clients' });
+    expect(clientsTour.steps.map((item) => item.target)).toEqual([
+      'navigation',
+      'clients-create',
+      'clients-manage',
+      'help',
+    ]);
+
+    const techniciansTour = buildTour(admin, { ...context, page: 'technicians' });
+    expect(techniciansTour.steps.map((item) => item.target)).toEqual([
+      'navigation',
+      'technicians-directory',
+      'help',
+    ]);
+
+    const usersTour = buildTour(admin, { ...context, page: 'users' });
+    expect(usersTour.steps.map((item) => item.target)).toEqual([
+      'navigation',
+      'users-create',
+      'users-list',
+      'help',
+    ]);
   });
 
   it('isolates progress by user, role, mode, tour and version without storing business data', () => {
