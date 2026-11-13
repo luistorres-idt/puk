@@ -1,7 +1,9 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
 import {
+  buildConsolidatedReportRows,
   buildTechnicianReportRows,
+  generateConsolidatedExcelReport,
   generateTechnicianExcelReport,
 } from './technician-excel-report.generator.js';
 
@@ -134,5 +136,49 @@ describe('TechnicianExcelReportGenerator', () => {
     const sheet = workbook.getWorksheet('TEC- Juan-Pedro- -1-');
     expect(sheet).toBeDefined();
     expect(sheet?.rowCount).toBe(2);
+  });
+
+  it('builds consolidated report rows including the technician column', () => {
+    const orderWithTech = {
+      ...sampleOrder1,
+      technician: { name: 'Mario López' },
+    };
+    const rows = buildConsolidatedReportRows([orderWithTech, sampleOrder2]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.tecnico).toBe('Mario López');
+    expect(rows[0]?.folio).toBe('ORD-001');
+    expect(rows[1]?.tecnico).toBe('Técnico');
+    expect(rows[1]?.folio).toBe('ORD-002');
+  });
+
+  it('generates a consolidated Excel report workbook with 13 columns and header', async () => {
+    const orderWithTech = {
+      ...sampleOrder1,
+      technician: { name: 'Mario López' },
+    };
+    const bytes = await generateConsolidatedExcelReport([orderWithTech, sampleOrder2]);
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as never);
+
+    const sheet = workbook.getWorksheet('Servicios Consolidados');
+    expect(sheet).toBeDefined();
+    expect(sheet?.rowCount).toBe(3); // 1 header + 2 orders
+
+    const header = sheet?.getRow(1);
+    expect(header?.getCell(1).value).toBe('Semana');
+    expect(header?.getCell(2).value).toBe('Folio');
+    expect(header?.getCell(3).value).toBe('Fecha');
+    expect(header?.getCell(4).value).toBe('Técnico');
+    expect(header?.getCell(5).value).toBe('Cliente');
+    expect(header?.getCell(12).value).toBe('Total');
+    expect(header?.getCell(13).value).toBe('Notas');
+
+    const row2 = sheet?.getRow(2);
+    expect(row2?.getCell(4).value).toBe('Mario López');
+    expect(row2?.getCell(5).value).toBe('Transportes del Norte');
+    expect(row2?.getCell(12).value).toBe(1800);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from '../orders/index.js';
 import { formatReportDate, getIsoWeek } from './technical-report-formatter.js';
 import {
+  generateConsolidatedExcelReport,
   generateTechnicianExcelReport,
   type TechnicianSummary,
 } from './technician-excel-report.generator.js';
@@ -32,7 +33,9 @@ export interface DispatchTechnicianReportsOutcome {
   readonly reason?: string;
   readonly sentCount: number;
   readonly failedCount: number;
-  readonly recipient?: string;
+  readonly recipient?: string | null;
+  readonly consolidatedRecipient?: string | null;
+  readonly consolidatedSent?: boolean;
   readonly results: ReadonlyArray<TechnicianEmailResult>;
 }
 
@@ -60,7 +63,7 @@ export class TechnicianReportEmailService {
     const reference = options.referenceDate ?? new Date();
     const config = await this.scheduleService.getConfig(reference);
 
-    if (!config.adminRecipientEmail) {
+    if (!config.adminRecipientEmail && !config.consolidatedRecipientEmail) {
       return {
         status: 'SKIPPED',
         reason: 'ADMIN_RECIPIENT_EMAIL_NOT_CONFIGURED',
@@ -104,17 +107,157 @@ export class TechnicianReportEmailService {
         status: 'NO_ORDERS',
         sentCount: 0,
         failedCount: 0,
-        recipient: config.adminRecipientEmail,
+        recipient: config.adminRecipientEmail ?? null,
+        consolidatedRecipient: config.consolidatedRecipientEmail ?? null,
         results: [],
       };
     }
 
-    // Group orders by technician
-    const groups = new Map<string, { technician: TechnicianSummary; orders: typeof orders }>();
+    const results: TechnicianEmailResult[] = [];
+    const attemptBatchId = randomUUID();
+    const cutoffDateStr = formatReportDate(window.end, config.timeZone);
 
+    if (config.adminRecipientEmail) {
+      const groups = this.groupOrdersByTechnician(orders);
+
+      for (const [technicianId, group] of groups) {
+        const sem = this.resolveIsoWeek(group.orders, window.end, config.timeZone);
+        const safeTechName = group.technician.name
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-zA-Z0-9_-]/g, '_')
+          .slice(0, 50);
+
+        const delivery = await this.sendAndAuditReport({
+          actorUserId,
+          actions: {
+            attempted: 'TECHNICIAN_REPORT_EMAIL_ATTEMPTED',
+            sent: 'TECHNICIAN_REPORT_EMAIL_SENT',
+            failed: 'TECHNICIAN_REPORT_EMAIL_FAILED',
+          },
+          entityType: 'Technician',
+          entityId: technicianId,
+          auditPayload: {
+            attemptBatchId,
+            attemptId: randomUUID(),
+            technicianId,
+            technicianName: group.technician.name,
+            adminRecipient: config.adminRecipientEmail,
+            cutoffEnd: window.end.toISOString(),
+            orderCount: group.orders.length,
+          },
+          errorLogMessage: 'Falló el despacho de reporte técnico semanal por correo',
+          errorLogContext: { technicianId, technicianName: group.technician.name },
+          buildMail: async () => ({
+            recipient: config.adminRecipientEmail!,
+            subject: `Reporte técnico - ${group.technician.name} - Semana ${sem} (${group.orders.length} órdenes)`,
+            text: `Adjuntamos el desglose de servicios en Excel del técnico ${group.technician.name} correspondiente al corte del ${cutoffDateStr}.`,
+            attachment: {
+              fileName: `Reporte_${safeTechName}_Semana_${sem}.xlsx`,
+              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              content: await generateTechnicianExcelReport(
+                group.technician,
+                group.orders,
+                config.timeZone,
+              ),
+            },
+          }),
+        });
+
+        results.push({
+          technicianId,
+          technicianName: group.technician.name,
+          orderCount: group.orders.length,
+          ...(delivery.sent
+            ? { status: 'SENT', messageId: delivery.messageId }
+            : { status: 'FAILED', failureCode: 'DELIVERY_UNCONFIRMED' }),
+        });
+      }
+    }
+
+    let consolidatedSent: boolean | undefined;
+
+    if (config.consolidatedRecipientEmail) {
+      const consolidatedSem = this.resolveIsoWeek(orders, window.end, config.timeZone);
+      const delivery = await this.sendAndAuditReport({
+        actorUserId,
+        actions: {
+          attempted: 'CONSOLIDATED_REPORT_EMAIL_ATTEMPTED',
+          sent: 'CONSOLIDATED_REPORT_EMAIL_SENT',
+          failed: 'CONSOLIDATED_REPORT_EMAIL_FAILED',
+        },
+        entityType: 'TechnicalReportSyncSchedule',
+        entityId: 'technical-report',
+        auditPayload: {
+          attemptBatchId,
+          attemptId: randomUUID(),
+          consolidatedRecipient: config.consolidatedRecipientEmail,
+          cutoffEnd: window.end.toISOString(),
+          orderCount: orders.length,
+        },
+        errorLogMessage: 'Falló el despacho de reporte técnico consolidado por correo',
+        errorLogContext: { recipient: config.consolidatedRecipientEmail },
+        buildMail: async () => ({
+          recipient: config.consolidatedRecipientEmail!,
+          subject: `Reporte técnico consolidado - Semana ${consolidatedSem} (${orders.length} órdenes)`,
+          text: `Adjuntamos el desglose consolidado de servicios en Excel correspondiente al corte del ${cutoffDateStr} (${orders.length} órdenes).`,
+          attachment: {
+            fileName: `Reporte_Consolidado_Semana_${consolidatedSem}.xlsx`,
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            content: await generateConsolidatedExcelReport(orders, config.timeZone),
+          },
+        }),
+      });
+      consolidatedSent = delivery.sent;
+    }
+
+    const techSentCount = results.filter((r) => r.status === 'SENT').length;
+    const techFailedCount = results.filter((r) => r.status === 'FAILED').length;
+
+    const hasConsolidated = Boolean(config.consolidatedRecipientEmail);
+    const totalSentCount = techSentCount + (consolidatedSent === true ? 1 : 0);
+    const totalFailedCount = techFailedCount + (consolidatedSent === false ? 1 : 0);
+    const totalExpected = results.length + (hasConsolidated ? 1 : 0);
+
+    const status =
+      totalSentCount === totalExpected
+        ? 'SUCCESS'
+        : totalSentCount === 0
+          ? 'FAILURE'
+          : 'PARTIAL_FAILURE';
+
+    return {
+      status,
+      sentCount: totalSentCount,
+      failedCount: totalFailedCount,
+      recipient: config.adminRecipientEmail ?? null,
+      consolidatedRecipient: config.consolidatedRecipientEmail ?? null,
+      ...(consolidatedSent !== undefined ? { consolidatedSent } : {}),
+      results,
+    };
+  }
+
+  private resolveIsoWeek(
+    orders: ReadonlyArray<{ readonly scheduledAt: Date }>,
+    fallbackDate: Date,
+    timeZone: string,
+  ): number {
+    return orders[0]
+      ? getIsoWeek(orders[0].scheduledAt, timeZone)
+      : getIsoWeek(fallbackDate, timeZone);
+  }
+
+  private groupOrdersByTechnician<
+    T extends {
+      readonly technicianId: string | null;
+      readonly technician: { readonly name: string; readonly externalKey: string | null } | null;
+      readonly technicianNameSnapshot: string | null;
+      readonly technicianExternalKeySnapshot: string | null;
+    },
+  >(orders: ReadonlyArray<T>): Map<string, { technician: TechnicianSummary; orders: T[] }> {
+    const groups = new Map<string, { technician: TechnicianSummary; orders: T[] }>();
     for (const order of orders) {
       const techId = order.technicianId!;
-      const techName = order.technician?.name ?? order.technicianNameSnapshot ?? 'Técnico';
       const existing = groups.get(techId);
       if (existing) {
         existing.orders.push(order);
@@ -122,132 +265,79 @@ export class TechnicianReportEmailService {
         groups.set(techId, {
           technician: {
             id: techId,
-            name: techName,
+            name: order.technician?.name ?? order.technicianNameSnapshot ?? 'Técnico',
             externalKey: order.technician?.externalKey ?? order.technicianExternalKeySnapshot,
           },
           orders: [order],
         });
       }
     }
+    return groups;
+  }
 
-    const results: TechnicianEmailResult[] = [];
-    const attemptBatchId = randomUUID();
-    const cutoffDateStr = formatReportDate(window.end, config.timeZone);
+  private async sendAndAuditReport(params: {
+    actorUserId?: string | null | undefined;
+    actions: { attempted: string; sent: string; failed: string };
+    entityType: string;
+    entityId: string;
+    auditPayload: Record<string, string | number | boolean | null>;
+    errorLogMessage: string;
+    errorLogContext: Record<string, unknown>;
+    buildMail: () => Promise<Parameters<ReportMailPort['send']>[0]>;
+  }): Promise<{ sent: true; messageId: string } | { sent: false }> {
+    const { actorUserId, actions, entityType, entityId, auditPayload } = params;
+    const actorField = actorUserId ? { actorUserId } : {};
 
-    for (const [technicianId, group] of groups) {
-      const sem = group.orders[0]
-        ? getIsoWeek(group.orders[0].scheduledAt, config.timeZone)
-        : getIsoWeek(window.end, config.timeZone);
-      const attemptId = randomUUID();
-      const auditPayload = {
-        attemptBatchId,
-        attemptId,
-        technicianId,
-        technicianName: group.technician.name,
-        adminRecipient: config.adminRecipientEmail,
-        cutoffEnd: window.end.toISOString(),
-        orderCount: group.orders.length,
-      };
+    await this.prisma.auditLog.create({
+      data: {
+        action: actions.attempted,
+        ...actorField,
+        entityType,
+        entityId,
+        after: auditPayload,
+      },
+    });
+
+    try {
+      const mail = await params.buildMail();
+      const delivered = await this.sender!.send(mail);
 
       await this.prisma.auditLog.create({
         data: {
-          action: 'TECHNICIAN_REPORT_EMAIL_ATTEMPTED',
-          ...(actorUserId ? { actorUserId } : {}),
-          entityType: 'Technician',
-          entityId: technicianId,
-          after: auditPayload,
+          action: actions.sent,
+          ...actorField,
+          entityType,
+          entityId,
+          after: {
+            ...auditPayload,
+            messageId: delivered.messageId,
+            status: 'SENT',
+          },
         },
       });
 
-      try {
-        const excelBytes = await generateTechnicianExcelReport(
-          group.technician,
-          group.orders,
-          config.timeZone,
-        );
+      return { sent: true, messageId: delivered.messageId };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(params.errorLogMessage, { ...params.errorLogContext, error: errorMessage });
 
-        const safeTechName = group.technician.name
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-zA-Z0-9_-]/g, '_')
-          .slice(0, 50);
-        const fileName = `Reporte_${safeTechName}_Semana_${sem}.xlsx`;
-
-        const delivered = await this.sender.send({
-          recipient: config.adminRecipientEmail,
-          subject: `Reporte técnico - ${group.technician.name} - Semana ${sem} (${group.orders.length} órdenes)`,
-          text: `Adjuntamos el desglose de servicios en Excel del técnico ${group.technician.name} correspondiente al corte del ${cutoffDateStr}.`,
-          attachment: {
-            fileName,
-            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            content: excelBytes,
+      await this.prisma.auditLog.create({
+        data: {
+          action: actions.failed,
+          ...actorField,
+          entityType,
+          entityId,
+          after: {
+            ...auditPayload,
+            status: 'FAILED',
+            failureCode: 'DELIVERY_UNCONFIRMED',
+            errorMessage,
           },
-        });
+        },
+      });
 
-        await this.prisma.auditLog.create({
-          data: {
-            action: 'TECHNICIAN_REPORT_EMAIL_SENT',
-            ...(actorUserId ? { actorUserId } : {}),
-            entityType: 'Technician',
-            entityId: technicianId,
-            after: {
-              ...auditPayload,
-              messageId: delivered.messageId,
-              status: 'SENT',
-            },
-          },
-        });
-
-        results.push({
-          technicianId,
-          technicianName: group.technician.name,
-          orderCount: group.orders.length,
-          status: 'SENT',
-          messageId: delivered.messageId,
-        });
-      } catch (error) {
-        logger.error('Falló el despacho de reporte técnico semanal por correo', {
-          technicianId,
-          technicianName: group.technician.name,
-          error: error instanceof Error ? error.message : String(error),
-        });
-
-        await this.prisma.auditLog.create({
-          data: {
-            action: 'TECHNICIAN_REPORT_EMAIL_FAILED',
-            ...(actorUserId ? { actorUserId } : {}),
-            entityType: 'Technician',
-            entityId: technicianId,
-            after: {
-              ...auditPayload,
-              status: 'FAILED',
-              failureCode: 'DELIVERY_UNCONFIRMED',
-              errorMessage: error instanceof Error ? error.message : String(error),
-            },
-          },
-        });
-
-        results.push({
-          technicianId,
-          technicianName: group.technician.name,
-          orderCount: group.orders.length,
-          status: 'FAILED',
-          failureCode: 'DELIVERY_UNCONFIRMED',
-        });
-      }
+      return { sent: false };
     }
-
-    const sentCount = results.filter((r) => r.status === 'SENT').length;
-    const failedCount = results.filter((r) => r.status === 'FAILED').length;
-
-    return {
-      status:
-        sentCount === results.length ? 'SUCCESS' : sentCount === 0 ? 'FAILURE' : 'PARTIAL_FAILURE',
-      sentCount,
-      failedCount,
-      recipient: config.adminRecipientEmail,
-      results,
-    };
   }
 
   public async processScheduledDispatch(
@@ -258,7 +348,7 @@ export class TechnicianReportEmailService {
     }
 
     const config = await this.scheduleService.getConfig(reference);
-    if (!config.adminRecipientEmail) {
+    if (!config.adminRecipientEmail && !config.consolidatedRecipientEmail) {
       return null;
     }
 
@@ -295,6 +385,7 @@ export class TechnicianReportEmailService {
           scheduledSyncAt: syncAt.toISOString(),
           dispatchedAt: reference.toISOString(),
           adminRecipient: config.adminRecipientEmail,
+          consolidatedRecipient: config.consolidatedRecipientEmail,
         },
       },
     });

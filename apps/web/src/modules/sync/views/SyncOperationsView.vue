@@ -40,9 +40,13 @@ watch(debouncedSearch, (val) => {
   filters.search = val;
 });
 const scheduleForm = reactive<
-  UpdateTechnicalReportSyncSchedule & { adminRecipientEmail: string | null }
+  UpdateTechnicalReportSyncSchedule & {
+    adminRecipientEmail: string | null;
+    consolidatedRecipientEmail: string | null;
+  }
 >({
   adminRecipientEmail: null,
+  consolidatedRecipientEmail: null,
   cutoffWeekday: 2,
   syncTime: '17:00',
   syncWeekday: 3,
@@ -98,6 +102,7 @@ watch(
     if (!schedule) return;
     Object.assign(scheduleForm, {
       adminRecipientEmail: schedule.adminRecipientEmail ?? null,
+      consolidatedRecipientEmail: schedule.consolidatedRecipientEmail ?? null,
       cutoffWeekday: schedule.cutoffWeekday,
       syncTime: schedule.syncTime,
       syncWeekday: schedule.syncWeekday,
@@ -138,9 +143,22 @@ const dispatchReports = useMutation({
     if (data.status === 'NO_ORDERS') {
       message.info('No hay órdenes completadas en la ventana de corte para enviar.');
     } else if (data.status === 'SKIPPED') {
-      message.warning('Envío omitido: verifica que el correo de administración esté configurado.');
+      if (data.reason === 'EMAIL_SENDER_NOT_CONFIGURED') {
+        message.warning(
+          'Envío omitido: el servicio emisor de correos (Gmail) no está configurado en el servidor.',
+        );
+      } else {
+        message.warning(
+          'Envío omitido: verifica que el correo de administración o consolidado esté configurado.',
+        );
+      }
     } else if (data.status === 'SUCCESS') {
-      message.success(`Se enviaron ${data.sentCount} reporte(s) por correo a ${data.recipient}.`);
+      const recipients = [data.recipient, data.consolidatedRecipient].filter(Boolean).join(', ');
+      message.success(
+        recipients
+          ? `Se enviaron ${data.sentCount} reporte(s) por correo a ${recipients}.`
+          : `Se enviaron ${data.sentCount} reporte(s) por correo.`,
+      );
     } else {
       message.warning(`Enviados: ${data.sentCount}, fallidos: ${data.failedCount}.`);
     }
@@ -223,7 +241,7 @@ function formatDate(value: string | null | undefined): string {
         <div v-if="scheduleQuery.isPending.value" class="grid min-h-24 place-items-center">
           <n-spin />
         </div>
-        <div v-else class="grid gap-4 md:grid-cols-6">
+        <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div>
             <label class="mb-1 block text-xs text-slate-500">Día de corte</label
             ><n-select v-model:value="scheduleForm.cutoffWeekday" :options="weekdays" />
@@ -259,7 +277,15 @@ function formatDate(value: string | null | undefined): string {
               clearable
             />
           </div>
-          <div class="flex flex-wrap items-end gap-2">
+          <div>
+            <label class="mb-1 block text-xs text-slate-500">Correo reporte consolidado</label
+            ><n-input
+              v-model:value="scheduleForm.consolidatedRecipientEmail"
+              placeholder="reportes@empresa.com"
+              clearable
+            />
+          </div>
+          <div class="flex flex-wrap items-end gap-2 md:col-span-2 lg:col-span-3">
             <n-button
               type="primary"
               class="w-full md:w-auto"

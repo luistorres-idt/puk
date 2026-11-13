@@ -9,6 +9,7 @@ import {
 
 const defaults = {
   adminRecipientEmail: null,
+  consolidatedRecipientEmail: null,
   cutoffWeekday: 2,
   syncTime: '17:00',
   syncWeekday: 3,
@@ -119,6 +120,7 @@ describe('TechnicalReportSyncScheduleService', () => {
     vi.setSystemTime(new Date('2026-09-08T18:00:00.000Z'));
     const input = {
       adminRecipientEmail: null,
+      consolidatedRecipientEmail: 'consolidated@example.com',
       cutoffWeekday: 5,
       syncTime: '08:30',
       syncWeekday: 1,

@@ -1,8 +1,5 @@
 import ExcelJS from 'exceljs';
-import {
-  formatTechnicalReportRow,
-  type ReportOrderSource,
-} from './technical-report-formatter.js';
+import { formatTechnicalReportRow, type ReportOrderSource } from './technical-report-formatter.js';
 
 export interface TechnicianSummary {
   readonly id?: string;
@@ -25,18 +22,23 @@ export interface TechnicianReportRow {
   readonly notas: string;
 }
 
-export function buildTechnicianReportRows(
-  orders: ReadonlyArray<ReportOrderSource>,
-  timeZone = 'America/Hermosillo',
-): TechnicianReportRow[] {
-  return orders.map((order) => {
-    const formatted = formatTechnicalReportRow(order, timeZone);
-    const hasMultilineCost = formatted.costo.includes('\n');
-    const costo = hasMultilineCost ? formatted.costo : Number(formatted.costo);
-    const viaticos = Number(formatted.viaticos);
-    const total = Number(formatted.total);
+export interface ConsolidatedReportRow extends TechnicianReportRow {
+  readonly tecnico: string;
+}
 
-    return {
+function formatExcelRowBase(
+  order: ReportOrderSource,
+  timeZone: string,
+): { formatted: ReturnType<typeof formatTechnicalReportRow>; row: TechnicianReportRow } {
+  const formatted = formatTechnicalReportRow(order, timeZone);
+  const hasMultilineCost = formatted.costo.includes('\n');
+  const costo = hasMultilineCost ? formatted.costo : Number(formatted.costo);
+  const viaticos = Number(formatted.viaticos);
+  const total = Number(formatted.total);
+
+  return {
+    formatted,
+    row: {
       sem: Number(formatted.sem),
       folio: formatted.folio,
       fecha: formatted.fecha,
@@ -49,41 +51,63 @@ export function buildTechnicianReportRows(
       viaticos,
       total,
       notas: formatted.notas,
+    },
+  };
+}
+
+export function buildTechnicianReportRows(
+  orders: ReadonlyArray<ReportOrderSource>,
+  timeZone = 'America/Hermosillo',
+): TechnicianReportRow[] {
+  return orders.map((order) => formatExcelRowBase(order, timeZone).row);
+}
+
+export function buildConsolidatedReportRows(
+  orders: ReadonlyArray<ReportOrderSource>,
+  timeZone = 'America/Hermosillo',
+): ConsolidatedReportRow[] {
+  return orders.map((order) => {
+    const { formatted, row } = formatExcelRowBase(order, timeZone);
+    return {
+      ...row,
+      tecnico: formatted.tecnico || 'Técnico',
     };
   });
 }
 
-export async function generateTechnicianExcelReport(
-  technician: TechnicianSummary,
-  orders: ReadonlyArray<ReportOrderSource>,
-  timeZone = 'America/Hermosillo',
+const BASE_HEAD_COLUMNS: Partial<ExcelJS.Column>[] = [
+  { header: 'Semana', key: 'sem', width: 10 },
+  { header: 'Folio', key: 'folio', width: 14 },
+  { header: 'Fecha', key: 'fecha', width: 14 },
+];
+
+const BASE_TAIL_COLUMNS: Partial<ExcelJS.Column>[] = [
+  { header: 'Cliente', key: 'cliente', width: 30 },
+  { header: 'Económico', key: 'economico', width: 18 },
+  { header: 'Serie', key: 'serie', width: 20 },
+  { header: 'IMEI / ID', key: 'imeiId', width: 22 },
+  { header: 'Servicio', key: 'servicio', width: 25 },
+  { header: 'Costo', key: 'costo', width: 16, style: { numFmt: '#,##0.00' } },
+  { header: 'Viáticos', key: 'viaticos', width: 14, style: { numFmt: '#,##0.00' } },
+  { header: 'Total', key: 'total', width: 14, style: { numFmt: '$#,##0.00' } },
+  { header: 'Notas', key: 'notas', width: 35 },
+];
+
+async function renderExcelReportWorkbook(
+  sheetName: string,
+  columns: Partial<ExcelJS.Column>[],
+  rows: ReadonlyArray<object>,
 ): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'PUK Technical Platform';
   workbook.created = new Date();
 
-  const rawSheetName = (technician.name || 'Técnico').slice(0, 31).replace(/[\\/?*:[\]]/g, '-').trim();
-  const sheetName = rawSheetName.length > 0 ? rawSheetName : 'Técnico';
   const worksheet = workbook.addWorksheet(sheetName, {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
 
-  worksheet.columns = [
-    { header: 'Semana', key: 'sem', width: 10 },
-    { header: 'Folio', key: 'folio', width: 14 },
-    { header: 'Fecha', key: 'fecha', width: 14 },
-    { header: 'Cliente', key: 'cliente', width: 30 },
-    { header: 'Económico', key: 'economico', width: 18 },
-    { header: 'Serie', key: 'serie', width: 20 },
-    { header: 'IMEI / ID', key: 'imeiId', width: 22 },
-    { header: 'Servicio', key: 'servicio', width: 25 },
-    { header: 'Costo', key: 'costo', width: 16, style: { numFmt: '#,##0.00' } },
-    { header: 'Viáticos', key: 'viaticos', width: 14, style: { numFmt: '#,##0.00' } },
-    { header: 'Total', key: 'total', width: 14, style: { numFmt: '$#,##0.00' } },
-    { header: 'Notas', key: 'notas', width: 35 },
-  ];
+  worksheet.columns = columns;
 
-  // Header styling
   const headerRow = worksheet.getRow(1);
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   headerRow.fill = {
@@ -94,14 +118,12 @@ export async function generateTechnicianExcelReport(
   headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
   headerRow.height = 24;
 
-  const rows = buildTechnicianReportRows(orders, timeZone);
   for (const row of rows) {
     const added = worksheet.addRow(row);
     added.alignment = { vertical: 'top', wrapText: true };
   }
 
-  // Format header row cells borders
-  for (let c = 1; c <= 12; c++) {
+  for (let c = 1; c <= columns.length; c++) {
     const cell = headerRow.getCell(c);
     cell.border = {
       bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
@@ -110,4 +132,33 @@ export async function generateTechnicianExcelReport(
 
   const buffer = await workbook.xlsx.writeBuffer();
   return new Uint8Array(buffer as ArrayBuffer);
+}
+
+export async function generateTechnicianExcelReport(
+  technician: TechnicianSummary,
+  orders: ReadonlyArray<ReportOrderSource>,
+  timeZone = 'America/Hermosillo',
+): Promise<Uint8Array> {
+  const rawSheetName = (technician.name || 'Técnico')
+    .slice(0, 31)
+    .replace(/[\\/?*:[\]]/g, '-')
+    .trim();
+  const sheetName = rawSheetName.length > 0 ? rawSheetName : 'Técnico';
+
+  return renderExcelReportWorkbook(
+    sheetName,
+    [...BASE_HEAD_COLUMNS, ...BASE_TAIL_COLUMNS],
+    buildTechnicianReportRows(orders, timeZone),
+  );
+}
+
+export async function generateConsolidatedExcelReport(
+  orders: ReadonlyArray<ReportOrderSource>,
+  timeZone = 'America/Hermosillo',
+): Promise<Uint8Array> {
+  return renderExcelReportWorkbook(
+    'Servicios Consolidados',
+    [...BASE_HEAD_COLUMNS, { header: 'Técnico', key: 'tecnico', width: 25 }, ...BASE_TAIL_COLUMNS],
+    buildConsolidatedReportRows(orders, timeZone),
+  );
 }

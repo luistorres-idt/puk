@@ -8,6 +8,7 @@ const SCHEDULE_ID = 'technical-report';
 
 export interface TechnicalReportSyncScheduleConfig {
   adminRecipientEmail?: string | null;
+  consolidatedRecipientEmail?: string | null;
   cutoffWeekday: number;
   syncTime: string;
   syncWeekday: number;
@@ -188,6 +189,8 @@ export class TechnicalReportSyncScheduleService {
       ? {
           adminRecipientEmail:
             stored.adminRecipientEmail ?? this.defaults.adminRecipientEmail ?? null,
+          consolidatedRecipientEmail:
+            stored.consolidatedRecipientEmail ?? this.defaults.consolidatedRecipientEmail ?? null,
           cutoffWeekday: stored.cutoffWeekday,
           syncTime: stored.syncTime,
           syncWeekday: stored.syncWeekday,
@@ -232,6 +235,7 @@ export class TechnicalReportSyncScheduleService {
     assertValidTimeZone(input.timeZone);
     const normalizedInput: TechnicalReportSyncScheduleConfig = {
       adminRecipientEmail: input.adminRecipientEmail ?? null,
+      consolidatedRecipientEmail: input.consolidatedRecipientEmail ?? null,
       cutoffWeekday: input.cutoffWeekday,
       syncTime: input.syncTime,
       syncWeekday: input.syncWeekday,
