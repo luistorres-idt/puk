@@ -19,7 +19,7 @@ export const SyncOperationsQuerySchema = v.object({
   to: v.optional(v.string()),
 });
 
-const adminRecipientEmailSchema = v.optional(
+const recipientEmailSchema = v.optional(
   v.nullable(
     v.union([
       v.pipe(
@@ -32,7 +32,8 @@ const adminRecipientEmailSchema = v.optional(
 );
 
 export const UpdateTechnicalReportSyncScheduleSchema = v.object({
-  adminRecipientEmail: adminRecipientEmailSchema,
+  adminRecipientEmail: recipientEmailSchema,
+  consolidatedRecipientEmail: recipientEmailSchema,
   cutoffWeekday: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(6)),
   syncTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):[0-5]\d$/)),
   syncWeekday: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(6)),

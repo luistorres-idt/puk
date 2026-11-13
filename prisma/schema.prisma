@@ -518,8 +518,9 @@ model TechnicalReportSyncSchedule {
   syncTime            String   @default("17:00")
   cutoffWeekday       Int      @default(2)
   timeZone            String   @default("America/Hermosillo")
-  adminRecipientEmail String?
-  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  adminRecipientEmail        String?
+  consolidatedRecipientEmail String?
+  createdAt                  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @updatedAt @db.Timestamptz(3)
 }
 

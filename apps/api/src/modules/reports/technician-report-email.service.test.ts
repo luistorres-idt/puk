@@ -237,6 +237,118 @@ describe('TechnicianReportEmailService', () => {
     });
   });
 
+  it('dispatches consolidated report in parallel when consolidatedRecipientEmail is configured', async () => {
+    mockSchedule.getConfig.mockResolvedValueOnce({
+      ...validConfig,
+      consolidatedRecipientEmail: 'consolidated@company.com',
+    });
+
+    const orders = [
+      {
+        id: 'ord-1',
+        folio: 'ORD-101',
+        technicianId: 'tech-1',
+        technician: { id: 'tech-1', name: 'Juan Pérez', externalKey: 'TK-1' },
+        scheduledAt: new Date('2026-09-08T14:00:00.000Z'),
+        clientNameSnapshot: 'Cliente Alpha',
+        serviceType: 'INSTALLATION',
+        status: 'COMPLETED',
+        pricingBaseCost: '500.00',
+        pricingTravelExpenses: '100.00',
+        pricingTotal: '600.00',
+        units: [],
+      },
+    ];
+
+    mockPrisma.order.findMany.mockResolvedValueOnce(orders);
+
+    const service = new TechnicianReportEmailService(
+      mockPrisma as unknown as PrismaClient,
+      mockSchedule as unknown as TechnicalReportSyncScheduleService,
+      mockSender,
+    );
+
+    const result = await service.dispatchWeeklyReports('admin-user');
+
+    expect(result.status).toBe('SUCCESS');
+    expect(result.sentCount).toBe(2); // 1 technician + 1 consolidated
+    expect(result.failedCount).toBe(0);
+    expect(result.consolidatedRecipient).toBe('consolidated@company.com');
+    expect(result.consolidatedSent).toBe(true);
+
+    // Verify 2 emails sent: one to admin, one to consolidated
+    expect(mockSender.send).toHaveBeenCalledTimes(2);
+    expect(mockSender.send).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        recipient: 'admin.ops@company.com',
+        subject: expect.stringContaining('Juan Pérez'),
+      }),
+    );
+    expect(mockSender.send).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        recipient: 'consolidated@company.com',
+        subject: expect.stringContaining('Reporte técnico consolidado'),
+      }),
+    );
+
+    // Verify consolidated audit logs
+    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'CONSOLIDATED_REPORT_EMAIL_SENT',
+          entityType: 'TechnicalReportSyncSchedule',
+        }),
+      }),
+    );
+  });
+
+  it('dispatches only consolidated report when adminRecipientEmail is null but consolidatedRecipientEmail is set', async () => {
+    mockSchedule.getConfig.mockResolvedValueOnce({
+      ...validConfig,
+      adminRecipientEmail: null,
+      consolidatedRecipientEmail: 'consolidated@company.com',
+    });
+
+    const orders = [
+      {
+        id: 'ord-1',
+        folio: 'ORD-101',
+        technicianId: 'tech-1',
+        technician: { id: 'tech-1', name: 'Juan Pérez', externalKey: 'TK-1' },
+        scheduledAt: new Date('2026-09-08T14:00:00.000Z'),
+        clientNameSnapshot: 'Cliente Alpha',
+        serviceType: 'INSTALLATION',
+        status: 'COMPLETED',
+        pricingBaseCost: '500.00',
+        pricingTravelExpenses: '100.00',
+        pricingTotal: '600.00',
+        units: [],
+      },
+    ];
+
+    mockPrisma.order.findMany.mockResolvedValueOnce(orders);
+
+    const service = new TechnicianReportEmailService(
+      mockPrisma as unknown as PrismaClient,
+      mockSchedule as unknown as TechnicalReportSyncScheduleService,
+      mockSender,
+    );
+
+    const result = await service.dispatchWeeklyReports('admin-user');
+
+    expect(result.status).toBe('SUCCESS');
+    expect(result.sentCount).toBe(1); // 0 tech + 1 consolidated
+    expect(result.results).toHaveLength(0);
+    expect(mockSender.send).toHaveBeenCalledTimes(1);
+    expect(mockSender.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipient: 'consolidated@company.com',
+      }),
+    );
+  });
+
   describe('processScheduledDispatch', () => {
     it('returns null if sender is undefined', async () => {
       const service = new TechnicianReportEmailService(

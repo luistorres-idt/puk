@@ -70,7 +70,9 @@ export interface DispatchTechnicianReportsResult {
   reason?: string;
   sentCount: number;
   failedCount: number;
-  recipient?: string;
+  recipient?: string | null;
+  consolidatedRecipient?: string | null;
+  consolidatedSent?: boolean;
 }
 
 export async function dispatchTechnicianReports(): Promise<DispatchTechnicianReportsResult> {

@@ -63,6 +63,7 @@ describe('createAdministrationRouter', () => {
   const mockSchedule = {
     getConfig: vi.fn().mockResolvedValue({
       adminRecipientEmail: 'admin@example.com',
+      consolidatedRecipientEmail: 'consolidated@example.com',
       cutoffWeekday: 2,
       nextSyncAt: new Date('2026-09-17T00:00:00.000Z'),
       syncTime: '17:00',
@@ -176,9 +177,10 @@ describe('createAdministrationRouter', () => {
     );
   });
 
-  it('updates the configurable weekly schedule including adminRecipientEmail', async () => {
+  it('updates the configurable weekly schedule including adminRecipientEmail and consolidatedRecipientEmail', async () => {
     const schedule = {
       adminRecipientEmail: 'admin.ops@company.com',
+      consolidatedRecipientEmail: 'consolidated.ops@company.com',
       cutoffWeekday: 2,
       syncTime: '17:00',
       syncWeekday: 3,

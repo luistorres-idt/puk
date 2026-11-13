@@ -14,6 +14,7 @@ export interface ReportOrderSource {
   readonly scheduledAt: Date | string;
   readonly generalNotes?: string | null;
   readonly failedReason?: string | null;
+  readonly technician?: { readonly name: string; readonly id?: string; readonly externalKey?: string | null } | null;
   readonly technicianNameSnapshot?: string | null;
   readonly pricingUnitRate?: { toFixed(digits: number): string } | number | string | null;
   readonly pricingBaseCost?: { toFixed(digits: number): string } | number | string | null;
@@ -195,7 +196,7 @@ export function formatTechnicalReportRow(
 ): TechnicalReportRowData {
   const sem = String(getIsoWeek(order.scheduledAt, timeZone));
   const fecha = formatReportDate(order.scheduledAt, timeZone);
-  const tecnico = (order.technicianNameSnapshot ?? '').trim();
+  const tecnico = (order.technician?.name ?? order.technicianNameSnapshot ?? '').trim();
   const cliente = (order.clientNameSnapshot ?? '').trim();
 
   const sortedUnits = [...(order.units ?? [])].sort((a, b) => {

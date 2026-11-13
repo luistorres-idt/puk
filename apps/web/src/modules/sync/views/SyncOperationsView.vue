@@ -2,22 +2,12 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { refDebounced } from '@vueuse/core';
-import {
-  NAlert,
-  NButton,
-  NCard,
-  NEmpty,
-  NInput,
-  NSelect,
-  NSpin,
-  NTag,
-  NTimePicker,
-  useMessage,
-} from 'naive-ui';
+import { NAlert, NButton, NCard, NEmpty, NInput, NSelect, NSpin, NTag, useMessage } from 'naive-ui';
 import type { SyncStatus, UpdateTechnicalReportSyncSchedule } from '@puk/contracts';
 
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
+import SyncScheduleDrawerLayout from '../components/SyncScheduleDrawerLayout.vue';
 import {
   dispatchTechnicianReports,
   fetchSyncOperations,
@@ -40,9 +30,13 @@ watch(debouncedSearch, (val) => {
   filters.search = val;
 });
 const scheduleForm = reactive<
-  UpdateTechnicalReportSyncSchedule & { adminRecipientEmail: string | null }
+  UpdateTechnicalReportSyncSchedule & {
+    adminRecipientEmail: string | null;
+    consolidatedRecipientEmail: string | null;
+  }
 >({
   adminRecipientEmail: null,
+  consolidatedRecipientEmail: null,
   cutoffWeekday: 2,
   syncTime: '17:00',
   syncWeekday: 3,
@@ -98,6 +92,7 @@ watch(
     if (!schedule) return;
     Object.assign(scheduleForm, {
       adminRecipientEmail: schedule.adminRecipientEmail ?? null,
+      consolidatedRecipientEmail: schedule.consolidatedRecipientEmail ?? null,
       cutoffWeekday: schedule.cutoffWeekday,
       syncTime: schedule.syncTime,
       syncWeekday: schedule.syncWeekday,
@@ -114,7 +109,10 @@ watch(
 );
 
 const saveSchedule = useMutation({
-  mutationFn: () => updateSyncSchedule({ ...scheduleForm }),
+  mutationFn: (payload: typeof scheduleForm) => {
+    Object.assign(scheduleForm, payload);
+    return updateSyncSchedule({ ...payload });
+  },
   onSuccess: async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['sync-schedule'] }),
@@ -138,9 +136,22 @@ const dispatchReports = useMutation({
     if (data.status === 'NO_ORDERS') {
       message.info('No hay órdenes completadas en la ventana de corte para enviar.');
     } else if (data.status === 'SKIPPED') {
-      message.warning('Envío omitido: verifica que el correo de administración esté configurado.');
+      if (data.reason === 'EMAIL_SENDER_NOT_CONFIGURED') {
+        message.warning(
+          'Envío omitido: el servicio emisor de correos (Gmail) no está configurado en el servidor.',
+        );
+      } else {
+        message.warning(
+          'Envío omitido: verifica que el correo de administración o consolidado esté configurado.',
+        );
+      }
     } else if (data.status === 'SUCCESS') {
-      message.success(`Se enviaron ${data.sentCount} reporte(s) por correo a ${data.recipient}.`);
+      const recipients = [data.recipient, data.consolidatedRecipient].filter(Boolean).join(', ');
+      message.success(
+        recipients
+          ? `Se enviaron ${data.sentCount} reporte(s) por correo a ${recipients}.`
+          : `Se enviaron ${data.sentCount} reporte(s) por correo.`,
+      );
     } else {
       message.warning(`Enviados: ${data.sentCount}, fallidos: ${data.failedCount}.`);
     }
@@ -219,71 +230,18 @@ function formatDate(value: string | null | undefined): string {
         </p>
       </div>
 
-      <n-card data-tour="sync-schedule" title="Horario del reporte técnico" class="shadow-sm">
-        <div v-if="scheduleQuery.isPending.value" class="grid min-h-24 place-items-center">
-          <n-spin />
-        </div>
-        <div v-else class="grid gap-4 md:grid-cols-6">
-          <div>
-            <label class="mb-1 block text-xs text-slate-500">Día de corte</label
-            ><n-select v-model:value="scheduleForm.cutoffWeekday" :options="weekdays" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs text-slate-500">Día de envío</label
-            ><n-select v-model:value="scheduleForm.syncWeekday" :options="weekdays" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs text-slate-500">Hora de envío</label
-            ><n-time-picker
-              class="w-full"
-              :formatted-value="scheduleForm.syncTime"
-              format="HH:mm"
-              value-format="HH:mm"
-              input-readonly
-              @update:formatted-value="(value) => value && (scheduleForm.syncTime = value)"
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs text-slate-500">Zona horaria</label
-            ><n-select
-              v-model:value="scheduleForm.timeZone"
-              :options="timeZoneOptions"
-              filterable
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs text-slate-500">Correo de administración</label
-            ><n-input
-              v-model:value="scheduleForm.adminRecipientEmail"
-              placeholder="admin@empresa.com"
-              clearable
-            />
-          </div>
-          <div class="flex flex-wrap items-end gap-2">
-            <n-button
-              type="primary"
-              class="w-full md:w-auto"
-              :loading="saveSchedule.isPending.value"
-              @click="saveSchedule.mutate()"
-            >
-              Guardar horario
-            </n-button>
-            <n-button
-              secondary
-              type="info"
-              class="w-full md:w-auto"
-              :loading="dispatchReports.isPending.value"
-              @click="dispatchReports.mutate()"
-            >
-              Enviar reportes ahora
-            </n-button>
-          </div>
-        </div>
-        <n-alert v-if="schedule" class="mt-4" type="info" :show-icon="false">
-          Próxima sincronización: <strong>{{ formatDate(schedule.nextSyncAt) }}</strong
-          >. Las órdenes se aceptan hasta el final del {{ cutoffLabel }}.
-        </n-alert>
-      </n-card>
+      <sync-schedule-drawer-layout
+        :form="scheduleForm"
+        :next-sync-label="formatDate(schedule?.nextSyncAt)"
+        :cutoff-label="cutoffLabel"
+        :weekdays="weekdays"
+        :time-zone-options="timeZoneOptions"
+        :is-pending="scheduleQuery.isPending.value"
+        :is-saving="saveSchedule.isPending.value"
+        :is-dispatching="dispatchReports.isPending.value"
+        @save="(payload) => saveSchedule.mutate(payload)"
+        @dispatch="dispatchReports.mutate()"
+      />
 
       <div data-tour="sync-summary" class="grid grid-cols-2 gap-3 md:grid-cols-4">
         <n-card v-for="card in summaryCards" :key="card.label" size="small"
