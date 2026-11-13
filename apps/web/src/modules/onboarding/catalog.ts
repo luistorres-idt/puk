@@ -136,11 +136,19 @@ export function buildTour(user: SessionUser, context: TourContext): Tour {
   } else if (context.page === 'home') {
     if (admin) {
       tour.steps.push(
-        step('new-order', 'Prepara un servicio nuevo', 'Nueva Orden abre el formulario para preparar una cita.'),
+        step(
+          'new-order',
+          'Prepara un servicio nuevo',
+          'Nueva Orden abre el formulario para preparar una cita.',
+        ),
       );
     }
     tour.steps.push(
-      step('order-list', 'Abre tus órdenes', 'Consulta las órdenes disponibles para tu función y abre la que necesitas.'),
+      step(
+        'order-list',
+        'Abre tus órdenes',
+        'Consulta las órdenes disponibles para tu función y abre la que necesitas.',
+      ),
     );
   } else if (context.page === 'detail' && admin) {
     tour.steps.push(
@@ -217,13 +225,24 @@ export function buildTour(user: SessionUser, context: TourContext): Tour {
       ),
     );
   } else if (context.page === 'technicians' && admin) {
-    tour.title = 'Directorio de técnicos';
-    tour.description = 'Consulta el personal técnico activo y sus datos de contacto y taller.';
+    tour.title = 'Administración de técnicos';
+    tour.description =
+      'Da de alta técnicos, configura sus tarifas y datos fiscales, o importa el directorio inicial desde Google Sheets.';
     tour.steps.push(
       step(
+        'technicians-actions',
+        'Alta e importación',
+        'Crea nuevos técnicos directamente desde la app o importa el catálogo inicial desde Google Sheets.',
+      ),
+      step(
+        'technicians-filters',
+        'Busca y filtra',
+        'Filtra por nombre, clave TEC, taller, ciudad o estado activo/inactivo.',
+      ),
+      step(
         'technicians-directory',
-        'Lista de técnicos',
-        'Revisa el estado activo/inactivo, taller, ciudad y teléfono de cada técnico.',
+        'Directorio y edición',
+        'Haz clic en cualquier fila o en Editar para modificar datos, tarifas y facturación, o usa el switch para activar o desactivar.',
       ),
     );
   } else if (context.page === 'users' && admin) {

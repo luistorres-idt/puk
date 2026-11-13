@@ -116,6 +116,8 @@ describe('onboarding catalog and privacy', () => {
     const techniciansTour = buildTour(admin, { ...context, page: 'technicians' });
     expect(techniciansTour.steps.map((item) => item.target)).toEqual([
       'navigation',
+      'technicians-actions',
+      'technicians-filters',
       'technicians-directory',
       'help',
     ]);

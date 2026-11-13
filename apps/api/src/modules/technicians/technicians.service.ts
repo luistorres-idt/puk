@@ -1,6 +1,5 @@
 import { Prisma, type PrismaClient } from '../../generated/prisma/client.js';
 import type { SheetsPort } from '../../integrations/ports.js';
-import { logger } from '../../observability/logger.js';
 import { AppError } from '../../shared/errors.js';
 import { allocateNextTechnicianId, parseTechnicianDirectoryRows } from './directory-parser.js';
 
@@ -30,17 +29,11 @@ type TechnicianInput = {
 
 export class TechniciansService {
   private lastSyncAt: number | null = null;
-  private readonly syncTtlMs: number = 60_000;
 
   public constructor(
     private readonly prisma: PrismaClient,
     private readonly sheetsPort?: SheetsPort,
-    options?: { syncTtlSeconds?: number },
-  ) {
-    if (options?.syncTtlSeconds !== undefined) {
-      this.syncTtlMs = options.syncTtlSeconds * 1000;
-    }
-  }
+  ) {}
 
   public getLastSyncAt(): number | null {
     return this.lastSyncAt;
@@ -50,25 +43,7 @@ export class TechniciansService {
     return this.prisma.technician.findMany({ orderBy: { name: 'asc' } });
   }
 
-  public async listSelectable(options?: { forceSync?: boolean }) {
-    if (this.sheetsPort) {
-      const now = Date.now();
-      const shouldSync =
-        Boolean(options?.forceSync) ||
-        this.lastSyncAt === null ||
-        now - this.lastSyncAt > this.syncTtlMs;
-
-      if (shouldSync) {
-        try {
-          await this.syncFromSheets();
-        } catch (error) {
-          logger.warn('No se pudo sincronizar el directorio técnico desde Google Sheets', {
-            error,
-          });
-        }
-      }
-    }
-
+  public async listSelectable() {
     return this.prisma.technician.findMany({
       where: { active: true },
       select: {
