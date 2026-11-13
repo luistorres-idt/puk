@@ -23,7 +23,26 @@ describe('technician selection', () => {
     });
   });
 
-  it('synchronizes technicians from sheets on listSelectable when sheetsPort is provided', async () => {
+  it('does not auto-sync from sheets during listSelectable even when sheetsPort is provided', async () => {
+    const mockSheetsPort = {
+      listTechniciansDirectory: vi.fn(),
+    };
+    const dbTechs = [
+      { id: 'tech-db', name: 'Tecnico App', workshop: 'Taller', city: 'Hermosillo' },
+    ];
+    const findMany = vi.fn().mockResolvedValue(dbTechs);
+    const mockPrisma = {
+      technician: { findMany },
+    } as unknown as PrismaClient;
+
+    const service = new TechniciansService(mockPrisma, mockSheetsPort as unknown as SheetsPort);
+    const result = await service.listSelectable();
+
+    expect(mockSheetsPort.listTechniciansDirectory).not.toHaveBeenCalled();
+    expect(result).toEqual(dbTechs);
+  });
+
+  it('synchronizes technicians from sheets when syncFromSheets is called explicitly', async () => {
     const validHeaderRow = [
       'TECNICO',
       'TALLER',
@@ -91,7 +110,7 @@ describe('technician selection', () => {
     } as unknown as PrismaClient;
 
     const service = new TechniciansService(mockPrisma, mockSheetsPort as unknown as SheetsPort);
-    await service.listSelectable();
+    await service.syncFromSheets();
 
     expect(mockSheetsPort.listTechniciansDirectory).toHaveBeenCalledOnce();
     expect(create).toHaveBeenCalledWith(
@@ -102,28 +121,6 @@ describe('technician selection', () => {
         }),
       }),
     );
-    expect(findMany).toHaveBeenCalled();
-  });
-
-  it('falls back to local database technicians if sheetsPort fails during listSelectable', async () => {
-    const mockSheetsPort = {
-      listTechniciansDirectory: vi
-        .fn()
-        .mockRejectedValue(new Error('Google Sheets API unavailable')),
-    };
-    const fallbackTechs = [
-      { id: 'tech-fallback', name: 'Tecnico Local', workshop: 'Taller', city: 'Ciudad' },
-    ];
-    const findMany = vi.fn().mockResolvedValue(fallbackTechs);
-    const mockPrisma = {
-      technician: { findMany },
-    } as unknown as PrismaClient;
-
-    const service = new TechniciansService(mockPrisma, mockSheetsPort as unknown as SheetsPort);
-    const result = await service.listSelectable();
-
-    expect(result).toEqual(fallbackTechs);
-    expect(findMany).toHaveBeenCalled();
   });
 
   it('allocates next durable ID when creating technician without externalKey', async () => {
