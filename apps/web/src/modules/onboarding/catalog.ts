@@ -37,19 +37,25 @@ const wizardSteps: Record<string, string> = {
 export function buildTour(user: SessionUser, context: TourContext): Tour {
   const shared = user.orderAccessMode === 'SHARED';
   const admin = !shared && user.role === 'ADMIN';
-  const audience = shared ? 'shared' : admin ? 'admin' : 'technician';
+  const billing = !shared && user.role === 'BILLING';
+  const canAccessBilling = admin || billing;
+  const audience = shared ? 'shared' : admin ? 'admin' : billing ? 'billing' : 'technician';
   const tour: Tour = {
     id: `${audience}:${context.page}:${context.status}:${context.step}`,
     title: shared
       ? 'Tu tablero de trabajo'
       : admin
         ? 'Tu guía de administración'
-        : 'Tu guía de trabajo',
+        : billing
+          ? 'Tu guía de facturación'
+          : 'Tu guía de trabajo',
     description: shared
       ? 'Esta cuenta es compartida. Puedes atender órdenes asignadas y activas. No muestra opciones administrativas.'
       : admin
         ? 'Crea la orden, asigna al técnico y revisa el resultado. Esta guía solo explica: no guarda ni cambia datos.'
-        : 'Consulta tus órdenes asignadas y registra el trabajo de cada unidad. Esta guía no cambia datos.',
+        : billing
+          ? 'Administra facturas, pagos, cuentas de clientes y el corte semanal de reporte técnico. Esta guía no cambia datos.'
+          : 'Consulta tus órdenes asignadas y registra el trabajo de cada unidad. Esta guía no cambia datos.',
     steps: [
       step(
         'navigation',
@@ -245,20 +251,69 @@ export function buildTour(user: SessionUser, context: TourContext): Tour {
         'Haz clic en cualquier fila o en Editar para modificar datos, tarifas y facturación, o usa el switch para activar o desactivar.',
       ),
     );
-  } else if (context.page === 'users' && admin) {
-    tour.title = 'Gestión de administradores';
+  } else if (context.page === 'billing' && canAccessBilling) {
+    tour.title = 'Facturación y Cobranza';
     tour.description =
-      'Administra las cuentas con acceso al panel de control y crea nuevos administradores.';
+      'Registra facturas, lleva el historial de abonos y controla el estatus de cuenta de cada cliente. Esta guía no guarda ni cambia datos.';
+    tour.steps.push(
+      step(
+        'billing-actions',
+        'Registra nuevas facturas',
+        'Usa Nueva factura para capturar folio, cliente, tipo, total y vencimiento (20 días por defecto, ajustable).',
+      ),
+      step(
+        'billing-summary',
+        'Resumen de cobranza',
+        'Consulta al instante la deuda total por cobrar, facturas activas (no pagadas), vencidas y total cobrado.',
+      ),
+      step(
+        'billing-tabs',
+        'Facturas y cuentas de clientes',
+        'En Facturas registra o elimina abonos (el estatus Pagada/No pagada se actualiza solo). En Cuentas de clientes ajusta estatus, contacto, razón social y promesa de pago.',
+      ),
+    );
+  } else if (context.page === 'technical-reports' && canAccessBilling) {
+    tour.title = 'Reporte Técnico semanal';
+    tour.description =
+      'Consulta la liquidación semanal por técnico, revisa el desglose de unidades y equipos, y captura el envío DHL. Esta guía no cambia datos.';
+    tour.steps.push(
+      step(
+        'technical-reports-week',
+        'Navega por semanas',
+        'Cambia entre el corte actual y semanas anteriores con las flechas, o regresa rápido con el botón Hoy.',
+      ),
+      step(
+        'technical-reports-summary',
+        'Resumen y descargas',
+        admin
+          ? 'Revisa el total del corte, descarga el Excel consolidado o dispara el envío de reportes por correo.'
+          : 'Revisa el total del corte semanal y descarga el archivo Excel consolidado.',
+      ),
+      step(
+        'technical-reports-controls',
+        'Cambia de vista o busca',
+        'Alterna entre la vista agrupada Por técnico y la lista cronológica Por orden, o busca por folio, cliente, técnico o IMEI.',
+      ),
+      step(
+        'technical-reports-list',
+        'Desglose y envío DHL',
+        'Expande un técnico para ver sus órdenes y descargar su Excel individual. Haz clic en cualquier orden para abrir el panel lateral con unidades, IMEIs y captura de Envío DHL.',
+      ),
+    );
+  } else if (context.page === 'users' && admin) {
+    tour.title = 'Gestión de usuarios y perfiles';
+    tour.description =
+      'Administra las cuentas con perfil de Administrador y Facturación.';
     tour.steps.push(
       step(
         'users-create',
-        'Crea administradores',
-        'Da de alta una cuenta administrativa ingresando su nombre, correo y contraseña.',
+        'Crea usuarios',
+        'Da de alta una cuenta eligiendo su perfil (Administrador o Facturación), nombre, correo y contraseña.',
       ),
       step(
         'users-list',
-        'Cuentas administradoras',
-        'Consulta las cuentas registradas, actualiza sus datos o restablece contraseñas.',
+        'Cuentas registradas',
+        'Consulta las cuentas activas, cambia su perfil, actualiza sus datos o restablece contraseñas.',
       ),
     );
   } else if (context.page === 'orders' || context.page === 'shared') {

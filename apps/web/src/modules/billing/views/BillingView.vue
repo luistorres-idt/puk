@@ -451,7 +451,7 @@ onMounted(() => {
 
 <template>
   <app-layout wide>
-    <section class="space-y-5">
+    <section data-tour-page="billing" class="space-y-5">
       <header class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 class="text-2xl font-bold text-slate-900">Facturación y Cobranza</h1>
@@ -459,7 +459,7 @@ onMounted(() => {
             Administra facturas, abonos y estatus de cuenta de los clientes registrados.
           </p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div data-tour="billing-actions" class="flex flex-wrap gap-2">
           <n-button
             secondary
             size="small"
@@ -481,7 +481,7 @@ onMounted(() => {
         </div>
       </n-alert>
 
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="billing-summary" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <n-card size="small" class="shadow-sm">
           <p class="text-xs font-medium text-slate-500">Deuda total por cobrar</p>
           <p class="mt-1 text-xl font-bold text-rose-700">{{ formatMoney(totalDebtSummary) }}</p>
@@ -502,7 +502,7 @@ onMounted(() => {
         </n-card>
       </div>
 
-      <n-card class="shadow-sm">
+      <n-card data-tour="billing-tabs" class="shadow-sm">
         <n-tabs v-model:value="activeTab" type="line" animated>
           <n-tab-pane name="invoices" :tab="`Facturas (${invoices.length})`">
             <div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
