@@ -24,6 +24,13 @@ import {
   SharedTechnicianAccessConfigSchema,
   UpdateSharedTechnicianAccessAccountSchema,
   UpdateSharedTechnicianAccessOrderSchema,
+  InvoiceSchema,
+  InvoiceDetailSchema,
+  CreateInvoiceSchema,
+  UpdateInvoiceSchema,
+  RecordInvoicePaymentSchema,
+  BillingClientAccountSchema,
+  UpdateBillingClientAccountSchema,
 } from '@puk/contracts';
 
 const schemaConfig = { errorMode: 'ignore' as const };
@@ -42,6 +49,16 @@ const updateSharedTechnicianAccessAccountSchema = toJsonSchema(
 );
 const updateSharedTechnicianAccessOrderSchema = toJsonSchema(
   UpdateSharedTechnicianAccessOrderSchema,
+  schemaConfig,
+);
+const invoiceSchema = toJsonSchema(InvoiceSchema, schemaConfig);
+const invoiceDetailSchema = toJsonSchema(InvoiceDetailSchema, schemaConfig);
+const createInvoiceSchema = toJsonSchema(CreateInvoiceSchema, schemaConfig);
+const updateInvoiceSchema = toJsonSchema(UpdateInvoiceSchema, schemaConfig);
+const recordInvoicePaymentSchema = toJsonSchema(RecordInvoicePaymentSchema, schemaConfig);
+const billingClientAccountSchema = toJsonSchema(BillingClientAccountSchema, schemaConfig);
+const updateBillingClientAccountSchema = toJsonSchema(
+  UpdateBillingClientAccountSchema,
   schemaConfig,
 );
 const meOrderAccessResponseSchema = toJsonSchema(MeOrderAccessResponseSchema, schemaConfig);
@@ -664,6 +681,173 @@ export const openApiDocument = {
             content: { 'application/json': { schema: meOrderAccessResponseSchema } },
           },
           '401': { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/v1/billing/invoices': {
+      get: {
+        operationId: 'listBillingInvoices',
+        summary: 'List invoices with derived paid/balance metrics (ADMIN or BILLING)',
+        responses: {
+          '200': {
+            description: 'List of invoices',
+            content: {
+              'application/json': {
+                schema: { type: 'object', properties: { data: { type: 'array', items: invoiceSchema } } },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+        },
+      },
+      post: {
+        operationId: 'createBillingInvoice',
+        summary: 'Create an invoice (ADMIN or BILLING)',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: createInvoiceSchema } },
+        },
+        responses: {
+          '201': {
+            description: 'Created invoice detail',
+            content: { 'application/json': { schema: invoiceDetailSchema } },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+          '404': { description: 'Client not found' },
+          '409': { description: 'Invoice folio already exists' },
+        },
+      },
+    },
+    '/api/v1/billing/invoices/{id}': {
+      get: {
+        operationId: 'getBillingInvoice',
+        summary: 'Get invoice detail with payment history (ADMIN or BILLING)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: {
+          '200': {
+            description: 'Invoice detail',
+            content: { 'application/json': { schema: invoiceDetailSchema } },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+          '404': { description: 'Invoice not found' },
+        },
+      },
+      patch: {
+        operationId: 'updateBillingInvoice',
+        summary: 'Update invoice metadata (ADMIN or BILLING)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: updateInvoiceSchema } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated invoice detail',
+            content: { 'application/json': { schema: invoiceDetailSchema } },
+          },
+          '400': { description: 'Validation error or total below paid amount' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+          '404': { description: 'Invoice or client not found' },
+          '409': { description: 'Invoice folio already exists' },
+        },
+      },
+      delete: {
+        operationId: 'deleteBillingInvoice',
+        summary: 'Soft delete an invoice (ADMIN or BILLING)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: {
+          '200': { description: 'Invoice deleted' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+          '404': { description: 'Invoice not found' },
+        },
+      },
+    },
+    '/api/v1/billing/invoices/{id}/payments': {
+      post: {
+        operationId: 'recordBillingInvoicePayment',
+        summary: 'Record a partial or full payment against an invoice (ADMIN or BILLING)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: recordInvoicePaymentSchema } },
+        },
+        responses: {
+          '201': {
+            description: 'Updated invoice detail with payment history',
+            content: { 'application/json': { schema: invoiceDetailSchema } },
+          },
+          '400': { description: 'Validation error or overpayment' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+          '404': { description: 'Invoice not found' },
+          '409': { description: 'Invoice already paid' },
+        },
+      },
+    },
+    '/api/v1/billing/invoices/{id}/payments/{paymentId}': {
+      delete: {
+        operationId: 'deleteBillingInvoicePayment',
+        summary: 'Delete a recorded payment and recalculate invoice status (ADMIN or BILLING)',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'paymentId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Updated invoice detail after removing payment',
+            content: { 'application/json': { schema: invoiceDetailSchema } },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+          '404': { description: 'Invoice or payment not found' },
+        },
+      },
+    },
+    '/api/v1/billing/clients': {
+      get: {
+        operationId: 'listBillingClients',
+        summary: 'List client billing accounts with total debt and active unpaid invoice count (ADMIN or BILLING)',
+        responses: {
+          '200': {
+            description: 'List of client billing accounts',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: { type: 'array', items: billingClientAccountSchema } },
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+        },
+      },
+    },
+    '/api/v1/billing/clients/{id}': {
+      patch: {
+        operationId: 'updateBillingClient',
+        summary: 'Update client billing account fields and status (ADMIN or BILLING)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: updateBillingClientAccountSchema } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated client billing account',
+            content: { 'application/json': { schema: billingClientAccountSchema } },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires billing:manage' },
+          '404': { description: 'Client not found' },
         },
       },
     },
