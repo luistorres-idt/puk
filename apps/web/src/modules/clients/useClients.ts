@@ -1,5 +1,10 @@
 import { computed, ref } from 'vue';
-import { CreateClientSchema, SaveClientEmailSchema, type Client } from '@puk/contracts';
+import {
+  CreateClientSchema,
+  SaveClientEmailSchema,
+  type Client,
+  type UpdateClient,
+} from '@puk/contracts';
 import { safeParse } from 'valibot';
 import { extractApiErrorMessage } from '@/shared/http/client.js';
 import * as clientApi from './api.js';
@@ -60,6 +65,9 @@ export function useClients() {
   function rename(id: string, name: string): Promise<boolean> {
     return save(async () => storeClient(await clientApi.updateClient(id, { name })));
   }
+  function updateDetails(id: string, input: UpdateClient): Promise<boolean> {
+    return save(async () => storeClient(await clientApi.updateClient(id, input)));
+  }
   function saveEmail(id: string, email: string, emailId?: string): Promise<boolean> {
     if (!safeParse(SaveClientEmailSchema, { email }).success) {
       formError.value = 'Ingresa un correo con formato válido.';
@@ -91,6 +99,7 @@ export function useClients() {
     load,
     register,
     rename,
+    updateDetails,
     saveEmail,
     removeEmail,
   };

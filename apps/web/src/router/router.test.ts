@@ -118,5 +118,49 @@ describe('router navigation guards', () => {
 
     await router.push('/admin/clients');
     expect(router.currentRoute.value.name).toBe('home');
+
+    await router.push('/billing');
+    expect(router.currentRoute.value.name).toBe('home');
+  });
+
+  it('restricts BILLING role exclusively to /billing and allows ADMIN to access /billing', async () => {
+    const session = useSessionStore();
+    session.acceptSession('test-token', {
+      id: '00000000-0000-4000-8000-000000000004',
+      name: 'Billing User',
+      email: 'billing@example.com',
+      role: 'BILLING',
+      orderAccessMode: 'INDIVIDUAL',
+      active: true,
+      technicianId: null,
+    });
+
+    await router.push('/login');
+    expect(router.currentRoute.value.name).toBe('billing');
+
+    await router.push('/');
+    expect(router.currentRoute.value.name).toBe('billing');
+
+    await router.push('/orders');
+    expect(router.currentRoute.value.name).toBe('billing');
+
+    await router.push('/admin/clients');
+    expect(router.currentRoute.value.name).toBe('billing');
+
+    await router.push('/billing');
+    expect(router.currentRoute.value.name).toBe('billing');
+
+    session.acceptSession('test-token', {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'Admin User',
+      email: 'admin@example.com',
+      role: 'ADMIN',
+      orderAccessMode: 'INDIVIDUAL',
+      active: true,
+      technicianId: null,
+    });
+
+    await router.push('/billing');
+    expect(router.currentRoute.value.name).toBe('billing');
   });
 });

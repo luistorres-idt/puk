@@ -8,6 +8,7 @@ import { technicianRoutes } from '@/modules/technicians';
 import { syncRoutes } from '@/modules/sync';
 import { inventoryRoutes } from '@/modules/inventory';
 import { clientRoutes } from '@/modules/clients';
+import { billingRoutes } from '@/modules/billing';
 import { adminUserRoutes } from '@/modules/admin-users';
 import { useSessionStore } from '@/stores/session';
 import { resolveSessionAccessRedirect } from './session-access';
@@ -20,6 +21,7 @@ export const router = createRouter({
     ...technicianRoutes,
     ...adminUserRoutes,
     ...clientRoutes,
+    ...billingRoutes,
     ...inventoryRoutes,
     ...syncRoutes,
     ...orderRoutes,

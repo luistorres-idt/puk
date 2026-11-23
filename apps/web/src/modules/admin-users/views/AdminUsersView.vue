@@ -4,10 +4,12 @@ import type { AdminUserListItem } from '@puk/contracts';
 import {
   NAlert,
   NButton,
+  NCard,
   NEmpty,
   NInput,
   NModal,
   NPopconfirm,
+  NSelect,
   NSpin,
   NTable,
   NTag,
@@ -15,7 +17,12 @@ import {
 } from 'naive-ui';
 import AppLayout from '@/shared/layouts/AppLayout.vue';
 import { useSessionStore } from '@/stores/session';
-import { createAdmin as createAdminUser, listAdmins, updateAdmin } from '../api.js';
+import {
+  createStaffUser,
+  listStaffUsers,
+  updateAdmin,
+  type StaffRole,
+} from '../api.js';
 
 const session = useSessionStore();
 const message = useMessage();
@@ -31,20 +38,30 @@ const formError = ref<string | null>(null);
 const target = ref<AdminUserListItem | null>(null);
 const name = ref('');
 const email = ref('');
+const role = ref<StaffRole>('ADMIN');
 const password = ref('');
 const newPassword = ref('');
 
-const admins = computed(() => users.value.filter((user) => user.role === 'ADMIN'));
-const filteredAdmins = computed(() => {
+const roleOptions = [
+  { label: 'Administrador', value: 'ADMIN' },
+  { label: 'Facturación', value: 'BILLING' },
+];
+
+const staffUsers = computed(() =>
+  users.value.filter((user) => user.role === 'ADMIN' || user.role === 'BILLING'),
+);
+const filteredUsers = computed(() => {
   const query = search.value.trim().toLowerCase();
   return query
-    ? admins.value.filter(
+    ? staffUsers.value.filter(
         (user) =>
           user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query),
       )
-    : admins.value;
+    : staffUsers.value;
 });
-const activeAdminCount = computed(() => admins.value.filter((user) => user.active).length);
+const activeAdminCount = computed(
+  () => staffUsers.value.filter((user) => user.role === 'ADMIN' && user.active).length,
+);
 
 watch(showCreate, (open) => {
   if (!open) password.value = '';
@@ -57,9 +74,9 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    users.value = await listAdmins();
+    users.value = await listStaffUsers();
   } catch {
-    error.value = 'No se pudieron cargar las cuentas administradoras.';
+    error.value = 'No se pudieron cargar las cuentas de usuarios.';
   } finally {
     loading.value = false;
   }
@@ -68,17 +85,21 @@ async function load(): Promise<void> {
 function openCreate(): void {
   name.value = '';
   email.value = '';
+  role.value = 'ADMIN';
   password.value = '';
   formError.value = null;
   showCreate.value = true;
 }
+
 function openEdit(user: AdminUserListItem): void {
   target.value = user;
   name.value = user.name;
   email.value = user.email;
+  role.value = user.role === 'BILLING' ? 'BILLING' : 'ADMIN';
   formError.value = null;
   showEdit.value = true;
 }
+
 function openPassword(user: AdminUserListItem): void {
   target.value = user;
   newPassword.value = '';
@@ -86,17 +107,22 @@ function openPassword(user: AdminUserListItem): void {
   showPassword.value = true;
 }
 
-async function createAdmin(): Promise<void> {
+async function createAccount(): Promise<void> {
   saving.value = true;
   formError.value = null;
   try {
-    await createAdminUser({
+    await createStaffUser({
       name: name.value,
       email: email.value,
       password: password.value,
+      role: role.value,
     });
     showCreate.value = false;
-    message.success('Cuenta administradora creada.');
+    message.success(
+      role.value === 'BILLING'
+        ? 'Cuenta de facturación creada.'
+        : 'Cuenta administradora creada.',
+    );
     await load();
   } catch (err) {
     formError.value = apiMessage(err, 'No se pudo crear la cuenta.');
@@ -110,7 +136,11 @@ async function saveProfile(): Promise<void> {
   saving.value = true;
   formError.value = null;
   try {
-    await updateAdmin(target.value.id, { name: name.value, email: email.value });
+    await updateAdmin(target.value.id, {
+      name: name.value,
+      email: email.value,
+      role: role.value,
+    });
     showEdit.value = false;
     message.success('Cuenta actualizada.');
     await load();
@@ -161,32 +191,36 @@ onMounted(() => {
     <section data-tour-page="users" class="space-y-5">
       <header class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 class="text-2xl font-bold text-slate-900">Administradores</h1>
-          <p class="mt-1 text-sm text-slate-600">Gestioná las cuentas con acceso administrativo.</p>
+          <h1 class="text-2xl font-bold text-slate-900">Usuarios y perfiles</h1>
+          <p class="mt-1 text-sm text-slate-600">
+            Gestiona las cuentas con perfil de Administrador y Facturación.
+          </p>
         </div>
         <div class="flex gap-2">
           <n-button secondary size="small" :loading="loading" @click="load">Actualizar</n-button>
-          <n-button data-tour="users-create" type="primary" size="small" @click="openCreate">Nuevo administrador</n-button>
+          <n-button data-tour="users-create" type="primary" size="small" @click="openCreate">
+            Nuevo usuario
+          </n-button>
         </div>
       </header>
 
       <n-alert v-if="error" type="error" role="alert">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <span>{{ error }}</span
-          ><n-button size="small" @click="load">Reintentar</n-button>
+          <span>{{ error }}</span>
+          <n-button size="small" @click="load">Reintentar</n-button>
         </div>
       </n-alert>
 
       <n-card data-tour="users-list" class="shadow-sm">
         <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <h2 class="font-semibold">Cuentas administradoras ({{ filteredAdmins.length }})</h2>
+          <h2 class="font-semibold">Cuentas registradas ({{ filteredUsers.length }})</h2>
           <n-input
             v-model:value="search"
             clearable
             size="small"
             class="w-full sm:max-w-xs"
             placeholder="Buscar por nombre o correo"
-            aria-label="Buscar administradores"
+            aria-label="Buscar usuarios"
           />
         </div>
         <div
@@ -197,32 +231,42 @@ onMounted(() => {
           <n-spin />
         </div>
         <n-empty
-          v-else-if="!error && filteredAdmins.length === 0"
-          description="No hay administradores para mostrar"
+          v-else-if="!error && filteredUsers.length === 0"
+          description="No hay usuarios para mostrar"
         />
-        <div v-else-if="filteredAdmins.length" class="overflow-x-auto">
+        <div v-else-if="filteredUsers.length" class="overflow-x-auto">
           <n-table :bordered="false" :single-line="false" size="small">
             <thead>
               <tr>
                 <th>Nombre</th>
                 <th>Correo</th>
+                <th>Perfil</th>
                 <th>Estado</th>
                 <th class="text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="user in filteredAdmins" :key="user.id">
+              <tr v-for="user in filteredUsers" :key="user.id">
                 <td class="font-medium">
-                  {{ user.name
-                  }}<span v-if="user.id === session.user?.id" class="ml-2 text-xs text-slate-500"
-                    >Tu cuenta</span
-                  >
+                  {{ user.name }}
+                  <span v-if="user.id === session.user?.id" class="ml-2 text-xs text-slate-500">
+                    Tu cuenta
+                  </span>
                 </td>
                 <td class="break-all">{{ user.email }}</td>
                 <td>
-                  <n-tag size="small" round :type="user.active ? 'success' : 'error'">{{
-                    user.active ? 'Activo' : 'Inactivo'
-                  }}</n-tag>
+                  <n-tag
+                    size="small"
+                    round
+                    :type="user.role === 'ADMIN' ? 'primary' : 'warning'"
+                  >
+                    {{ user.role === 'ADMIN' ? 'Administrador' : 'Facturación' }}
+                  </n-tag>
+                </td>
+                <td>
+                  <n-tag size="small" round :type="user.active ? 'success' : 'error'">
+                    {{ user.active ? 'Activo' : 'Inactivo' }}
+                  </n-tag>
                 </td>
                 <td>
                   <div class="flex flex-wrap justify-end gap-2">
@@ -231,33 +275,37 @@ onMounted(() => {
                       secondary
                       :aria-label="`Editar ${user.name}`"
                       @click="openEdit(user)"
-                      >Editar</n-button
                     >
+                      Editar
+                    </n-button>
                     <n-button
                       size="tiny"
                       secondary
                       :aria-label="`Cambiar contraseña de ${user.name}`"
                       @click="openPassword(user)"
-                      >Contraseña</n-button
                     >
+                      Contraseña
+                    </n-button>
                     <n-popconfirm
                       :positive-text="user.active ? 'Desactivar' : 'Activar'"
                       negative-text="Cancelar"
                       @positive-click="toggleActive(user)"
                     >
-                      <template #trigger
-                        ><n-button
+                      <template #trigger>
+                        <n-button
                           size="tiny"
                           secondary
                           :type="user.active ? 'error' : 'success'"
                           :disabled="
-                            user.id === session.user?.id || (user.active && activeAdminCount <= 1)
+                            user.id === session.user?.id ||
+                            (user.role === 'ADMIN' && user.active && activeAdminCount <= 1)
                           "
                           :aria-label="`${user.active ? 'Desactivar' : 'Activar'} ${user.name}`"
-                          >{{ user.active ? 'Desactivar' : 'Activar' }}</n-button
-                        ></template
-                      >
-                      ¿Querés {{ user.active ? 'desactivar' : 'activar' }} la cuenta de
+                        >
+                          {{ user.active ? 'Desactivar' : 'Activar' }}
+                        </n-button>
+                      </template>
+                      ¿Seguro que deseas {{ user.active ? 'desactivar' : 'activar' }} la cuenta de
                       {{ user.name }}?
                     </n-popconfirm>
                   </div>
@@ -271,63 +319,85 @@ onMounted(() => {
       <n-modal
         v-model:show="showCreate"
         preset="card"
-        title="Nuevo administrador"
+        title="Nuevo usuario"
         class="w-[92vw] max-w-md"
       >
         <div class="space-y-4">
           <n-alert v-if="formError" type="error">{{ formError }}</n-alert>
-          <label class="block text-sm"
-            >Nombre<n-input v-model:value="name" autocomplete="name"
-          /></label>
-          <label class="block text-sm"
-            >Correo<n-input v-model:value="email" type="text" autocomplete="email"
-          /></label>
-          <label class="block text-sm"
-            >Contraseña inicial<n-input
+          <label class="block text-sm">
+            Nombre
+            <n-input v-model:value="name" autocomplete="name" />
+          </label>
+          <label class="block text-sm">
+            Correo
+            <n-input v-model:value="email" type="text" autocomplete="email" />
+          </label>
+          <label class="block text-sm">
+            Perfil
+            <n-select v-model:value="role" :options="roleOptions" />
+          </label>
+          <label class="block text-sm">
+            Contraseña inicial
+            <n-input
               v-model:value="password"
               type="password"
               show-password-on="click"
               autocomplete="new-password"
-            /><span class="text-xs text-slate-500">Mínimo 12 caracteres.</span></label
-          >
+            />
+            <span class="text-xs text-slate-500">Mínimo 12 caracteres.</span>
+          </label>
           <div class="flex justify-end gap-2">
-            <n-button :disabled="saving" @click="showCreate = false">Cancelar</n-button
-            ><n-button
+            <n-button :disabled="saving" @click="showCreate = false">Cancelar</n-button>
+            <n-button
               type="primary"
               :loading="saving"
               :disabled="!name.trim() || !email.trim() || !password"
-              @click="createAdmin"
-              >Crear cuenta</n-button
+              @click="createAccount"
             >
+              Crear cuenta
+            </n-button>
           </div>
         </div>
       </n-modal>
+
       <n-modal
         v-model:show="showEdit"
         preset="card"
-        title="Editar administrador"
+        title="Editar usuario"
         class="w-[92vw] max-w-md"
       >
         <div class="space-y-4">
           <n-alert v-if="formError" type="error">{{ formError }}</n-alert>
-          <label class="block text-sm"
-            >Nombre<n-input v-model:value="name" autocomplete="name"
-          /></label>
-          <label class="block text-sm"
-            >Correo<n-input v-model:value="email" type="text" autocomplete="email"
-          /></label>
+          <label class="block text-sm">
+            Nombre
+            <n-input v-model:value="name" autocomplete="name" />
+          </label>
+          <label class="block text-sm">
+            Correo
+            <n-input v-model:value="email" type="text" autocomplete="email" />
+          </label>
+          <label class="block text-sm">
+            Perfil
+            <n-select
+              v-model:value="role"
+              :options="roleOptions"
+              :disabled="target?.id === session.user?.id"
+            />
+          </label>
           <div class="flex justify-end gap-2">
-            <n-button :disabled="saving" @click="showEdit = false">Cancelar</n-button
-            ><n-button
+            <n-button :disabled="saving" @click="showEdit = false">Cancelar</n-button>
+            <n-button
               type="primary"
               :loading="saving"
               :disabled="!name.trim() || !email.trim()"
               @click="saveProfile"
-              >Guardar</n-button
             >
+              Guardar
+            </n-button>
           </div>
         </div>
       </n-modal>
+
       <n-modal
         v-model:show="showPassword"
         preset="card"
@@ -339,23 +409,26 @@ onMounted(() => {
             La contraseña nueva no se vuelve a mostrar después de guardarla.
           </p>
           <n-alert v-if="formError" type="error">{{ formError }}</n-alert>
-          <label class="block text-sm"
-            >Nueva contraseña<n-input
+          <label class="block text-sm">
+            Nueva contraseña
+            <n-input
               v-model:value="newPassword"
               type="password"
               show-password-on="click"
               autocomplete="new-password"
-            /><span class="text-xs text-slate-500">Mínimo 12 caracteres.</span></label
-          >
+            />
+            <span class="text-xs text-slate-500">Mínimo 12 caracteres.</span>
+          </label>
           <div class="flex justify-end gap-2">
-            <n-button :disabled="saving" @click="showPassword = false">Cancelar</n-button
-            ><n-button
+            <n-button :disabled="saving" @click="showPassword = false">Cancelar</n-button>
+            <n-button
               type="primary"
               :loading="saving"
               :disabled="newPassword.length < 12"
               @click="savePassword"
-              >Guardar contraseña</n-button
             >
+              Guardar contraseña
+            </n-button>
           </div>
         </div>
       </n-modal>

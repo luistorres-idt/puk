@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/shared/http/client.js';
-import { createAdmin, listAdmins } from './api.js';
+import { createAdmin, createStaffUser, listAdmins, listStaffUsers } from './api.js';
 
 vi.mock('@/shared/http/client.js', () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
@@ -39,6 +39,40 @@ describe('admin users API', () => {
       email: 'admin@example.com',
       password: 'a-secure-password',
       role: 'ADMIN',
+    });
+  });
+
+  it('lists both ADMIN and BILLING users and creates BILLING users', async () => {
+    const billingUser = {
+      ...admin,
+      id: '00000000-0000-4000-8000-000000000003',
+      role: 'BILLING' as const,
+    };
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        data: [
+          admin,
+          billingUser,
+          { ...admin, id: '00000000-0000-4000-8000-000000000002', role: 'TECHNICIAN' },
+        ],
+      },
+    } as never);
+
+    await expect(listStaffUsers()).resolves.toEqual([admin, billingUser]);
+
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { data: billingUser } } as never);
+    await createStaffUser({
+      name: 'Billing',
+      email: 'billing@example.com',
+      password: 'a-secure-password',
+      role: 'BILLING',
+    });
+
+    expect(api.post).toHaveBeenCalledWith('/users', {
+      name: 'Billing',
+      email: 'billing@example.com',
+      password: 'a-secure-password',
+      role: 'BILLING',
     });
   });
 });
