@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
+import type { Role } from '../../auth/capabilities.js';
 import { assertPasswordPolicy, hashPassword } from '../../auth/password.js';
 import { AppError } from '../../shared/errors.js';
 
@@ -29,7 +30,7 @@ export class UsersService {
       email: string;
       name: string;
       password: string;
-      role: 'ADMIN' | 'TECHNICIAN';
+      role: Role;
       technicianId?: string | null;
     },
   ) {
@@ -67,7 +68,7 @@ export class UsersService {
       email: string;
       name: string;
       password: string;
-      role: 'ADMIN' | 'TECHNICIAN';
+      role: Role;
       technicianId: string | null;
     }>,
   ) {
@@ -83,7 +84,7 @@ export class UsersService {
         const isRemovingAdminAccess =
           existing.role === 'ADMIN' &&
           existing.active &&
-          (input.active === false || input.role === 'TECHNICIAN');
+          (input.active === false || (input.role !== undefined && input.role !== 'ADMIN'));
         if (isRemovingAdminAccess && actorUserId === id) {
           throw new AppError(
             400,

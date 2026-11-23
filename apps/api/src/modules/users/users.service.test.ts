@@ -95,4 +95,35 @@ describe('UsersService', () => {
     expect(transaction.user.count).not.toHaveBeenCalled();
     expect(transaction.user.update).not.toHaveBeenCalled();
   });
+
+  it('prevents demoting the last active administrator to BILLING', async () => {
+    const admin = {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      name: 'Admin',
+      role: 'ADMIN' as const,
+      technicianId: null,
+      active: true,
+    };
+    const transaction = {
+      user: { count: vi.fn().mockResolvedValue(1), update: vi.fn() },
+      refreshSession: { updateMany: vi.fn() },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(admin) },
+      $transaction: vi.fn(async (work: (tx: typeof transaction) => Promise<unknown>) =>
+        work(transaction),
+      ),
+    };
+    const service = new UsersService(prisma as unknown as PrismaClient, 12);
+
+    await expect(
+      service.update('other-admin', 'admin-1', { role: 'BILLING' }),
+    ).rejects.toMatchObject({
+      code: 'LAST_ACTIVE_ADMIN',
+      status: 400,
+    });
+    expect(transaction.user.update).not.toHaveBeenCalled();
+  });
 });

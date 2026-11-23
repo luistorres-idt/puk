@@ -24,6 +24,7 @@ export {
   type LoginRequest,
   type OrderAccessMode,
   type SessionUser,
+  type UserRole,
 } from './auth.js';
 export { HealthResponseSchema, type HealthResponse } from './health.js';
 export {
@@ -176,18 +177,52 @@ export {
 } from './inventory.js';
 
 export {
+  ClientAccountStatusSchema,
+  CLIENT_ACCOUNT_STATUS_LABELS,
   CreateClientSchema,
   UpdateClientSchema,
   SaveClientEmailSchema,
   ClientEmailParamsSchema,
   ClientEmailSchema,
   ClientSchema,
+  type ClientAccountStatus,
   type CreateClient,
   type UpdateClient,
   type SaveClientEmail,
   type ClientEmail,
   type Client,
 } from './clients.js';
+
+export {
+  DEFAULT_INVOICE_DUE_DAYS,
+  InvoiceTypeSchema,
+  InvoicePaymentStatusSchema,
+  INVOICE_TYPE_LABELS,
+  INVOICE_PAYMENT_STATUS_LABELS,
+  CreateInvoiceSchema,
+  UpdateInvoiceSchema,
+  RecordInvoicePaymentSchema,
+  InvoicePaymentParamsSchema,
+  InvoiceListQuerySchema,
+  UpdateBillingClientAccountSchema,
+  InvoicePaymentSchema,
+  InvoiceClientSummarySchema,
+  InvoiceSchema,
+  InvoiceDetailSchema,
+  BillingClientAccountSchema,
+  type InvoiceType,
+  type InvoicePaymentStatus,
+  type CreateInvoice,
+  type UpdateInvoice,
+  type RecordInvoicePayment,
+  type InvoiceListQuery,
+  type UpdateBillingClientAccount,
+  type InvoicePayment,
+  type InvoiceClientSummary,
+  type Invoice,
+  type InvoiceDetail,
+  type BillingClientAccount,
+} from './billing.js';
 
 export {
   SendReportEmailSchema,

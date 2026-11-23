@@ -12,6 +12,12 @@ const client = {
   id: 'client-1',
   clientSheetId: 'C1',
   name: 'Client',
+  legalName: null,
+  platformClient: null,
+  contactPhone: null,
+  accountStatus: 'ACTIVE' as const,
+  suspendedAt: null,
+  paymentPromiseDate: null,
   emails: [{ id: 'email-1', email: 'one@example.invalid' }],
 };
 const success: ReportEmailResult = {

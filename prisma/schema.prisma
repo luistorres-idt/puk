@@ -10,6 +10,24 @@ datasource db {
 enum UserRole {
   ADMIN
   TECHNICIAN
+  BILLING
+}
+
+enum ClientAccountStatus {
+  ACTIVE
+  SUSPENDED
+  PAYMENT_PROMISE
+  PAYMENT_IN_PROGRESS
+}
+
+enum InvoiceType {
+  MONTHLY
+  TECHNICAL_SERVICE
+}
+
+enum InvoicePaymentStatus {
+  UNPAID
+  PAID
 }
 
 enum OrderServiceType {
@@ -117,6 +135,8 @@ model User {
   auditLogs                  AuditLog[]              @relation("AuditActor")
   resolvedFailedAppointments Order[]                 @relation("FailedAppointmentResolver")
   sharedTechnicianAccess     SharedTechnicianAccess?
+  createdInvoices            Invoice[]               @relation("InvoiceCreator")
+  recordedInvoicePayments    InvoicePayment[]        @relation("InvoicePaymentRecorder")
 
   @@index([role, active])
 }
@@ -525,14 +545,22 @@ model TechnicalReportSyncSchedule {
 }
 
 model Client {
-  id            String        @id @default(uuid()) @db.Uuid
-  clientSheetId String        @unique
-  name          String
-  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
-  emails        ClientEmail[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  clientSheetId      String              @unique
+  name               String
+  legalName          String?
+  platformClient     String?
+  contactPhone       String?
+  accountStatus      ClientAccountStatus @default(ACTIVE)
+  suspendedAt        DateTime?           @db.Timestamptz(3)
+  paymentPromiseDate DateTime?           @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  emails             ClientEmail[]
+  invoices           Invoice[]
 
   @@index([name])
+  @@index([accountStatus])
 }
 
 model ClientEmail {
@@ -544,4 +572,46 @@ model ClientEmail {
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, email])
+}
+
+model Invoice {
+  id            String               @id @default(uuid()) @db.Uuid
+  folio         String               @unique
+  clientId      String               @db.Uuid
+  invoiceType   InvoiceType?
+  paymentStatus InvoicePaymentStatus @default(UNPAID)
+  totalAmount   Decimal              @db.Decimal(12, 2)
+  currency      String               @default("MXN")
+  issuedAt      DateTime             @db.Timestamptz(3)
+  dueAt         DateTime             @db.Timestamptz(3)
+  paidAt        DateTime?            @db.Timestamptz(3)
+  notes         String?
+  createdById   String               @db.Uuid
+  deletedAt     DateTime?            @db.Timestamptz(3)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime             @updatedAt @db.Timestamptz(3)
+  client        Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy     User                 @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  payments      InvoicePayment[]
+
+  @@index([clientId, paymentStatus, deletedAt])
+  @@index([paymentStatus, dueAt])
+  @@index([issuedAt])
+  @@index([deletedAt])
+}
+
+model InvoicePayment {
+  id           String   @id @default(uuid()) @db.Uuid
+  invoiceId    String   @db.Uuid
+  amount       Decimal  @db.Decimal(12, 2)
+  paidAt       DateTime @db.Timestamptz(3)
+  reference    String?
+  notes        String?
+  recordedById String   @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy   User     @relation("InvoicePaymentRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, paidAt])
+  @@index([recordedById])
 }

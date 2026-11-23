@@ -10,7 +10,18 @@ import type { ClientsService } from './clients.service.js';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const emailId = '00000000-0000-4000-8000-000000000002';
-const client = { id, clientSheetId: 'C1', name: 'Client', emails: [] };
+const client = {
+  id,
+  clientSheetId: 'C1',
+  name: 'Client',
+  legalName: null,
+  platformClient: null,
+  contactPhone: null,
+  accountStatus: 'ACTIVE' as const,
+  suspendedAt: null,
+  paymentPromiseDate: null,
+  emails: [],
+};
 const service = {
   list: vi.fn(),
   get: vi.fn(),
@@ -20,7 +31,7 @@ const service = {
   updateEmail: vi.fn(),
   removeEmail: vi.fn(),
 };
-function app(role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
+function app(role: 'ADMIN' | 'TECHNICIAN' | 'BILLING' = 'ADMIN') {
   const application = express();
   application.use(express.json());
   const tokens = {
