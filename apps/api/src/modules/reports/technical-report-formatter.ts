@@ -20,6 +20,7 @@ export interface ReportOrderSource {
   readonly pricingBaseCost?: { toFixed(digits: number): string } | number | string | null;
   readonly pricingTravelExpenses?: { toFixed(digits: number): string } | number | string | null;
   readonly pricingTotal?: { toFixed(digits: number): string } | number | string | null;
+  readonly dhlShippingCost?: { toFixed(digits: number): string } | number | string | null;
   readonly pricingBreakdown?:
     | PricingBreakdown
     | {

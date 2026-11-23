@@ -1,5 +1,6 @@
 import { ClientsService } from './modules/clients/index.js';
 import { BillingService } from './modules/billing/index.js';
+import { TechnicalReportsService } from './modules/technical-reports/index.js';
 import { HybridEquipmentCatalog, InventoryService } from './modules/inventory/index.js';
 import { createApp } from './app.js';
 import { TokenService } from './auth/tokens.js';
@@ -198,6 +199,7 @@ const server = createApp({
   catalogsService,
   clientsService: new ClientsService(prisma, sheetsCatalogService),
   billingService: new BillingService(prisma),
+  technicalReportsService: new TechnicalReportsService(prisma, technicalReportSyncSchedule),
   inventoryService,
   ordersService,
   orderPricingService,

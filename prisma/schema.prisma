@@ -189,6 +189,7 @@ model Order {
   pricingDepartureCost              Decimal?                     @db.Decimal(10, 2)
   pricingTravelExpenses             Decimal?                     @db.Decimal(10, 2)
   pricingTotal                      Decimal?                     @db.Decimal(10, 2)
+  dhlShippingCost                   Decimal?                     @db.Decimal(10, 2)
   pricingCurrency                   String?                      @default("MXN")
   pricingSnapshotAt                 DateTime?                    @db.Timestamptz(3)
   pricingVersion                    Int?                         @default(1)
