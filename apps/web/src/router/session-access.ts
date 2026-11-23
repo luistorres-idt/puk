@@ -34,7 +34,7 @@ export function resolveSessionAccessRedirect(
   }
 
   if (user.role === 'BILLING') {
-    if (route.name !== 'billing') {
+    if (route.name !== 'billing' && route.name !== 'technical-reports') {
       return { name: 'billing' };
     }
     return undefined;

@@ -233,4 +233,25 @@ export {
   type ReportEmailResult,
 } from './report-email.js';
 
+export {
+  TechnicalReportQuerySchema,
+  TechnicalReportExportQuerySchema,
+  UpdateOrderDhlShippingSchema,
+  TechnicalReportUnitSchema,
+  TechnicalReportOrderSchema,
+  TechnicalReportTechnicianGroupSchema,
+  TechnicalReportSummarySchema,
+  TechnicalReportWindowSchema,
+  TechnicalReportResponseSchema,
+  type TechnicalReportQuery,
+  type TechnicalReportExportQuery,
+  type UpdateOrderDhlShipping,
+  type TechnicalReportUnit,
+  type TechnicalReportOrder,
+  type TechnicalReportTechnicianGroup,
+  type TechnicalReportSummary,
+  type TechnicalReportWindow,
+  type TechnicalReportResponse,
+} from './technical-reports.js';
+
 export { parseOrderQueryDate } from './order-query-validation.js';

@@ -18,6 +18,7 @@ export interface TechnicianReportRow {
   readonly servicio: string;
   readonly costo: string | number;
   readonly viaticos: number;
+  readonly envioDhl?: number;
   readonly total: number;
   readonly notas: string;
 }
@@ -26,15 +27,30 @@ export interface ConsolidatedReportRow extends TechnicianReportRow {
   readonly tecnico: string;
 }
 
+export interface ExcelReportOptions {
+  readonly includeDhl?: boolean;
+}
+
+function parseOptionalAmount(
+  value?: { toFixed(digits: number): string } | number | string | null,
+): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const numeric = typeof value === 'object' ? Number(value.toFixed(2)) : Number(value);
+  return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : 0;
+}
+
 function formatExcelRowBase(
   order: ReportOrderSource,
   timeZone: string,
+  includeDhl = false,
 ): { formatted: ReturnType<typeof formatTechnicalReportRow>; row: TechnicianReportRow } {
   const formatted = formatTechnicalReportRow(order, timeZone);
   const hasMultilineCost = formatted.costo.includes('\n');
   const costo = hasMultilineCost ? formatted.costo : Number(formatted.costo);
   const viaticos = Number(formatted.viaticos);
-  const total = Number(formatted.total);
+  const envioDhl = parseOptionalAmount(order.dhlShippingCost);
+  const baseTotal = Number(formatted.total);
+  const total = includeDhl ? Math.round((baseTotal + envioDhl) * 100) / 100 : baseTotal;
 
   return {
     formatted,
@@ -49,6 +65,7 @@ function formatExcelRowBase(
       servicio: formatted.servicio,
       costo,
       viaticos,
+      ...(includeDhl ? { envioDhl } : {}),
       total,
       notas: formatted.notas,
     },
@@ -58,16 +75,18 @@ function formatExcelRowBase(
 export function buildTechnicianReportRows(
   orders: ReadonlyArray<ReportOrderSource>,
   timeZone = 'America/Hermosillo',
+  options: ExcelReportOptions = {},
 ): TechnicianReportRow[] {
-  return orders.map((order) => formatExcelRowBase(order, timeZone).row);
+  return orders.map((order) => formatExcelRowBase(order, timeZone, options.includeDhl).row);
 }
 
 export function buildConsolidatedReportRows(
   orders: ReadonlyArray<ReportOrderSource>,
   timeZone = 'America/Hermosillo',
+  options: ExcelReportOptions = {},
 ): ConsolidatedReportRow[] {
   return orders.map((order) => {
-    const { formatted, row } = formatExcelRowBase(order, timeZone);
+    const { formatted, row } = formatExcelRowBase(order, timeZone, options.includeDhl);
     return {
       ...row,
       tecnico: formatted.tecnico || 'Técnico',
@@ -81,17 +100,22 @@ const BASE_HEAD_COLUMNS: Partial<ExcelJS.Column>[] = [
   { header: 'Fecha', key: 'fecha', width: 14 },
 ];
 
-const BASE_TAIL_COLUMNS: Partial<ExcelJS.Column>[] = [
-  { header: 'Cliente', key: 'cliente', width: 30 },
-  { header: 'Económico', key: 'economico', width: 18 },
-  { header: 'Serie', key: 'serie', width: 20 },
-  { header: 'IMEI / ID', key: 'imeiId', width: 22 },
-  { header: 'Servicio', key: 'servicio', width: 25 },
-  { header: 'Costo', key: 'costo', width: 16, style: { numFmt: '#,##0.00' } },
-  { header: 'Viáticos', key: 'viaticos', width: 14, style: { numFmt: '#,##0.00' } },
-  { header: 'Total', key: 'total', width: 14, style: { numFmt: '$#,##0.00' } },
-  { header: 'Notas', key: 'notas', width: 35 },
-];
+function buildTailColumns(includeDhl = false): Partial<ExcelJS.Column>[] {
+  return [
+    { header: 'Cliente', key: 'cliente', width: 30 },
+    { header: 'Económico', key: 'economico', width: 18 },
+    { header: 'Serie', key: 'serie', width: 20 },
+    { header: 'IMEI / ID', key: 'imeiId', width: 22 },
+    { header: 'Servicio', key: 'servicio', width: 25 },
+    { header: 'Costo', key: 'costo', width: 16, style: { numFmt: '#,##0.00' } },
+    { header: 'Viáticos', key: 'viaticos', width: 14, style: { numFmt: '#,##0.00' } },
+    ...(includeDhl
+      ? [{ header: 'Envío DHL', key: 'envioDhl', width: 14, style: { numFmt: '#,##0.00' } }]
+      : []),
+    { header: 'Total', key: 'total', width: 14, style: { numFmt: '$#,##0.00' } },
+    { header: 'Notas', key: 'notas', width: 35 },
+  ];
+}
 
 async function renderExcelReportWorkbook(
   sheetName: string,
@@ -138,6 +162,7 @@ export async function generateTechnicianExcelReport(
   technician: TechnicianSummary,
   orders: ReadonlyArray<ReportOrderSource>,
   timeZone = 'America/Hermosillo',
+  options: ExcelReportOptions = {},
 ): Promise<Uint8Array> {
   const rawSheetName = (technician.name || 'Técnico')
     .slice(0, 31)
@@ -147,18 +172,23 @@ export async function generateTechnicianExcelReport(
 
   return renderExcelReportWorkbook(
     sheetName,
-    [...BASE_HEAD_COLUMNS, ...BASE_TAIL_COLUMNS],
-    buildTechnicianReportRows(orders, timeZone),
+    [...BASE_HEAD_COLUMNS, ...buildTailColumns(options.includeDhl)],
+    buildTechnicianReportRows(orders, timeZone, options),
   );
 }
 
 export async function generateConsolidatedExcelReport(
   orders: ReadonlyArray<ReportOrderSource>,
   timeZone = 'America/Hermosillo',
+  options: ExcelReportOptions = {},
 ): Promise<Uint8Array> {
   return renderExcelReportWorkbook(
     'Servicios Consolidados',
-    [...BASE_HEAD_COLUMNS, { header: 'Técnico', key: 'tecnico', width: 25 }, ...BASE_TAIL_COLUMNS],
-    buildConsolidatedReportRows(orders, timeZone),
+    [
+      ...BASE_HEAD_COLUMNS,
+      { header: 'Técnico', key: 'tecnico', width: 25 },
+      ...buildTailColumns(options.includeDhl),
+    ],
+    buildConsolidatedReportRows(orders, timeZone, options),
   );
 }

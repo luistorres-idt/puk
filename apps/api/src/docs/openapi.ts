@@ -31,6 +31,9 @@ import {
   RecordInvoicePaymentSchema,
   BillingClientAccountSchema,
   UpdateBillingClientAccountSchema,
+  TechnicalReportResponseSchema,
+  TechnicalReportOrderSchema,
+  UpdateOrderDhlShippingSchema,
 } from '@puk/contracts';
 
 const schemaConfig = { errorMode: 'ignore' as const };
@@ -61,6 +64,9 @@ const updateBillingClientAccountSchema = toJsonSchema(
   UpdateBillingClientAccountSchema,
   schemaConfig,
 );
+const technicalReportResponseSchema = toJsonSchema(TechnicalReportResponseSchema, schemaConfig);
+const technicalReportOrderSchema = toJsonSchema(TechnicalReportOrderSchema, schemaConfig);
+const updateOrderDhlShippingSchema = toJsonSchema(UpdateOrderDhlShippingSchema, schemaConfig);
 const meOrderAccessResponseSchema = toJsonSchema(MeOrderAccessResponseSchema, schemaConfig);
 const orderAdministrationDetailSchema = toJsonSchema(OrderAdministrationDetailSchema, schemaConfig);
 const orderExecutionDetailSchema = toJsonSchema(OrderExecutionDetailSchema, schemaConfig);
@@ -848,6 +854,63 @@ export const openApiDocument = {
           '401': { description: 'Unauthorized' },
           '403': { description: 'Forbidden - requires billing:manage' },
           '404': { description: 'Client not found' },
+        },
+      },
+    },
+    '/api/v1/technical-reports': {
+      get: {
+        operationId: 'getTechnicalReport',
+        summary: 'Get weekly technical settlement report grouped by technician (ADMIN or BILLING)',
+        responses: {
+          '200': {
+            description: 'Weekly technical report data',
+            content: { 'application/json': { schema: technicalReportResponseSchema } },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires technical-reports:manage' },
+        },
+      },
+    },
+    '/api/v1/technical-reports/orders/{id}/dhl': {
+      patch: {
+        operationId: 'updateTechnicalReportOrderDhl',
+        summary: 'Update DHL shipping cost for a reportable order (ADMIN or BILLING)',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: updateOrderDhlShippingSchema } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated reportable order',
+            content: { 'application/json': { schema: technicalReportOrderSchema } },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires technical-reports:manage' },
+          '404': { description: 'Order not found' },
+          '409': { description: 'Order is not reportable' },
+        },
+      },
+    },
+    '/api/v1/technical-reports/export': {
+      get: {
+        operationId: 'exportTechnicalReportExcel',
+        summary: 'Download weekly consolidated or per-technician Excel report (ADMIN or BILLING)',
+        responses: {
+          '200': {
+            description: 'Excel workbook binary stream',
+            content: {
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+                schema: { type: 'string', format: 'binary' },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden - requires technical-reports:manage' },
+          '404': { description: 'Technician not found' },
         },
       },
     },
