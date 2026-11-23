@@ -861,7 +861,9 @@ onMounted(() => {
             <n-alert v-if="formError" type="error" class="mb-4">{{ formError }}</n-alert>
 
             <template v-if="selectedInvoice">
-              <div class="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center">
+              <div
+                class="mb-4 grid grid-cols-3 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-center"
+              >
                 <div>
                   <p class="text-[11px] text-slate-500">Total factura</p>
                   <p class="font-semibold">{{ formatMoney(selectedInvoice.totalAmount) }}</p>

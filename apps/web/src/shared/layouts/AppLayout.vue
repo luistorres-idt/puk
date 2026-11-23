@@ -136,6 +136,13 @@ async function logout(): Promise<void> {
               >
                 Facturación
               </router-link>
+              <router-link
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/technical-reports"
+              >
+                Reporte Técnico
+              </router-link>
             </template>
             <template v-else>
               <router-link
@@ -159,6 +166,13 @@ async function logout(): Promise<void> {
                   to="/billing"
                 >
                   Facturación
+                </router-link>
+                <router-link
+                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                  active-class="bg-blue-50 text-blue-900 font-semibold"
+                  to="/technical-reports"
+                >
+                  Reporte Técnico
                 </router-link>
                 <n-dropdown
                   trigger="click"
@@ -263,6 +277,14 @@ async function logout(): Promise<void> {
             >
               Facturación
             </router-link>
+            <router-link
+              class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+              active-class="bg-blue-50 text-blue-900 font-semibold"
+              to="/technical-reports"
+              @click="isMobileMenuOpen = false"
+            >
+              Reporte Técnico
+            </router-link>
           </template>
           <template v-else>
             <p class="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -292,6 +314,14 @@ async function logout(): Promise<void> {
                 @click="isMobileMenuOpen = false"
               >
                 Facturación
+              </router-link>
+              <router-link
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/technical-reports"
+                @click="isMobileMenuOpen = false"
+              >
+                Reporte Técnico
               </router-link>
               <p
                 class="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400"

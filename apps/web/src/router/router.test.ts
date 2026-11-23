@@ -121,9 +121,12 @@ describe('router navigation guards', () => {
 
     await router.push('/billing');
     expect(router.currentRoute.value.name).toBe('home');
+
+    await router.push('/technical-reports');
+    expect(router.currentRoute.value.name).toBe('home');
   });
 
-  it('restricts BILLING role exclusively to /billing and allows ADMIN to access /billing', async () => {
+  it('restricts BILLING role to /billing and /technical-reports and allows ADMIN access', async () => {
     const session = useSessionStore();
     session.acceptSession('test-token', {
       id: '00000000-0000-4000-8000-000000000004',
@@ -150,6 +153,9 @@ describe('router navigation guards', () => {
     await router.push('/billing');
     expect(router.currentRoute.value.name).toBe('billing');
 
+    await router.push('/technical-reports');
+    expect(router.currentRoute.value.name).toBe('technical-reports');
+
     session.acceptSession('test-token', {
       id: '00000000-0000-4000-8000-000000000001',
       name: 'Admin User',
@@ -162,5 +168,8 @@ describe('router navigation guards', () => {
 
     await router.push('/billing');
     expect(router.currentRoute.value.name).toBe('billing');
+
+    await router.push('/technical-reports');
+    expect(router.currentRoute.value.name).toBe('technical-reports');
   });
 });

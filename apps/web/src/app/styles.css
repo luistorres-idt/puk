@@ -67,9 +67,15 @@ select {
 /* Bridge existing utility colors to the same palette as Naive UI. */
 @layer utilities {
   :root[data-theme='dark'] .bg-slate-50,
+  :root[data-theme='dark'] .bg-slate-50\/70,
   :root[data-theme='dark'] .bg-slate-100,
+  :root[data-theme='dark'] .bg-slate-200\/70,
   :root[data-theme='dark'] .hover\:bg-slate-100:hover {
     background-color: #0f172a;
+  }
+
+  :root[data-theme='dark'] .hover\:bg-slate-50:hover {
+    background-color: #334155;
   }
 
   :root[data-theme='dark'] .bg-white,
@@ -86,6 +92,7 @@ select {
   }
 
   :root[data-theme='dark'] .text-slate-900,
+  :root[data-theme='dark'] .hover\:text-slate-900:hover,
   :root[data-theme='dark'] .text-slate-800 {
     color: #f1f5f9;
   }
@@ -107,10 +114,19 @@ select {
     border-color: #475569;
   }
 
+  :root[data-theme='dark'] .divide-slate-100 > :not(:last-child),
+  :root[data-theme='dark'] .divide-slate-200 > :not(:last-child) {
+    border-color: #334155;
+  }
+
   :root[data-theme='dark'] .bg-blue-50,
   :root[data-theme='dark'] .hover\:bg-blue-50:hover,
   :root[data-theme='dark'] .bg-blue-50\/20 {
     background-color: #172e50;
+  }
+
+  :root[data-theme='dark'] .hover\:bg-blue-50\/40:hover {
+    background-color: rgb(30 58 138 / 38%);
   }
 
   :root[data-theme='dark'] .bg-amber-50,
@@ -166,8 +182,10 @@ select {
 
   :root[data-theme='dark'] .text-red-500,
   :root[data-theme='dark'] .text-red-600,
-  :root[data-theme='dark'] .text-red-700 {
-    color: #fca5a5;
+  :root[data-theme='dark'] .text-red-700,
+  :root[data-theme='dark'] .text-rose-600,
+  :root[data-theme='dark'] .text-rose-700 {
+    color: #fda4af;
   }
 
   :root[data-theme='dark'] .border-blue-200 {
