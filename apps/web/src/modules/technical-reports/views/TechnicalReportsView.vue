@@ -173,7 +173,7 @@ onMounted(() => {
 
 <template>
   <app-layout>
-    <section class="mx-auto max-w-4xl space-y-5">
+    <section data-tour-page="technical-reports" class="mx-auto max-w-4xl space-y-5">
       <!-- Header & Week Navigation -->
       <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div class="min-w-0">
@@ -181,7 +181,10 @@ onMounted(() => {
           <p class="mt-0.5 text-sm text-slate-500">Corte semanal por técnico.</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
+        <div
+          data-tour="technical-reports-week"
+          class="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end"
+        >
           <div
             class="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-white p-1 shadow-xs"
           >
@@ -233,7 +236,7 @@ onMounted(() => {
       </n-alert>
 
       <!-- Clean Summary Strip -->
-      <n-card class="shadow-sm">
+      <n-card data-tour="technical-reports-summary" class="shadow-sm">
         <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -276,7 +279,10 @@ onMounted(() => {
       </n-card>
 
       <!-- Mode switch & search -->
-      <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div
+        data-tour="technical-reports-controls"
+        class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"
+      >
         <div class="inline-flex rounded-lg border border-slate-200 bg-slate-200/70 p-1">
           <button
             type="button"
@@ -314,7 +320,8 @@ onMounted(() => {
       </div>
 
       <!-- Main List -->
-      <n-spin :show="loading">
+      <div data-tour="technical-reports-list">
+        <n-spin :show="loading">
         <n-card
           v-if="!loading && (!report || report.summary.totalOrders === 0)"
           class="shadow-sm"
@@ -459,6 +466,7 @@ onMounted(() => {
           </button>
         </div>
       </n-spin>
+      </div>
 
       <!-- Overlay Detail Drawer -->
       <n-drawer v-model:show="showDrawer" :width="440" placement="right">

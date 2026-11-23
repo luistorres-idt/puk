@@ -15,6 +15,7 @@ const admin: SessionUser = {
   technicianId: null,
 };
 const technician: SessionUser = { ...admin, role: 'TECHNICIAN' };
+const billing: SessionUser = { ...admin, role: 'BILLING' };
 const shared: SessionUser = { ...technician, orderAccessMode: 'SHARED' };
 const context: TourContext = { page: 'orders', status: '', step: '' };
 
@@ -129,6 +130,36 @@ describe('onboarding catalog and privacy', () => {
       'users-list',
       'help',
     ]);
+
+    for (const user of [admin, billing]) {
+      const billingTour = buildTour(user, { ...context, page: 'billing' });
+      expect(billingTour.steps.map((item) => item.target)).toEqual([
+        'navigation',
+        'billing-actions',
+        'billing-summary',
+        'billing-tabs',
+        'help',
+      ]);
+
+      const techReportTour = buildTour(user, { ...context, page: 'technical-reports' });
+      expect(techReportTour.steps.map((item) => item.target)).toEqual([
+        'navigation',
+        'technical-reports-week',
+        'technical-reports-summary',
+        'technical-reports-controls',
+        'technical-reports-list',
+        'help',
+      ]);
+    }
+
+    expect(
+      buildTour(technician, { ...context, page: 'billing' }).steps.map((item) => item.target),
+    ).toEqual(['navigation', 'help']);
+    expect(
+      buildTour(technician, { ...context, page: 'technical-reports' }).steps.map(
+        (item) => item.target,
+      ),
+    ).toEqual(['navigation', 'help']);
   });
 
   it('isolates progress by user, role, mode, tour and version without storing business data', () => {
