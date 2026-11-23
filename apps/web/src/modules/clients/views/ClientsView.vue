@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import {
+  CLIENT_ACCOUNT_STATUS_LABELS,
+  type ClientAccountStatus,
+} from '@puk/contracts';
+import {
   NAlert,
   NButton,
   NCard,
+  NDatePicker,
   NEmpty,
   NForm,
   NFormItem,
@@ -27,52 +32,104 @@ const {
   formError,
   load,
   register,
-  rename,
+  updateDetails,
   saveEmail,
   removeEmail,
 } = useClients();
 const message = useMessage();
 const newName = ref('');
 const name = ref('');
+const legalName = ref('');
+const platformClient = ref('');
+const contactPhone = ref('');
+const accountStatus = ref<ClientAccountStatus>('ACTIVE');
+const paymentPromiseDate = ref<number | null>(null);
 const email = ref('');
 const emailId = ref<string | undefined>();
+
 const clientOptions = computed(() =>
   clients.value.map((client) => ({
     label: `${client.name} (${client.clientSheetId})`,
     value: client.id,
   })),
 );
+
+const accountStatusOptions = (
+  Object.keys(CLIENT_ACCOUNT_STATUS_LABELS) as ClientAccountStatus[]
+).map((key) => ({
+  label: CLIENT_ACCOUNT_STATUS_LABELS[key],
+  value: key,
+}));
+
 watch(selected, (client) => {
   name.value = client?.name ?? '';
+  legalName.value = client?.legalName ?? '';
+  platformClient.value = client?.platformClient ?? '';
+  contactPhone.value = client?.contactPhone ?? '';
+  accountStatus.value = client?.accountStatus ?? 'ACTIVE';
+  paymentPromiseDate.value = client?.paymentPromiseDate
+    ? Date.parse(client.paymentPromiseDate)
+    : null;
   cancelEmail();
   formError.value = null;
 });
+
 function cancelEmail(): void {
   email.value = '';
   emailId.value = undefined;
 }
+
 async function create(): Promise<void> {
   if (await register(newName.value)) {
     newName.value = '';
     message.success('Cliente registrado.');
   }
 }
-async function saveName(): Promise<void> {
-  if (selected.value && (await rename(selected.value.id, name.value)))
-    message.success('Nombre actualizado.');
+
+async function saveClientProfile(): Promise<void> {
+  if (!selected.value) return;
+  if (accountStatus.value === 'PAYMENT_PROMISE' && paymentPromiseDate.value === null) {
+    formError.value =
+      'La fecha de promesa de pago es obligatoria cuando el estatus es Promesa de pago.';
+    return;
+  }
+  const ok = await updateDetails(selected.value.id, {
+    name: name.value,
+    legalName: legalName.value.trim() || null,
+    platformClient: platformClient.value.trim() || null,
+    contactPhone: contactPhone.value.trim() || null,
+    accountStatus: accountStatus.value,
+    paymentPromiseDate:
+      paymentPromiseDate.value !== null ? new Date(paymentPromiseDate.value).toISOString() : null,
+  });
+  if (ok) message.success('Datos del cliente actualizados.');
 }
+
 async function submitEmail(): Promise<void> {
   if (selected.value && (await saveEmail(selected.value.id, email.value, emailId.value))) {
     cancelEmail();
     message.success('Correo guardado.');
   }
 }
+
 async function deleteEmail(id: string): Promise<void> {
   if (selected.value && (await removeEmail(selected.value.id, id))) {
     if (emailId.value === id) cancelEmail();
     message.success('Correo eliminado.');
   }
 }
+
+function formatDate(value: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-MX', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
 onMounted(() => {
   void load();
 });
@@ -84,7 +141,8 @@ onMounted(() => {
       <header>
         <h1 class="text-2xl font-bold">Clientes y correos</h1>
         <p class="text-sm text-slate-600">
-          Crea clientes y administra sus destinatarios de reportes en la base de datos.
+          Crea clientes y administra sus datos de cuenta y destinatarios de reportes en la base de
+          datos.
         </p>
       </header>
       <n-alert v-if="error" type="error"
@@ -127,17 +185,66 @@ onMounted(() => {
                 Identificador del cliente: {{ selected.clientSheetId }}. Este identificador no se
                 modifica.
               </p>
-              <n-form @submit.prevent="saveName">
-                <n-form-item label="Nombre en el sistema"
-                  ><n-input
-                    v-model:value="name"
-                    :disabled="saving"
-                    :maxlength="200"
-                    :input-props="{ 'aria-label': 'Nombre del cliente' }"
-                /></n-form-item>
-                <n-button attr-type="submit" :loading="saving" :disabled="!name.trim()"
-                  >Guardar nombre</n-button
-                >
+              <n-form @submit.prevent="saveClientProfile">
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <n-form-item label="Nombre en el sistema" required>
+                    <n-input
+                      v-model:value="name"
+                      :disabled="saving"
+                      :maxlength="200"
+                      :input-props="{ 'aria-label': 'Nombre del cliente' }"
+                    />
+                  </n-form-item>
+                  <n-form-item label="Razón social">
+                    <n-input
+                      v-model:value="legalName"
+                      :disabled="saving"
+                      :maxlength="250"
+                      placeholder="Razón social"
+                    />
+                  </n-form-item>
+                  <n-form-item label="Cliente plataforma">
+                    <n-input
+                      v-model:value="platformClient"
+                      :disabled="saving"
+                      :maxlength="200"
+                      placeholder="Usuario / cuenta en plataforma"
+                    />
+                  </n-form-item>
+                  <n-form-item label="Celular">
+                    <n-input
+                      v-model:value="contactPhone"
+                      :disabled="saving"
+                      :maxlength="50"
+                      placeholder="Número de celular"
+                    />
+                  </n-form-item>
+                  <n-form-item label="Estatus de cuenta">
+                    <n-select
+                      v-model:value="accountStatus"
+                      :disabled="saving"
+                      :options="accountStatusOptions"
+                    />
+                  </n-form-item>
+                  <n-form-item
+                    label="Fecha promesa de pago"
+                    :required="accountStatus === 'PAYMENT_PROMISE'"
+                  >
+                    <n-date-picker
+                      v-model:value="paymentPromiseDate"
+                      type="date"
+                      clearable
+                      :disabled="saving"
+                      class="w-full"
+                    />
+                  </n-form-item>
+                </div>
+                <p v-if="selected.suspendedAt" class="mb-3 text-xs text-rose-700">
+                  Fecha de suspensión registrada: {{ formatDate(selected.suspendedAt) }}
+                </p>
+                <n-button attr-type="submit" :loading="saving" :disabled="!name.trim()">
+                  Guardar datos del cliente
+                </n-button>
               </n-form>
               <h2 class="mt-6 mb-3 text-lg font-semibold">Correos del cliente</h2>
               <div v-if="selected.emails.length" class="overflow-x-auto">

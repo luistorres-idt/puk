@@ -2,7 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { ClientsService } from './clients.service.js';
 
-const client = { id: 'client-1', clientSheetId: 'C1', name: 'Client', emails: [] };
+const client = {
+  id: 'client-1',
+  clientSheetId: 'C1',
+  name: 'Client',
+  legalName: null,
+  platformClient: null,
+  contactPhone: null,
+  accountStatus: 'ACTIVE' as const,
+  suspendedAt: null,
+  paymentPromiseDate: null,
+  emails: [],
+};
 function setup() {
   const tx = {
     client: {
@@ -171,5 +182,38 @@ describe('ClientsService', () => {
     await expect(
       context.service.addEmail('actor', client.id, { email: 'a@example.com' }),
     ).rejects.toThrow('audit failed');
+  });
+  it('sets suspendedAt automatically when suspended and clears it on exit', async () => {
+    await context.service.update('actor', client.id, { accountStatus: 'SUSPENDED' });
+    expect(context.tx.client.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountStatus: 'SUSPENDED',
+          suspendedAt: expect.any(Date),
+        }),
+      }),
+    );
+
+    const suspendedAt = new Date('2026-11-10T10:00:00.000Z');
+    context.tx.client.findUnique.mockResolvedValueOnce({
+      ...client,
+      accountStatus: 'SUSPENDED',
+      suspendedAt,
+    } as never);
+    await context.service.update('actor', client.id, { accountStatus: 'ACTIVE' });
+    expect(context.tx.client.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountStatus: 'ACTIVE',
+          suspendedAt: null,
+        }),
+      }),
+    );
+  });
+  it('requires paymentPromiseDate when transitioning to PAYMENT_PROMISE', async () => {
+    await expect(
+      context.service.update('actor', client.id, { accountStatus: 'PAYMENT_PROMISE' }),
+    ).rejects.toMatchObject({ code: 'PAYMENT_PROMISE_DATE_REQUIRED', status: 400 });
+    expect(context.tx.client.update).not.toHaveBeenCalled();
   });
 });

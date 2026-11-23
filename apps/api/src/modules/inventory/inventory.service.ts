@@ -10,6 +10,7 @@ import {
   type DeleteInventoryEquipment,
   type RegisterEquipment,
 } from '@puk/contracts';
+import type { Role } from '../../auth/capabilities.js';
 import { domainTransaction } from '../../database/transaction.js';
 import type { PrismaClient, Prisma } from '../../generated/prisma/client.js';
 import type { EquipmentCatalogPort } from '../../integrations/ports.js';
@@ -36,7 +37,7 @@ const managementSelection = {
 } satisfies Prisma.EquipmentSelect;
 
 type ManagedEquipmentRow = Prisma.EquipmentGetPayload<{ select: typeof managementSelection }>;
-type InventoryActor = { id: string; role: 'ADMIN' | 'TECHNICIAN' };
+type InventoryActor = { id: string; role: Role };
 
 /**
  * Enforces that the caller holds the `ADMIN` role before executing any inventory
@@ -280,7 +281,7 @@ export class InventoryService {
    * both local inventory and a fresh Google Sheets read before persisting.
    */
   public async register(
-    actor: { id: string; role: 'ADMIN' | 'TECHNICIAN' },
+    actor: InventoryActor,
     request: RegisterEquipment,
   ) {
     if (actor.role !== 'ADMIN')

@@ -1,6 +1,7 @@
 import * as v from 'valibot';
 
-export const UserRoleSchema = v.picklist(['ADMIN', 'TECHNICIAN']);
+export const UserRoleSchema = v.picklist(['ADMIN', 'TECHNICIAN', 'BILLING']);
+export type UserRole = v.InferOutput<typeof UserRoleSchema>;
 export const OrderAccessModeSchema = v.picklist(['INDIVIDUAL', 'SHARED']);
 
 export const LoginRequestSchema = v.object({

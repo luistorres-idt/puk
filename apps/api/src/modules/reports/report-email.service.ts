@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { ReportEmailRecipients, ReportEmailResult, SendReportEmail } from '@puk/contracts';
+import type { Role } from '../../auth/capabilities.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { ReportMailPort } from '../../integrations/gmail/gmail.client.js';
 import { AppError } from '../../shared/errors.js';
+import { clientSelection, serializeClient } from '../clients/index.js';
 import type { ReportsService } from './reports.service.js';
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
-type Actor = { userId: string; role: 'ADMIN' | 'TECHNICIAN' };
+type Actor = { userId: string; role: Role };
 
 export class ReportEmailService {
   public constructor(
@@ -19,14 +21,9 @@ export class ReportEmailService {
     const order = await this.requireOrder(orderId, actor);
     const client = await this.prisma.client.findUnique({
       where: { clientSheetId: order.clientSheetId },
-      select: {
-        id: true,
-        clientSheetId: true,
-        name: true,
-        emails: { select: { id: true, email: true }, orderBy: { email: 'asc' } },
-      },
+      select: clientSelection,
     });
-    return { client, configured: this.sender !== undefined };
+    return { client: client ? serializeClient(client) : null, configured: this.sender !== undefined };
   }
 
   public async send(

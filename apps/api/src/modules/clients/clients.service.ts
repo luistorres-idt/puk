@@ -3,13 +3,12 @@ import type { Client, CreateClient, SaveClientEmail, UpdateClient } from '@puk/c
 import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import type { ClientCatalogPort } from '../../integrations/ports.js';
 import { AppError } from '../../shared/errors.js';
-
-const clientSelection = {
-  id: true,
-  clientSheetId: true,
-  name: true,
-  emails: { select: { id: true, email: true }, orderBy: { email: 'asc' as const } },
-} satisfies Prisma.ClientSelect;
+import {
+  buildClientAccountCreateData,
+  buildClientAccountUpdateData,
+  clientSelection,
+  serializeClient,
+} from './client-account.js';
 
 export class ClientsService {
   public constructor(
@@ -17,14 +16,18 @@ export class ClientsService {
     private readonly catalog: ClientCatalogPort,
   ) {}
 
-  public list(): Promise<Client[]> {
-    return this.prisma.client.findMany({ orderBy: { name: 'asc' }, select: clientSelection });
+  public async list(): Promise<Client[]> {
+    const records = await this.prisma.client.findMany({
+      orderBy: { name: 'asc' },
+      select: clientSelection,
+    });
+    return records.map(serializeClient);
   }
 
   public async get(id: string): Promise<Client> {
     const client = await this.prisma.client.findUnique({ where: { id }, select: clientSelection });
     if (!client) throw clientNotFound();
-    return client;
+    return serializeClient(client);
   }
 
   public async create(actorUserId: string, input: CreateClient): Promise<Client> {
@@ -32,11 +35,13 @@ export class ClientsService {
     if (input.clientSheetId !== undefined) {
       await this.verifySheetClient(clientKey);
     }
+    const accountData = buildClientAccountCreateData(input);
     return this.mutate('CLIENT_ALREADY_EXISTS', async (tx) => {
-      const client = await tx.client.create({
-        data: { clientSheetId: clientKey, name: input.name.trim() },
+      const created = await tx.client.create({
+        data: { clientSheetId: clientKey, name: input.name.trim(), ...accountData },
         select: clientSelection,
       });
+      const client = serializeClient(created);
       await this.audit(tx, actorUserId, 'CLIENT_CREATED', client.id, null, client);
       return client;
     });
@@ -64,12 +69,19 @@ export class ClientsService {
 
   public update(actorUserId: string, id: string, input: UpdateClient): Promise<Client> {
     return this.mutate('CLIENT_ALREADY_EXISTS', async (tx) => {
-      const before = await this.requireClient(tx, id);
-      const client = await tx.client.update({
+      const beforeRecord = await this.requireClient(tx, id);
+      const accountData = buildClientAccountUpdateData(beforeRecord, input);
+      const data: Prisma.ClientUpdateInput = {
+        ...accountData,
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      };
+      const updated = await tx.client.update({
         where: { id },
-        data: { name: input.name.trim() },
+        data,
         select: clientSelection,
       });
+      const before = serializeClient(beforeRecord);
+      const client = serializeClient(updated);
       await this.audit(tx, actorUserId, 'CLIENT_UPDATED', id, before, client);
       return client;
     });

@@ -10,9 +10,11 @@ export const SHARED_TECHNICIAN_ELIGIBLE_ORDER_STATUSES = [
 
 export type OrderAccessMode = 'INDIVIDUAL' | 'SHARED';
 
+import type { Role } from './capabilities.js';
+
 export interface OrderAccessActor {
   id: string;
-  role: 'ADMIN' | 'TECHNICIAN';
+  role: Role;
 }
 
 export interface OrderAccessDecision {

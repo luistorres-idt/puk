@@ -7,6 +7,10 @@ import ThemeToggle from '@/shared/components/ThemeToggle.vue';
 import { OnboardingHelp } from '@/modules/onboarding';
 import { useSessionStore } from '@/stores/session';
 
+const props = defineProps<{
+  wide?: boolean;
+}>();
+
 const session = useSessionStore();
 const router = useRouter();
 const route = useRoute();
@@ -18,9 +22,25 @@ const adminDropdownOptions = [
   { label: 'Cuentas Técnicas', key: '/technical-accounts' },
   { label: 'Clientes', key: '/admin/clients' },
   { label: 'Equipos', key: '/admin/equipment' },
-  { label: 'Administradores', key: '/admin/users' },
+  { label: 'Usuarios', key: '/admin/users' },
   { label: 'Sincronización', key: '/sync' },
 ];
+
+const homeTarget = computed(() => {
+  if (session.user?.orderAccessMode === 'SHARED') return '/work-order';
+  if (session.user?.role === 'BILLING') return '/billing';
+  return '/';
+});
+
+const roleBadge = computed(() => {
+  if (!session.user) return { label: '', type: 'info' as const };
+  if (session.user.role === 'ADMIN') return { label: 'Admin', type: 'primary' as const };
+  if (session.user.role === 'BILLING') return { label: 'Facturación', type: 'warning' as const };
+  return {
+    label: session.user.orderAccessMode === 'SHARED' ? 'Técnico Compartido' : 'Técnico',
+    type: 'info' as const,
+  };
+});
 
 const isAdminRouteActive = computed(() =>
   adminDropdownOptions.some((opt) => route.path.startsWith(opt.key)),
@@ -66,7 +86,7 @@ async function logout(): Promise<void> {
         <div class="flex min-w-0 items-center gap-2 sm:gap-3">
           <router-link
             class="flex min-w-0 items-center gap-2 text-sm font-bold tracking-tight text-blue-900 uppercase hover:text-blue-700"
-            :to="session.user?.orderAccessMode === 'SHARED' ? '/work-order' : '/'"
+            :to="homeTarget"
             @click="isMobileMenuOpen = false"
           >
             <div
@@ -80,17 +100,11 @@ async function logout(): Promise<void> {
           <n-tag
             v-if="session.user"
             size="small"
-            :type="session.user.role === 'ADMIN' ? 'primary' : 'info'"
+            :type="roleBadge.type"
             round
             class="hidden sm:inline-flex"
           >
-            {{
-              session.user.role === 'ADMIN'
-                ? 'Admin'
-                : session.user.orderAccessMode === 'SHARED'
-                  ? 'Técnico Compartido'
-                  : 'Técnico'
-            }}
+            {{ roleBadge.label }}
           </n-tag>
         </div>
 
@@ -114,6 +128,15 @@ async function logout(): Promise<void> {
                 Orden de Trabajo
               </router-link>
             </template>
+            <template v-else-if="session.user.role === 'BILLING'">
+              <router-link
+                class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/billing"
+              >
+                Facturación
+              </router-link>
+            </template>
             <template v-else>
               <router-link
                 class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
@@ -130,6 +153,13 @@ async function logout(): Promise<void> {
                 {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
               </router-link>
               <template v-if="session.user.role === 'ADMIN'">
+                <router-link
+                  class="rounded px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-800"
+                  active-class="bg-blue-50 text-blue-900 font-semibold"
+                  to="/billing"
+                >
+                  Facturación
+                </router-link>
                 <n-dropdown
                   trigger="click"
                   :options="adminDropdownOptions"
@@ -208,14 +238,8 @@ async function logout(): Promise<void> {
             <p class="text-xs font-semibold text-slate-800">{{ session.user.name }}</p>
             <p class="text-[11px] text-slate-500">{{ session.user.email }}</p>
           </div>
-          <n-tag size="small" :type="session.user.role === 'ADMIN' ? 'primary' : 'info'" round>
-            {{
-              session.user.role === 'ADMIN'
-                ? 'Admin'
-                : session.user.orderAccessMode === 'SHARED'
-                  ? 'Técnico Compartido'
-                  : 'Técnico'
-            }}
+          <n-tag size="small" :type="roleBadge.type" round>
+            {{ roleBadge.label }}
           </n-tag>
         </div>
 
@@ -228,6 +252,16 @@ async function logout(): Promise<void> {
               @click="isMobileMenuOpen = false"
             >
               Orden de Trabajo
+            </router-link>
+          </template>
+          <template v-else-if="session.user.role === 'BILLING'">
+            <router-link
+              class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+              active-class="bg-blue-50 text-blue-900 font-semibold"
+              to="/billing"
+              @click="isMobileMenuOpen = false"
+            >
+              Facturación
             </router-link>
           </template>
           <template v-else>
@@ -251,6 +285,14 @@ async function logout(): Promise<void> {
               {{ session.user.role === 'ADMIN' ? 'Órdenes' : 'Mis Órdenes' }}
             </router-link>
             <template v-if="session.user.role === 'ADMIN'">
+              <router-link
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                active-class="bg-blue-50 text-blue-900 font-semibold"
+                to="/billing"
+                @click="isMobileMenuOpen = false"
+              >
+                Facturación
+              </router-link>
               <p
                 class="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400"
               >
@@ -294,7 +336,7 @@ async function logout(): Promise<void> {
                 to="/admin/users"
                 @click="isMobileMenuOpen = false"
               >
-                Administradores
+                Usuarios
               </router-link>
               <router-link
                 class="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
@@ -321,7 +363,10 @@ async function logout(): Promise<void> {
     </header>
 
     <!-- Main content slot -->
-    <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
+    <main
+      class="mx-auto w-full flex-1 px-4 py-6 sm:px-6"
+      :class="props.wide ? 'max-w-7xl' : 'max-w-6xl'"
+    >
       <slot />
     </main>
 

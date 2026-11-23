@@ -31,11 +31,22 @@ async function mockClients(page: Page, role: 'ADMIN' | 'TECHNICIAN' = 'ADMIN') {
     if (path.endsWith('/clients') && method === 'POST') {
       const body = request.postDataJSON() as { name: string };
       expect(body).toEqual({ name: 'Local client' });
-      client = { id: clientId, clientSheetId: localClientKey, ...body, emails: [] };
+      client = {
+        id: clientId,
+        clientSheetId: localClientKey,
+        ...body,
+        legalName: null,
+        platformClient: null,
+        contactPhone: null,
+        accountStatus: 'ACTIVE',
+        suspendedAt: null,
+        paymentPromiseDate: null,
+        emails: [],
+      };
       return respond(client, 201);
     }
     if (path.endsWith(`/clients/${clientId}`) && method === 'PATCH') {
-      client!.name = (request.postDataJSON() as { name: string }).name;
+      Object.assign(client!, request.postDataJSON() as Partial<Client>);
       return respond(client);
     }
     if (path.endsWith(`/clients/${clientId}/emails`) && method === 'POST') {
@@ -79,7 +90,7 @@ test('administrator creates a local client and manages recipients without Sheets
     page.getByText(`Identificador del cliente: ${localClientKey}.`, { exact: false }),
   ).toBeVisible();
   await page.getByLabel('Nombre del cliente', { exact: true }).fill('Renamed client');
-  await page.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar datos del cliente', exact: true }).click();
   await expect(page.getByText(`Renamed client (${localClientKey})`, { exact: true })).toBeVisible();
   await page.getByLabel('Correo del cliente').fill(' Recipient@Example.invalid ');
   await page.getByRole('button', { name: 'Agregar correo', exact: true }).click();

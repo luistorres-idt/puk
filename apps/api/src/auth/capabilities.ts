@@ -1,5 +1,6 @@
 export const capabilities = [
   'clients:manage',
+  'billing:manage',
   'users:manage',
   'technicians:manage',
   'orders:manage',
@@ -9,11 +10,12 @@ export const capabilities = [
 ] as const;
 
 export type Capability = (typeof capabilities)[number];
-export type Role = 'ADMIN' | 'TECHNICIAN';
+export type Role = 'ADMIN' | 'TECHNICIAN' | 'BILLING';
 
 const roleCapabilities: Record<Role, ReadonlySet<Capability>> = {
   ADMIN: new Set([
     'clients:manage',
+    'billing:manage',
     'users:manage',
     'technicians:manage',
     'orders:manage',
@@ -21,6 +23,7 @@ const roleCapabilities: Record<Role, ReadonlySet<Capability>> = {
     'sync:retry',
   ]),
   TECHNICIAN: new Set(['orders:execute', 'catalogs:read']),
+  BILLING: new Set(['billing:manage']),
 };
 
 export function hasCapability(role: Role, capability: Capability): boolean {

@@ -1,6 +1,7 @@
 import { Router, type RequestHandler } from 'express';
 import { CatalogSearchQuerySchema } from '@puk/contracts';
 import { authorize } from '../../auth/authenticate.js';
+import type { Role } from '../../auth/capabilities.js';
 import { assertIndividualTechnician } from '../../auth/order-access-policy.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { validate } from '../../middleware/validate.js';
@@ -79,7 +80,7 @@ export function createCatalogsRouter(options: {
 
 async function rejectSharedCatalogAccess(
   prisma: PrismaClient | undefined,
-  auth: { role: 'ADMIN' | 'TECHNICIAN'; userId: string },
+  auth: { role: Role; userId: string },
 ): Promise<void> {
   if (prisma === undefined) return;
   await assertIndividualTechnician(

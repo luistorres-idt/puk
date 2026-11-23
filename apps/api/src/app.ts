@@ -18,6 +18,7 @@ import {
 } from './modules/administration/index.js';
 import { createInventoryRouter, type InventoryService } from './modules/inventory/index.js';
 import { createClientsRouter, type ClientsService } from './modules/clients/index.js';
+import { createBillingRouter, type BillingService } from './modules/billing/index.js';
 import { createCatalogsRouter } from './modules/catalogs/index.js';
 import {
   createOrdersRouter,
@@ -45,6 +46,7 @@ export interface AppOptions {
   auth?: Omit<AuthRouterOptions, 'requireAccess'> & { minimumPasswordLength: number };
   catalogsService?: CatalogServicePort;
   clientsService?: ClientsService;
+  billingService?: BillingService;
   inventoryService?: InventoryService;
   ordersService?: OrdersService;
   orderPricingService?: OrderPricingService;
@@ -116,6 +118,8 @@ export function createApp(options: AppOptions = {}): Express {
     }
     if (options.clientsService !== undefined)
       app.use('/api/v1/clients', createClientsRouter(options.clientsService, requireAccess));
+    if (options.billingService !== undefined)
+      app.use('/api/v1/billing', createBillingRouter(options.billingService, requireAccess));
     if (options.inventoryService !== undefined)
       app.use('/api/v1/inventory', createInventoryRouter(options.inventoryService, requireAccess));
     if (options.catalogsService !== undefined) {

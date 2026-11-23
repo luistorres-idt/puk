@@ -9,7 +9,18 @@ vi.mock('./api.js', () => ({
   updateClientEmail: vi.fn(),
   deleteClientEmail: vi.fn(),
 }));
-const client = { id: 'client-1', clientSheetId: 'C1', name: 'Client', emails: [] };
+const client = {
+  id: 'client-1',
+  clientSheetId: 'C1',
+  name: 'Client',
+  legalName: null,
+  platformClient: null,
+  contactPhone: null,
+  accountStatus: 'ACTIVE' as const,
+  suspendedAt: null,
+  paymentPromiseDate: null,
+  emails: [],
+};
 describe('client management state', () => {
   beforeEach(() => vi.resetAllMocks());
   it('loads stored clients and selects the first one', async () => {
