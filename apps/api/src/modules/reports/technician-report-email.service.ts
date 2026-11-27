@@ -75,15 +75,27 @@ export class TechnicianReportEmailService {
 
     const window = options.forceDateWindow ?? calculateCurrentCutoffWindow(reference, config);
 
-    // Query completed orders in window
+    // Query completed and failed appointment orders in window
     const orders = await this.prisma.order.findMany({
       where: {
-        status: 'COMPLETED',
-        completedAt: {
-          gte: window.start,
-          lte: window.end,
-        },
         technicianId: { not: null },
+        OR: [
+          {
+            status: { in: ['COMPLETED', 'FAILED_APPOINTMENT'] },
+            completedAt: {
+              gte: window.start,
+              lte: window.end,
+            },
+          },
+          {
+            status: 'FAILED_APPOINTMENT',
+            completedAt: null,
+            scheduledAt: {
+              gte: window.start,
+              lte: window.end,
+            },
+          },
+        ],
       },
       include: {
         technician: {
@@ -159,6 +171,7 @@ export class TechnicianReportEmailService {
                 group.technician,
                 group.orders,
                 config.timeZone,
+                { includeDhl: true },
               ),
             },
           }),
@@ -204,7 +217,9 @@ export class TechnicianReportEmailService {
           attachment: {
             fileName: `Reporte_Consolidado_Semana_${consolidatedSem}.xlsx`,
             contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            content: await generateConsolidatedExcelReport(orders, config.timeZone),
+            content: await generateConsolidatedExcelReport(orders, config.timeZone, {
+              includeDhl: true,
+            }),
           },
         }),
       });

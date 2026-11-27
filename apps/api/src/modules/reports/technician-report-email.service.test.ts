@@ -89,6 +89,37 @@ describe('TechnicianReportEmailService', () => {
     expect(mockSender.send).not.toHaveBeenCalled();
   });
 
+  it('includes FAILED_APPOINTMENT orders alongside COMPLETED orders in weekly email queries', async () => {
+    mockPrisma.order.findMany.mockResolvedValueOnce([]);
+
+    const service = new TechnicianReportEmailService(
+      mockPrisma as unknown as PrismaClient,
+      mockSchedule as unknown as TechnicalReportSyncScheduleService,
+      mockSender,
+    );
+
+    await service.dispatchWeeklyReports('admin-user');
+
+    expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          technicianId: { not: null },
+          OR: [
+            expect.objectContaining({
+              status: { in: ['COMPLETED', 'FAILED_APPOINTMENT'] },
+              completedAt: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+            expect.objectContaining({
+              status: 'FAILED_APPOINTMENT',
+              completedAt: null,
+              scheduledAt: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
   it('groups orders by technician, dispatches individual Excel emails to admin, and records audits', async () => {
     const orders = [
       {
