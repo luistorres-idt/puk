@@ -262,11 +262,12 @@ export class TechnicalReportsService {
         ...(technicianId ? { technicianId } : {}),
         OR: [
           {
-            status: 'COMPLETED',
+            status: { in: ['COMPLETED', 'FAILED_APPOINTMENT'] },
             completedAt: { gte: window.start, lte: window.end },
           },
           {
             status: 'FAILED_APPOINTMENT',
+            completedAt: null,
             scheduledAt: { gte: window.start, lte: window.end },
           },
         ],

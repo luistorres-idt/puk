@@ -162,6 +162,28 @@ describe('TechnicalReportsService', () => {
     ).rejects.toMatchObject({ status: 409, code: 'ORDER_NOT_REPORTABLE' });
   });
 
+  it('queries both COMPLETED and FAILED_APPOINTMENT orders by completedAt with legacy fallback', async () => {
+    await ctx.service.getReport({}, new Date('2026-11-20T18:00:00.000Z'));
+
+    expect(ctx.tx.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            expect.objectContaining({
+              status: { in: ['COMPLETED', 'FAILED_APPOINTMENT'] },
+              completedAt: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+            expect.objectContaining({
+              status: 'FAILED_APPOINTMENT',
+              completedAt: null,
+              scheduledAt: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
   it('exports consolidated and per-technician Excel files', async () => {
     const consolidated = await ctx.service.exportExcel({}, new Date('2026-11-20T18:00:00.000Z'));
     expect(consolidated.fileName).toMatch(/^Reporte_Tecnico_Consolidado_Semana_\d+\.xlsx$/);
